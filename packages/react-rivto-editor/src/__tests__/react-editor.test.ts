@@ -288,7 +288,7 @@ describe("ReactPanelApi", () => {
 
     expect(isReactPanelApi(reactPanel)).toBe(true);
     expect(isReactPanelApi(reactPanel.editor)).toBe(false);
-    expect(isRivtoEditor(reactPanel)).toBe(false);
+    expect(isRivtoEditor(reactPanel)).toBe(true);
     expect(isReactPanelApi(editor)).toBe(false);
     expect(isRivtoEditor(editor)).toBe(true);
 

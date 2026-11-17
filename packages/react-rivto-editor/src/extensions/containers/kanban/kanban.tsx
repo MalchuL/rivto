@@ -62,6 +62,12 @@ function KanbanDialog({ block, children }: BlockWrapperProps) {
 export function kanbanExtension(): ReactEditorExtension {
   return {
     id: "block.kanban",
+    /**
+     * Installs Kanban presentation, dialog controls and background defaults for this editor.
+     *
+     * @param reactEditor - Runtime that owns the extension registrations.
+     * @returns Disposer that releases those registrations in reverse installation order.
+     */
     setup: (reactEditor) => {
       const disposers = [
         // Defaults missing background on creation/conversion; removes the processor with the extension.

@@ -1,6 +1,6 @@
 import type { DOMEventMap, DOMEventName, DOMEventScope, DOMEventTarget } from "./dom-types";
 import type { EditorMode, Selection } from "@chulane/rivto";
-import type { PanelRegistration, ReactPanelApi } from "../../panels/types";
+import type { PanelEventScope, ReactPanelApi } from "../../panels/types";
 import type { EditorEvent } from "./editor-event";
 
 /** Callback used by DOM and keyboard event registrations. */
@@ -58,7 +58,7 @@ export interface DOMRegistration {
   readonly id: string;
   /** False immediately on removal, including in snapshots retained by an ongoing event. */
   active: boolean;
-  readonly owner?: Pick<PanelRegistration, "id" | "getRoot">;
+  readonly owner?: PanelEventScope;
   readonly type: string;
   readonly target: DOMEventTarget;
   readonly scope?: DOMEventScope;

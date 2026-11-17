@@ -82,7 +82,7 @@ EditorPanel принимает `editor: ReactEditorApi`, явно выбранн
 `useReactPanel()` возвращает ближайший ReactPanelApi и выбрасывает исключение вне EditorPanel или EditorEmbed.
 `usePanel()` возвращает core PanelAPI. Общий DocumentEditorAPI всегда возвращает настоящих родителей. PanelAPI возвращает null
 на видимом верхнем уровне. Изменения вне панели отклоняются до записи; batch проверяет
-все targets. Insertion destination панели — `{ root: true, beforeId? }` или
+все targets. Insertion destination панели — `{ parentId: null, beforeId? }` или
 `{ parentId: string, beforeId? }`. DocumentEditorAPI использует реальный parentId, включая null.
 
 Mode по умолчанию отдельный для каждой панели. Переданный ModeManager можно разделить

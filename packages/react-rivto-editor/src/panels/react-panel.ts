@@ -1,3 +1,4 @@
+import type { BlockFactory } from "../block-factories";
 import { Listeners } from "@chulane/rivto-utils";
 import { PAGE_SELECTION_BINDINGS } from "../surfaces/page/page-selection-extension";
 import { PageNavigationController } from "../surfaces/page/page-navigation-controller";
@@ -8,16 +9,23 @@ import { PageSelection } from "../surfaces/page/page-selection";
 import { PageSurfaceRegistrations } from "../surfaces/page/page-surface-registrations";
 import { UnknownBlock } from "../blocks/unknown-block/unknown-block";
 import type { DocumentModel } from "@chulane/document-model";
-import { ModeManager, type PanelAPI, type ModeManagerApi, type EditorMode } from "@chulane/rivto";
+import {
+  ModeManager,
+  type PanelAPI,
+  type EditorSnapshot,
+  type EditorSnapshotUpdate,
+  type ModeManagerApi,
+  type EditorMode,
+} from "@chulane/rivto";
 import type { ReactEditorApi } from "../editor/types";
 import { PanelClipboardManager } from "../managers/clipboard/panel-clipboard-manager";
 import { PANEL_ATTRIBUTE } from "./panel-dom";
 import { PanelEventManager } from "../managers/events/panel-event-manager";
 import { PanelKeyboardManager } from "../managers/keyboard/panel-keyboard-manager";
-import type { PanelSelectionApi } from "../managers/selection/api";
 import { PanelSelectionManager } from "../managers/selection/panel-selection-manager";
 import { PanelSlashCommandManager } from "../managers/slash/panel-slash-command-manager";
 import type { PanelOptions, PanelSnapshot, ReactPanelApi } from "./types";
+import { isReactPanelApi } from "../utils";
 
 /**
  * Connects one EditorPanel or EditorEmbed component to its document, DOM root, and local managers.
@@ -55,6 +63,8 @@ import type { PanelOptions, PanelSnapshot, ReactPanelApi } from "./types";
  * A destroyed instance is never reused by a later mount of the hook.
  */
 export class ReactPanel implements ReactPanelApi {
+  /** Shared React runtime that owns registrations and browser transport. */
+  readonly editor: ReactEditorApi;
   /** Occurrence-owned Page runtime; the mounted surface borrows only its attachment. */
   readonly page: BlockEditorController;
   /** Optional feature coordinator shared by this occurrence's independent selection extensions. */
@@ -70,7 +80,8 @@ export class ReactPanel implements ReactPanelApi {
   readonly blockContextMenu: PanelBlockContextMenuManager;
   readonly slashCommands: PanelSlashCommandManager;
   readonly id = crypto.randomUUID();
-  private selectionManager: PanelSelectionManager;
+  /** Occurrence-local DOM adapter for the shared selection. */
+  readonly selection: PanelSelectionManager;
   private root: HTMLElement | null = null;
   private enabled = true;
   private snapshot: PanelSnapshot = { status: "loading" };
@@ -95,7 +106,7 @@ export class ReactPanel implements ReactPanelApi {
    * @throws If the core panel belongs to another editor, the shared editor is destroyed, or resource setup fails.
    */
   constructor(
-    readonly editor: ReactEditorApi,
+    editor: ReactEditorApi,
     private readonly corePanel: PanelAPI,
     options: PanelOptions = {},
   ) {
@@ -105,10 +116,14 @@ export class ReactPanel implements ReactPanelApi {
     ) {
       throw new Error("Panel and React editor must use the same document editor");
     }
+    while (isReactPanelApi(editor)) {
+      editor = editor.editor;
+    }
+    this.editor = editor;
     this.mode = options.mode ?? new ModeManager();
     this.events = new PanelEventManager(editor.events, this);
     this.keyboard = new PanelKeyboardManager(editor.keyboard, this);
-    this.selectionManager = new PanelSelectionManager(this, this.corePanel.document.selection);
+    this.selection = new PanelSelectionManager(this, corePanel.selection);
     this.clipboard = new PanelClipboardManager(editor.clipboard, this);
     this.blockContextMenu = new PanelBlockContextMenuManager(this);
     this.slashCommands = new PanelSlashCommandManager(editor.slashCommands, this);
@@ -152,9 +167,8 @@ export class ReactPanel implements ReactPanelApi {
       this.updateSnapshot(this.corePanel.document.getDocument(), true);
       // A subtree root can disappear and return through undo while its document remains retained.
       if (this.corePanel.rootBlockId) {
-        this.unsubscribeBlock = this.corePanel.document.blocks.subscribeBlockNode(
-          this.corePanel.rootBlockId,
-          () => this.updateSnapshot(this.corePanel.document.getDocument(), true),
+        this.unsubscribeBlock = editor.blocks.subscribeBlockNode(this.corePanel.rootBlockId, () =>
+          this.updateSnapshot(this.corePanel.document.getDocument(), true),
         );
       }
       // Keep edits made in different presentation modes out of the same undo capture.
@@ -195,6 +209,193 @@ export class ReactPanel implements ReactPanelApi {
   get elements(): PanelAPI["elements"] {
     return this.corePanel.elements;
   }
+  /**
+   * Reads the elementTypes capability owned by the shared React runtime.
+   *
+   * @returns The existing shared capability; its lifecycle remains with the runtime.
+   */
+  get elementTypes(): ReactEditorApi["elementTypes"] {
+    return this.editor.elementTypes;
+  }
+  /**
+   * Reads the edgelessToolbar capability owned by the shared React runtime.
+   *
+   * @returns The existing shared capability; its lifecycle remains with the runtime.
+   */
+  get edgelessToolbar(): ReactEditorApi["edgelessToolbar"] {
+    return this.editor.edgelessToolbar;
+  }
+  /**
+   * Reads the defaultWritingBlockFactory capability owned by the shared React runtime.
+   *
+   * @returns The existing shared capability; its lifecycle remains with the runtime.
+   */
+  get defaultWritingBlockFactory(): ReactEditorApi["defaultWritingBlockFactory"] {
+    return this.editor.defaultWritingBlockFactory;
+  }
+  /**
+   * Reads the renderers capability owned by the shared React runtime.
+   *
+   * @returns The existing shared capability; its lifecycle remains with the runtime.
+   */
+  get renderers(): ReactEditorApi["renderers"] {
+    return this.editor.renderers;
+  }
+  /**
+   * Reads the blockBehaviors capability owned by the shared React runtime.
+   *
+   * @returns The existing shared capability; its lifecycle remains with the runtime.
+   */
+  get blockBehaviors(): ReactEditorApi["blockBehaviors"] {
+    return this.editor.blockBehaviors;
+  }
+  /**
+   * Reads the blockTypes capability owned by the shared React runtime.
+   *
+   * @returns The existing shared capability; its lifecycle remains with the runtime.
+   */
+  get blockTypes(): ReactEditorApi["blockTypes"] {
+    return this.editor.blockTypes;
+  }
+  /**
+   * Reads the clipboardFormats capability owned by the shared React runtime.
+   *
+   * @returns The existing shared capability; its lifecycle remains with the runtime.
+   */
+  get clipboardFormats(): ReactEditorApi["clipboardFormats"] {
+    return this.editor.clipboardFormats;
+  }
+  /**
+   * Reads the attachments capability owned by the shared React runtime.
+   *
+   * @returns The existing shared capability; its lifecycle remains with the runtime.
+   */
+  get attachments(): ReactEditorApi["attachments"] {
+    return this.editor.attachments;
+  }
+  /**
+   * Reads the pasteStrategies capability owned by the shared React runtime.
+   *
+   * @returns The existing shared capability; its lifecycle remains with the runtime.
+   */
+  get pasteStrategies(): ReactEditorApi["pasteStrategies"] {
+    return this.editor.pasteStrategies;
+  }
+  /**
+   * Reads the surfaces capability owned by the shared React runtime.
+   *
+   * @returns The existing shared capability; its lifecycle remains with the runtime.
+   */
+  get surfaces(): ReactEditorApi["surfaces"] {
+    return this.editor.surfaces;
+  }
+  /**
+   * Reads the extensions capability owned by the shared React runtime.
+   *
+   * @returns The existing shared capability; its lifecycle remains with the runtime.
+   */
+  get extensions(): ReactEditorApi["extensions"] {
+    return this.editor.extensions;
+  }
+  /**
+   * Reads the panels capability owned by the shared React runtime.
+   *
+   * @returns The existing shared capability; its lifecycle remains with the runtime.
+   */
+  get panels(): ReactEditorApi["panels"] {
+    return this.editor.panels;
+  }
+  /**
+   * Reads the blockElements capability owned by the shared React runtime.
+   *
+   * @returns The existing shared capability; its lifecycle remains with the runtime.
+   */
+  get blockElements(): ReactEditorApi["blockElements"] {
+    return this.editor.blockElements;
+  }
+  /**
+   * Installs writing-block factories on the shared React runtime.
+   *
+   * @param factory - Factory and predicates used by writing interactions.
+   * @returns Disposer restoring the previous shared factories.
+   */
+  installDefaultWriting(factory: BlockFactory): () => void {
+    return this.editor.installDefaultWriting(factory);
+  }
+  /**
+   * Reads the shared element definitions.
+   *
+   * @returns The current value owned by the source editor.
+   */
+  get elementRegistry(): PanelAPI["elementRegistry"] {
+    return this.corePanel.elementRegistry;
+  }
+  /**
+   * Reads the shared list-property policy.
+   *
+   * @returns The current value owned by the source editor.
+   */
+  get blockListProps(): PanelAPI["blockListProps"] {
+    return this.corePanel.blockListProps;
+  }
+  /**
+   * Reads the shared block definitions.
+   *
+   * @returns The current value owned by the source editor.
+   */
+  get blockRegistry(): PanelAPI["blockRegistry"] {
+    return this.corePanel.blockRegistry;
+  }
+  /**
+   * Reads the shared named commands.
+   *
+   * @returns The current value owned by the source editor.
+   */
+  get commands(): PanelAPI["commands"] {
+    return this.corePanel.commands;
+  }
+  /**
+   * Reads the shared document history.
+   *
+   * @returns The current value owned by the source editor.
+   */
+  get history(): PanelAPI["history"] {
+    return this.corePanel.history;
+  }
+  /**
+   * Reads the shared document revision.
+   *
+   * @returns The current value owned by the source editor.
+   */
+  get revision(): number {
+    return this.corePanel.revision;
+  }
+  /**
+   * Reads the complete document model underlying this occurrence.
+   *
+   * @returns The source panel's borrowed document model.
+   */
+  getDocument(): DocumentModel {
+    return this.corePanel.getDocument();
+  }
+  /**
+   * Loads snapshot sections into the complete source document.
+   *
+   * @param snapshot - Document-wide snapshot sections to load.
+   * @returns After loading and clearing the shared history baseline.
+   * @throws If snapshot validation or the underlying document update fails.
+   */
+  load(snapshot: EditorSnapshotUpdate): void {
+    this.corePanel.load(snapshot);
+  }
+  /**
+   * Materializes a snapshot of the complete source document.
+   *
+   * @returns Detached document-wide snapshot.
+   */
+  dump(): EditorSnapshot {
+    return this.corePanel.dump();
+  }
   /** @inheritdoc PanelAPI.subscribe */
   readonly subscribe = (listener: () => void): (() => void) => this.corePanel.subscribe(listener);
   /** @inheritdoc PanelAPI.batchUpdates */
@@ -204,11 +405,6 @@ export class ReactPanel implements ReactPanelApi {
   /** @inheritdoc PanelAPI.batchUpdatesWithoutHistory */
   batchUpdatesWithoutHistory<Result>(operation: () => Result): Result {
     return this.corePanel.batchUpdatesWithoutHistory(operation);
-  }
-
-  /** Selection operations for this occurrence; lifecycle remains internal to this panel instance. */
-  get selection(): PanelSelectionApi {
-    return this.selectionManager;
   }
 
   /**
@@ -320,12 +516,12 @@ export class ReactPanel implements ReactPanelApi {
    * later panel created by the same hook or another occurrence of the document.
    * Every retained cleanup is attempted even when another cleanup throws.
    *
-   * @returns Nothing; repeated calls are harmless and a destroyed panel cannot be reattached.
+   * @returns An already-resolved promise after synchronous cleanup; repeated calls are harmless and a destroyed panel cannot be reattached.
    * @throws After all cleanup has run if one or more retained cleanup callbacks fail.
    */
-  readonly destroy = (): void => {
+  readonly destroy = (): Promise<void> => {
     if (this.destroyed) {
-      return;
+      return Promise.resolve();
     }
     this.destroyed = true;
     const errors: unknown[] = [];
@@ -337,7 +533,7 @@ export class ReactPanel implements ReactPanelApi {
       this.unsubscribeMode,
       this.unsubscribeBlock,
       this.unregisterRoot,
-      () => this.selectionManager.destroy(),
+      () => this.selection.destroy(),
       ...this.registrations,
     ];
     this.unsubscribeMode = undefined;
@@ -365,6 +561,7 @@ export class ReactPanel implements ReactPanelApi {
     if (errors.length > 1) {
       throw new AggregateError(errors, "Panel cleanup failed");
     }
+    return Promise.resolve();
   };
 
   /**
@@ -431,7 +628,7 @@ export class ReactPanel implements ReactPanelApi {
       this.snapshot.api,
       this.deactivate,
       // Cancels pending caret work for this occurrence, including runtime shutdown and root removal.
-      () => this.selectionManager.destroy(),
+      () => this.selection.destroy(),
     );
   };
 

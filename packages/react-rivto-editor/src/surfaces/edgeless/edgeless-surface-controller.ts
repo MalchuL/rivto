@@ -1,12 +1,6 @@
 import { EDGELESS_GRID_SIZE } from "../../elements/visuals/utils/geometry";
 import { createCaretSelection } from "@chulane/rivto";
-import type {
-  Camera,
-  Canvas,
-  Point,
-  Rect,
-  EdgelessSnappingSnapshot,
-} from "@chulane/rivto-edgeless";
+import type { Camera, Canvas, EdgelessSnappingSnapshot } from "@chulane/rivto-edgeless";
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import type { ReactPanelApi } from "../../panels/types";
 import {
@@ -93,8 +87,39 @@ export class EdgelessSurfaceController {
       x: event.clientX - rect.left,
       y: event.clientY - rect.top,
     });
-    const frame = this.getCardFrame(point);
-    const id = this.insertCard(frame);
+    const frame = {
+      ...EDGELESS_CARD_DEFAULT_FRAME,
+      ...point,
+      width:
+        Number.isFinite(this.cardWidth) && this.cardWidth > 0
+          ? this.cardWidth
+          : EDGELESS_CARD_DEFAULT_FRAME.width,
+    };
+    // A separator keeps independent writing cards apart when their roots would otherwise merge.
+    const roots = this.panel.blocks
+      .getRootIds()
+      .flatMap((id) => this.panel.blocks.getBlockNode(id) ?? []);
+    const zIndex =
+      Math.max(0, ...this.panel.elements.getElementNodes().map((element) => element.zIndex)) + 1;
+    let id = "";
+    this.panel.batchUpdates(() => {
+      let afterId = roots.at(-1)?.id;
+      const last = roots.at(-1);
+      if (last && !this.panel.editor.blockTypes.separatesBlockElements(last.type)) {
+        afterId = insertBlockElementSeparator(this.panel, last.id).id;
+      }
+      id = this.panel.blocks.insertBlock(
+        this.panel.editor.defaultWritingBlockFactory.createEmptyBlock(),
+        this.panel.blocks.getInsertionDestinationAfter(afterId),
+      ).id;
+      this.panel.elements.insertElement({
+        type: EDGELESS_BLOCK_ELEMENT_TYPE,
+        frame,
+        zIndex,
+        props: { startBlockId: id, endBlockId: id },
+      });
+    });
+
     this.panel.selection.set(createCaretSelection(id, 0));
     requestAnimationFrame(() => focusBlock(root, id, 0));
   };
@@ -124,6 +149,10 @@ export class EdgelessSurfaceController {
    * @returns Props for the generic viewport without exposing document policies to Canvas.
    */
   getViewportProps(camera: Camera, snap: EdgelessSnappingSnapshot) {
+    // Fade the grid as its dots pack closer together at low zoom.
+    const gridFade =
+      Math.max(0, Math.min(1, (1 - camera.zoom) / (1 - EdgelessSurfaceController.minimumZoom))) *
+      EdgelessSurfaceController.maximumGridDotFade;
     return {
       panEnabled: this.isPanEnabled,
       allowCamera: this.allowSurfaceCamera,
@@ -145,61 +174,11 @@ export class EdgelessSurfaceController {
         backgroundPosition: `${camera.x}px ${camera.y}px`,
         backgroundSize: `${EDGELESS_GRID_SIZE * camera.zoom}px ${EDGELESS_GRID_SIZE * camera.zoom}px`,
         "--rivto-edgeless-zoom": String(camera.zoom),
-        "--rivto-edgeless-grid-dot-fade": this.gridDotFade(camera.zoom),
+        "--rivto-edgeless-grid-dot-fade": `${Math.round(gridFade * 100)}%`,
       } as CSSProperties,
     };
   }
 
-  /**
-   * Computes the card frame at the requested canvas position.
-   *
-   * @param point - Requested top-left position in world units.
-   * @returns Placement frame using a finite positive width or the default width.
-   */
-  private getCardFrame(point: Point): Rect {
-    return {
-      ...EDGELESS_CARD_DEFAULT_FRAME,
-      ...point,
-      width:
-        Number.isFinite(this.cardWidth) && this.cardWidth > 0
-          ? this.cardWidth
-          : EDGELESS_CARD_DEFAULT_FRAME.width,
-    };
-  }
-
-  /**
-   * Inserts a writing block and its card together, separating it from the preceding card.
-   *
-   * @param frame - Resolved world placement of the new card.
-   * @returns ID of the inserted writing block for caret placement.
-   * @throws Propagates document mutation failures from the receiving panel.
-   */
-  private insertCard(frame: Rect): string {
-    const roots = this.panel.blocks
-      .getRootIds()
-      .flatMap((id) => this.panel.blocks.getBlockNode(id) ?? []);
-    const zIndex =
-      Math.max(0, ...this.panel.elements.getElementNodes().map((element) => element.zIndex)) + 1;
-    let id = "";
-    this.panel.batchUpdates(() => {
-      let afterId = roots.at(-1)?.id;
-      const last = roots.at(-1);
-      if (last && !this.panel.editor.blockTypes.separatesBlockElements(last.type)) {
-        afterId = insertBlockElementSeparator(this.panel, last.id).id;
-      }
-      id = this.panel.blocks.insertBlock(
-        this.panel.editor.defaultWritingBlockFactory.createEmptyBlock(),
-        this.panel.blocks.getInsertionDestinationAfter(afterId),
-      ).id;
-      this.panel.elements.insertElement({
-        type: EDGELESS_BLOCK_ELEMENT_TYPE,
-        frame,
-        zIndex,
-        props: { startBlockId: id, endBlockId: id },
-      });
-    });
-    return id;
-  }
   /**
    * Preserves native scrolling inside fixed-height cards and editor controls.
    *
@@ -245,22 +224,6 @@ export class EdgelessSurfaceController {
       delete root.dataset.panning;
     }
   };
-
-  /**
-   * Mix amount toward transparent background grid dots at the current zoom.
-   *
-   * 100% zoom keeps the designed pale dots. As scale drops toward the minimum,
-   * packed cells fade, but a residual mix remains so the field never vanishes.
-   *
-   * @param zoom - Viewport scale already clamped to `[0.5, 2]`.
-   * @returns A CSS percentage for `--rivto-edgeless-grid-dot-fade`.
-   */
-  private gridDotFade(zoom: number): string {
-    const amount =
-      Math.max(0, Math.min(1, (1 - zoom) / (1 - EdgelessSurfaceController.minimumZoom))) *
-      EdgelessSurfaceController.maximumGridDotFade;
-    return `${Math.round(amount * 100)}%`;
-  }
 
   /**
    * Reads live pan-tool state from the mounted viewport.

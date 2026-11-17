@@ -6,18 +6,28 @@
  * only sentinel and means the live end of the block. Invalid offsets copy and
  * delete as an empty slice.
  */
+import { deleteSelection } from "./delete-selection";
 import { Listeners } from "../../utils";
 import type { DocumentEditorAPI } from "../../editor/types";
-import type { SelectionManagerApi } from "../types";
+import type { HistoryBatch, SelectionManagerApi } from "../types";
 import type { Selection } from "./selection";
 import type { ResolvedSelection } from "./resolved-selection";
 import {
-  createCaretSelection,
   assertBlockRangeEndpoints,
   isStructuralSelection,
   resolveBlockRange,
   getSelectedBlockIds,
 } from "./selection-ranges";
+
+/** Reads live selection members and applies deletion through the owning editor. */
+interface SelectionManagerEditor {
+  readonly blocks: Pick<
+    DocumentEditorAPI["blocks"],
+    "getBlock" | "hasBlock" | "getOrderedIds" | "removeBlocks" | "replaceTextSelection"
+  >;
+  readonly elements: Pick<DocumentEditorAPI["elements"], "hasElement" | "removeElements">;
+  readonly history: HistoryBatch;
+}
 
 /** Local selection manager shared by core commands and browser adapters. */
 export class SelectionManager implements SelectionManagerApi {
@@ -31,7 +41,7 @@ export class SelectionManager implements SelectionManagerApi {
    * Creates a manager for one runtime.
    * @param editor - Owning editor providing block, element, and batch capabilities.
    */
-  constructor(private readonly editor: DocumentEditorAPI) {}
+  constructor(private readonly editor: SelectionManagerEditor) {}
 
   /** @returns Detached current selection. */
   get(): Selection | undefined {
@@ -151,7 +161,8 @@ export class SelectionManager implements SelectionManagerApi {
       throw new Error("Selection requires blocks, elements, or plugin data");
     }
     const normalized = this.cloneSelection({ ...item, blocks, elements });
-    if (this.sameSelection(this.value, normalized)) {
+    // Equivalent normalized selections do not invalidate pending focus restoration.
+    if (JSON.stringify(this.value) === JSON.stringify(normalized)) {
       return;
     }
     this.value = this.cloneSelection(normalized);
@@ -173,41 +184,7 @@ export class SelectionManager implements SelectionManagerApi {
    * @returns No value.
    */
   delete(): void {
-    const current = this.get();
-    const range = this.resolveBlockSelection(current);
-    const elementIds = [...new Set(current?.elements ?? [])];
-    if (!range && !elementIds.length) {
-      return;
-    }
-    // Whole-block coverage, or elements with no surviving blocks, must drop
-    // those entities rather than splice characters. Element IDs travel with
-    // either branch so mixed canvas+page selections stay one undo step.
-    if (!range || isStructuralSelection(current)) {
-      this.editor.history.batchUpdates(() => {
-        if (range && !this.editor.blocks.removeBlocks(range.blocks.map((block) => block.id))) {
-          return;
-        }
-        this.editor.elements.removeElements(elementIds);
-        this.clear();
-      });
-    } else {
-      // Keep the first block and join the surviving prefix/suffix. Invalid or
-      // reversed offsets resolve to an empty slice, so this is still a no-op
-      // splice at a clamped caret instead of aborting the transaction.
-      const first = range.ranges[0]!;
-      const last = range.ranges.at(-1)!;
-      const prefix = first.block.content.slice(0, first.startOffset);
-      const suffix = last.block.content.slice(last.endOffset);
-      this.editor.history.batchUpdates(() => {
-        this.editor.blocks.replaceTextSelection(
-          first.block.id,
-          range.blocks.slice(1).map((block) => block.id),
-          prefix + suffix,
-        );
-        this.editor.elements.removeElements(elementIds);
-        this.collapse(first.block.id, prefix.length);
-      });
-    }
+    deleteSelection(this.editor, this, this.get());
   }
 
   /** Clears selection without notifying when already empty. */
@@ -231,16 +208,6 @@ export class SelectionManager implements SelectionManagerApi {
   }
 
   /**
-   * Returns whether two selection values serialize identically.
-   * @param left - First selection.
-   * @param right - Second selection.
-   * @returns Whether every stored field matches.
-   */
-  private sameSelection(left: Selection | undefined, right: Selection | undefined): boolean {
-    return JSON.stringify(left) === JSON.stringify(right);
-  }
-
-  /**
    * Clones a selection at the manager boundary.
    * @param selection - Local selection value to detach.
    * @returns A value whose mutable arrays and plugin data are independently owned.
@@ -260,14 +227,5 @@ export class SelectionManager implements SelectionManagerApi {
   /** Notifies a stable listener snapshot. */
   private notify(): void {
     this.listeners.emit("selectionChanged");
-  }
-
-  /**
-   * Publishes a collapsed caret.
-   * @param blockId - Existing caret block.
-   * @param offset - UTF-16 caret offset.
-   */
-  private collapse(blockId: string, offset: number): void {
-    this.set(createCaretSelection(blockId, offset));
   }
 }

@@ -568,7 +568,8 @@ describe("core ClipboardManager", () => {
     editor.destroy();
   });
 
-  it("owns strategy IDs at registration without stale disposers removing replacements", () => {
+  it("owns strategy IDs at registration without stale disposers removing replacements", async () => {
+    const editor = await createDocumentEditor();
     const registry = new PasteStrategyRegistry();
     const first = { matches: () => true, paste: () => undefined };
     const replacement = { matches: () => true, paste: () => undefined };
@@ -577,8 +578,9 @@ describe("core ClipboardManager", () => {
 
     disposeFirst();
 
-    expect(registry.findMatchingPasteStrategies({ selection: undefined }, {})).toEqual([
+    expect(registry.findMatchingPasteStrategies({ editor, selection: undefined }, {})).toEqual([
       replacement,
     ]);
+    await editor.destroy();
   });
 });

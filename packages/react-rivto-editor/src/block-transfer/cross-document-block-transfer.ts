@@ -1,11 +1,7 @@
-import type { EditorBlock, EditorBlockInput } from "@chulane/rivto";
+import type { EditorBlock } from "@chulane/rivto";
 import type { BlockDestination } from "@chulane/document-model";
 
-import type {
-  BlockTransferEditor,
-  BlockTransferInput,
-  CrossDocumentBlockTransferPlacement,
-} from "./types";
+import type { BlockTransferInput, CrossDocumentBlockTransferPlacement } from "./types";
 
 /**
  * Moves complete selected subtrees between independent documents.
@@ -32,12 +28,77 @@ export function transferBlocksBetweenDocuments(
   rootIds: readonly string[],
   placement: CrossDocumentBlockTransferPlacement,
 ): void {
-  const source = "getDocument" in sourceInput ? sourceInput : sourceInput.document;
-  const destination =
-    "getDocument" in destinationInput ? destinationInput : destinationInput.document;
-  validatePanels(sourceInput, destinationInput, rootIds, placement);
-  const blocks = getTransferBlocks(source, destination, rootIds, placement);
-  const destinationPosition = getTransferDestination(destinationInput, destination, placement);
+  const source = "document" in sourceInput ? sourceInput.document : sourceInput;
+  const destination = "document" in destinationInput ? destinationInput.document : destinationInput;
+  // A panel can move descendants of its hidden root. The root itself cannot
+  // be removed or used as a sibling anchor outside the displayed subtree.
+  if ("document" in sourceInput && rootIds.some((id) => !sourceInput.blocks.canRemove(id))) {
+    throw new Error("Source block is outside panel or protected");
+  }
+  const { targetId, position } = placement;
+  if ("document" in destinationInput && targetId !== null) {
+    const intoPanelRoot = position === "inside" && targetId === destinationInput.rootBlockId;
+    if (
+      !intoPanelRoot &&
+      (!destinationInput.blocks.hasBlock(targetId) ||
+        (position !== "inside" && !destinationInput.blocks.canRemove(targetId)))
+    ) {
+      throw new Error("Destination is outside panel or protected");
+    }
+  }
+  if (source.getDocument() === destination.getDocument()) {
+    throw new Error("Cross-document transfer requires different documents");
+  }
+  if (targetId !== null && !destination.blocks.hasBlock(targetId)) {
+    throw new Error(`Destination block ${targetId} does not exist`);
+  }
+
+  // Read the complete source forest before inspecting identity conflicts. A missing
+  // source or a collision anywhere in its descendants must fail before either write.
+  const roots: EditorBlock[] = [];
+  for (const id of rootIds) {
+    const root = source.blocks.getBlock(id);
+    if (!root) {
+      throw new Error(`Source block ${id} does not exist`);
+    }
+    roots.push(root);
+  }
+  const pending = [...roots].reverse();
+  const blockIds = new Set<string>();
+  while (pending.length) {
+    const block = pending.pop()!;
+    if (!block.id) {
+      throw new Error("Transfer preparation must preserve block IDs");
+    }
+    blockIds.add(block.id);
+    for (let i = block.children.length - 1; i >= 0; i--) {
+      pending.push(block.children[i]!);
+    }
+  }
+  for (const id of blockIds) {
+    if (destination.blocks.hasBlock(id)) {
+      throw new Error(`Destination already contains block ${id}`);
+    }
+  }
+  const blocks = roots.map((root) => structuredClone(root));
+
+  // Translate the panel-relative anchor into the receiving document's coordinates.
+  let destinationPosition: BlockDestination;
+  if (targetId === null) {
+    const parentId = "document" in destinationInput ? (destinationInput.rootBlockId ?? null) : null;
+    destinationPosition = { parentId };
+  } else if (position === "inside") {
+    destinationPosition = { parentId: targetId };
+  } else if (position === "before") {
+    destinationPosition = {
+      parentId: destination.blocks.getParentId(targetId)!,
+      beforeId: targetId,
+    };
+  } else {
+    destinationPosition = destination.blocks.getInsertionDestinationAfter(targetId);
+  }
+  // Import runs destination preparation and entry rules before source removal.
+  // If the source intercepts removal, the successfully inserted copy remains.
   if (!destination.blocks.canMove({ sources: blocks, destination: destinationPosition })) {
     throw new Error("Block transfer is not permitted at this destination");
   }
@@ -45,128 +106,4 @@ export function transferBlocksBetweenDocuments(
   if (!source.blocks.removeBlocks(rootIds)) {
     throw new Error("Source block removal was intercepted after destination insertion");
   }
-}
-
-/**
- * Collects every stable identifier in a detached subtree.
- *
- * @param block - Subtree root to visit.
- * @param ids - Destination set receiving root and descendant identifiers.
- * @returns The set contains this subtree's stable identities.
- * @throws If preparation has omitted a required stable block ID.
- */
-function collectBlockIds(block: EditorBlockInput, ids: Set<string>): void {
-  if (!block.id) {
-    throw new Error("Transfer preparation must preserve block IDs");
-  }
-  ids.add(block.id);
-  block.children?.forEach((child) => collectBlockIds(child, ids));
-}
-
-/**
- * Builds the lossless payload and validates placement and identity conflicts.
- *
- * Complete destination preparation happens through the receiving block manager before its
- * first write, preventing an unavailable custom type from partially importing.
- *
- * @param source - Live document-bound source reads.
- * @param destination - Live destination reads used to reject identity collisions.
- * @param rootIds - Source roots in the requested transfer order.
- * @param placement - Current destination anchor or empty-document append.
- * @returns Detached recursive roots ready for complete destination preparation.
- * @throws If documents match, an anchor or source is missing, IDs collide, or cloning fails.
- */
-function getTransferBlocks(
-  source: BlockTransferEditor,
-  destination: BlockTransferEditor,
-  rootIds: readonly string[],
-  placement: CrossDocumentBlockTransferPlacement,
-): EditorBlock[] {
-  if (source.getDocument() === destination.getDocument()) {
-    throw new Error("Cross-document transfer requires different documents");
-  }
-  if (placement.targetId !== null && !destination.blocks.hasBlock(placement.targetId)) {
-    throw new Error(`Destination block ${placement.targetId} does not exist`);
-  }
-  const roots = rootIds.map((id) => {
-    const block = source.blocks.getBlock(id);
-    if (!block) {
-      throw new Error(`Source block ${id} does not exist`);
-    }
-    return block;
-  });
-  const blockIds = new Set<string>();
-  roots.forEach((block) => collectBlockIds(block, blockIds));
-  for (const id of blockIds) {
-    if (destination.blocks.hasBlock(id)) {
-      throw new Error(`Destination already contains block ${id}`);
-    }
-  }
-  return roots.map((block) => structuredClone(block));
-}
-
-/**
- * Rejects inaccessible sources and destination anchors before payload preparation.
- *
- * A hidden panel root remains a valid inside container; it cannot be used as an
- * outside sibling anchor. Document-only callers have no additional panel boundary.
- *
- * @param source - Source document or panel whose removal boundary is checked.
- * @param destination - Receiving document or panel whose destination is checked.
- * @param rootIds - Complete requested group checked before the first write.
- * @param placement - Current destination relationship.
- * @returns All supplied panel access checks have passed.
- * @throws If a source or destination is outside its panel or protected.
- */
-function validatePanels(
-  source: BlockTransferInput,
-  destination: BlockTransferInput,
-  rootIds: readonly string[],
-  placement: CrossDocumentBlockTransferPlacement,
-): void {
-  if (!("getDocument" in source) && rootIds.some((id) => !source.blocks.canRemove(id))) {
-    throw new Error("Source block is outside panel or protected");
-  }
-  if (!("getDocument" in destination) && placement.targetId !== null) {
-    const container =
-      placement.position === "inside" && placement.targetId === destination.rootBlockId;
-    if (
-      !container &&
-      (!destination.blocks.hasBlock(placement.targetId) ||
-        (placement.position !== "inside" && !destination.blocks.canRemove(placement.targetId)))
-    ) {
-      throw new Error("Destination is outside panel or protected");
-    }
-  }
-}
-
-/**
- * Translates the current anchor into actual model hierarchy before insertion.
- *
- * @param destinationInput - Receiving document or panel supplying the root boundary.
- * @param destination - Live destination commands used for sibling placement.
- * @param placement - Existing target relationship or append without an anchor.
- * @returns Actual parent and optional next sibling, bounded to a hidden panel root when present.
- * @throws Delegated hierarchy read failures for unavailable sibling anchors.
- */
-function getTransferDestination(
-  destinationInput: BlockTransferInput,
-  destination: BlockTransferEditor,
-  placement: CrossDocumentBlockTransferPlacement,
-): BlockDestination {
-  if (placement.targetId === null) {
-    const parentId =
-      "getDocument" in destinationInput ? null : (destinationInput.rootBlockId ?? null);
-    return { parentId };
-  }
-  if (placement.position === "inside") {
-    return { parentId: placement.targetId };
-  }
-  if (placement.position === "before") {
-    return {
-      parentId: destination.blocks.getParentId(placement.targetId)!,
-      beforeId: placement.targetId,
-    };
-  }
-  return destination.blocks.getInsertionDestinationAfter(placement.targetId);
 }

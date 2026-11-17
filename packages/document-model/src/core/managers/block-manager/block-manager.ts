@@ -344,7 +344,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
       }
       afterId = index === 0 ? null : siblings[index - 1];
     }
-    this.validateInsertedForest([block]);
+    // Validate descendants and storage identities before writing the first record.
+    validateBlockForest([block], { existingIds: this.storage });
     const prepared = this.prepareBlock(block);
     let inserted: Block | undefined;
     this.crdt.transact(() => {
@@ -431,7 +432,10 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     // Placement changes update the parent index and changed child lists.
     // A moved block's own node snapshot is unchanged, so its node
     // listener must not wake just because it moved under another parent.
-    this.invalidateBlocks(changedBlockIds, nodeFieldChangedIds, childListChangedIds);
+    const affected = this.cache.getAncestorIds(changedBlockIds);
+    this.cache.invalidate(affected, nodeFieldChangedIds, childListChangedIds);
+    this.emitFocused(affected, "block");
+    this.emitFocused(new Set([...nodeFieldChangedIds, ...childListChangedIds]), "node");
     if (structureChanged || recordReplaced) {
       this.emitStructure(transaction);
     }
@@ -584,7 +588,14 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   setBlockProp(id: string, key: string, value: unknown): void {
     this.crdt.transact(() => {
       const block = this.requiredBlock(id);
-      this.patchProps(this.requiredMap(block, "props"), { [key]: value });
+      const props = this.requiredMap(block, "props");
+      if (value === undefined) {
+        props.delete(key);
+      } else {
+        // Detach host-owned values before storing them in the collaborative map.
+        assertPortableValue(value, `block.props.${key}`);
+        props.set(key, clone(value) as CRDTType);
+      }
     });
   }
 
@@ -782,14 +793,185 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
    * @throws When a source or anchor is unplaced or a cycle would form.
    */
   moveBlocks(moves: readonly BlockMove[]): void {
-    const placements = this.validateMoves(moves);
+    // History batches may already hold a CRDT transaction, so the parent
+    // cache is stale and individual placement searches scan the whole tree.
+    // Read the live hierarchy once for a large grouped move.
+    const liveParents =
+      this.crdt.isTransacting && moves.length > DocumentBlockManager.PARENT_INDEX_MOVE_THRESHOLD
+        ? new Map<string, string | null>()
+        : undefined;
+    if (liveParents) {
+      /**
+       * Indexes current placement before any writes in this move.
+       * @param array - Current sibling array to visit.
+       * @param parentId - Owner of the array, or null for roots.
+       * @returns No value.
+       */
+      const visit = (array: CRDTArray<string>, parentId: string | null): void => {
+        strings(array).forEach((id) => {
+          if (liveParents.has(id)) {
+            return;
+          }
+          liveParents.set(id, parentId);
+          const block = this.storage.get(id);
+          if (isCRDTMap(block)) {
+            visit(this.requiredArray(block, "children"), id);
+          }
+        });
+      };
+      visit(this.roots, null);
+    }
+    const simulatedParents = new Map<string, string | null>();
+    /**
+     * Resolves a parent after preceding simulated moves.
+     *
+     * @param id - Placed block identifier.
+     * @returns Its simulated parent, or the live parent when not yet moved.
+     */
+    const parentOf = (id: string): string | null => {
+      let parentId: string | null;
+      if (simulatedParents.has(id)) {
+        parentId = simulatedParents.get(id)!;
+      } else if (liveParents) {
+        parentId = liveParents.get(id) ?? null;
+      } else {
+        parentId = this.getParentId(id) ?? null;
+      }
+      return parentId;
+    };
+    // Self-anchors are already in the requested place; keeping them would
+    // still trip the descendant-cycle walk below.
+    const placements = moves.filter(({ id, targetId }) => id !== targetId);
+    // Validate each placement against parents simulated by earlier moves,
+    // rejecting missing blocks and cycles before any CRDT writes occur.
+    for (const { id, targetId, position } of placements) {
+      const sourceExists = liveParents ? liveParents.has(id) : this.isPlaced(id);
+      if (!sourceExists) {
+        throw new Error(`Block ${id} not found`);
+      }
+      if (targetId !== null) {
+        const targetExists = liveParents ? liveParents.has(targetId) : this.isPlaced(targetId);
+        if (!targetExists) {
+          throw new Error(`Target block ${targetId} not found`);
+        }
+      }
+      // Reject any placement whose anchor sits in the moving subtree,
+      // including a sibling insert beside a descendant: detaching the
+      // root would take the anchor with it.
+      let ancestor = targetId;
+      while (ancestor !== null) {
+        if (ancestor === id) {
+          throw new Error(`Cannot move block ${id} relative to its descendant ${targetId}`);
+        }
+        ancestor = parentOf(ancestor);
+      }
+      let parentId: string | null;
+      if (targetId === null) {
+        parentId = parentOf(id);
+      } else if (position === "inside") {
+        parentId = targetId;
+      } else {
+        parentId = parentOf(targetId);
+      }
+      // Later placements must see this new parent to detect cycles
+      // introduced by earlier moves in the batch, before any writes occur.
+      simulatedParents.set(id, parentId);
+    }
+
     this.crdt.transact(() => {
-      if (this.tryMoveSiblingRange(placements)) {
-        return;
+      // A shared stationary anchor permits a single array splice if the sources
+      // are contiguous siblings. Repeated "after" and prepend placements arrive in reverse order.
+      const first = placements[0];
+      if (
+        first &&
+        placements.length > 1 &&
+        placements.every(
+          ({ id, targetId, position }) =>
+            targetId === first.targetId && position === first.position && id !== first.targetId,
+        )
+      ) {
+        const source = this.findContainer(first.id)!;
+        const reverseOrder = first.targetId === null || first.position === "after";
+        const sourceStartIndex = source.index - (reverseOrder ? placements.length - 1 : 0);
+        const orderedMoves = reverseOrder ? [...placements].reverse() : placements;
+        const rangeIds = strings(source.array).slice(
+          sourceStartIndex,
+          sourceStartIndex + placements.length,
+        );
+        if (
+          sourceStartIndex >= 0 &&
+          rangeIds.length === placements.length &&
+          rangeIds.every((id, index) => id === orderedMoves[index]!.id)
+        ) {
+          // Move the verified range together so its sibling order is preserved.
+          let target: CRDTArray<string>;
+          let index: number;
+          let sameArray: boolean;
+          // A null anchor prepends within the range's current parent.
+          if (first.targetId === null) {
+            target = source.array;
+            index = 0;
+            sameArray = true;
+            // Inside appends to the anchor's children.
+          } else if (first.position === "inside") {
+            target = this.requiredArray(this.requiredBlock(first.targetId), "children");
+            index = target.length;
+            sameArray = source.parentId === first.targetId;
+            // Before and after use the anchor's sibling array and index.
+          } else {
+            const targetLocation = this.findContainer(first.targetId)!;
+            target = targetLocation.array;
+            index = targetLocation.index + (first.position === "after" ? 1 : 0);
+            sameArray = source.parentId === targetLocation.parentId;
+          }
+          // The insertion slot was measured before deleting the range.
+          // Deleting earlier siblings shifts that slot left by its length.
+          source.array.delete(sourceStartIndex, rangeIds.length);
+          // Only insertion into the same array after the removed range needs an index adjustment.
+          const insertionIndexShifts = sameArray && index > sourceStartIndex;
+          if (insertionIndexShifts) {
+            index -= rangeIds.length;
+          }
+          target.insert(index, ...rangeIds);
+          return;
+        }
       }
       // Other selections must be placed one block at a time.
-      for (const placement of placements) {
-        this.applyMove(placement);
+      for (const { id, targetId, position } of placements) {
+        const source = this.findContainer(id)!;
+        let target: CRDTArray<string>;
+        // A null anchor stays in the source's sibling array.
+        if (targetId === null) {
+          target = source.array;
+        }
+        // Inside changes the parent to the anchor block.
+        else if (position === "inside") {
+          target = this.requiredArray(this.requiredBlock(targetId), "children");
+        }
+        // Before and after keep the anchor's parent.
+        else {
+          target = this.findContainer(targetId)!.array;
+        }
+        // Detach first so same-array sibling indexes are computed on
+        // the remaining IDs, then insert at the resolved slot.
+        source.array.delete(source.index, 1);
+        let index: number;
+        // A null anchor inserts at the start of the same sibling list.
+        if (targetId === null) {
+          index = 0;
+        }
+        // Inside inserts after the anchor's existing children.
+        else if (position === "inside") {
+          index = target.length;
+        }
+        // Sibling moves resolve the anchor after detaching the source.
+        else {
+          index = strings(target).indexOf(targetId);
+          if (position === "after") {
+            index += 1;
+          }
+        }
+        target.insert(index, id);
       }
     });
   }
@@ -949,222 +1131,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   }
 
   /**
-   * Validates sequential placements without changing collaborative state.
-   * @param moves - Ordered placements, including self-anchors to skip.
-   * @returns Placements excluding self-anchors, ready to apply in order.
-   * @throws When a source or anchor is unplaced or a cycle would form.
-   */
-  private validateMoves(moves: readonly BlockMove[]): readonly BlockMove[] {
-    // History batches may already hold a CRDT transaction, so the parent
-    // cache is stale and individual placement searches scan the whole tree.
-    // Read the live hierarchy once for a large grouped move.
-    const liveParents =
-      this.crdt.isTransacting && moves.length > DocumentBlockManager.PARENT_INDEX_MOVE_THRESHOLD
-        ? new Map<string, string | null>()
-        : undefined;
-    if (liveParents) {
-      /**
-       * Indexes current placement before any writes in this move.
-       * @param array - Current sibling array to visit.
-       * @param parentId - Owner of the array, or null for roots.
-       * @returns No value.
-       */
-      const visit = (array: CRDTArray<string>, parentId: string | null): void => {
-        strings(array).forEach((id) => {
-          if (liveParents.has(id)) {
-            return;
-          }
-          liveParents.set(id, parentId);
-          const block = this.storage.get(id);
-          if (isCRDTMap(block)) {
-            visit(this.requiredArray(block, "children"), id);
-          }
-        });
-      };
-      visit(this.roots, null);
-    }
-    const simulatedParents = new Map<string, string | null>();
-    /**
-     * Resolves a parent after preceding simulated moves.
-     *
-     * @param id - Placed block identifier.
-     * @returns Its simulated parent, or the live parent when not yet moved.
-     */
-    const parentOf = (id: string): string | null => {
-      let parentId: string | null;
-      if (simulatedParents.has(id)) {
-        parentId = simulatedParents.get(id)!;
-      } else if (liveParents) {
-        parentId = liveParents.get(id) ?? null;
-      } else {
-        parentId = this.getParentId(id) ?? null;
-      }
-      return parentId;
-    };
-    // Self-anchors are already in the requested place; keeping them would
-    // still trip the descendant-cycle walk below.
-    const placements = moves.filter(({ id, targetId }) => id !== targetId);
-    // Validate each placement against parents simulated by earlier moves,
-    // rejecting missing blocks and cycles before any CRDT writes occur.
-    for (const { id, targetId, position } of placements) {
-      const sourceExists = liveParents ? liveParents.has(id) : this.isPlaced(id);
-      if (!sourceExists) {
-        throw new Error(`Block ${id} not found`);
-      }
-      if (targetId !== null) {
-        const targetExists = liveParents ? liveParents.has(targetId) : this.isPlaced(targetId);
-        if (!targetExists) {
-          throw new Error(`Target block ${targetId} not found`);
-        }
-      }
-      // Reject any placement whose anchor sits in the moving subtree,
-      // including a sibling insert beside a descendant: detaching the
-      // root would take the anchor with it.
-      let ancestor = targetId;
-      while (ancestor !== null) {
-        if (ancestor === id) {
-          throw new Error(`Cannot move block ${id} relative to its descendant ${targetId}`);
-        }
-        ancestor = parentOf(ancestor);
-      }
-      let parentId: string | null;
-      if (targetId === null) {
-        parentId = parentOf(id);
-      } else if (position === "inside") {
-        parentId = targetId;
-      } else {
-        parentId = parentOf(targetId);
-      }
-      // Later placements must see this new parent to detect cycles
-      // introduced by earlier moves in the batch, before any writes occur.
-      simulatedParents.set(id, parentId);
-    }
-    return placements;
-  }
-
-  /**
-   * Moves a contiguous sibling range with one deletion and insertion.
-   * @param placements - Validated placements in sequential execution order.
-   * @returns True after moving the range; false without writes when ineligible.
-   */
-  private tryMoveSiblingRange(placements: readonly BlockMove[]): boolean {
-    // Outline commands pass a contiguous sibling range in source order
-    // (or reverse order for repeated "after" inserts). Move that range
-    // with one CRDT deletion and insertion instead of rewriting every ID.
-    const first = placements[0];
-    if (!first || placements.length < 2) {
-      return false;
-    }
-    // A single range insertion requires a shared anchor and position.
-    const samePlacement = placements.every(
-      ({ targetId, position }) => targetId === first.targetId && position === first.position,
-    );
-    if (!samePlacement) {
-      return false;
-    }
-    // The anchor must remain in place when the source range is detached.
-    const targetIsMoving =
-      first.targetId !== null && placements.some(({ id }) => id === first.targetId);
-    if (targetIsMoving) {
-      return false;
-    }
-    const source = this.findContainer(first.id)!;
-    const reverseOrder = first.targetId === null || first.position === "after";
-    const sourceStartIndex = source.index - (reverseOrder ? placements.length - 1 : 0);
-    const rangeIds = strings(source.array).slice(
-      sourceStartIndex,
-      sourceStartIndex + placements.length,
-    );
-    const orderedMoves = reverseOrder ? [...placements].reverse() : placements;
-    // A shared placement can use one array splice only if its sources
-    // occupy one contiguous sibling range in the expected order.
-    // A noncontiguous or reordered selection needs individual moves.
-    // The sibling slice must fit every requested move without crossing array bounds.
-    const hasCompleteRange = sourceStartIndex >= 0 && rangeIds.length === placements.length;
-    if (!hasCompleteRange) {
-      return false;
-    }
-    // Matching IDs in order proves the sources form one contiguous sibling range.
-    const hasExpectedOrder = rangeIds.every((id, index) => id === orderedMoves[index]!.id);
-    if (!hasExpectedOrder) {
-      return false;
-    }
-    // Move the verified range together so its sibling order is preserved.
-    let target: CRDTArray<string>;
-    let index: number;
-    let sameArray: boolean;
-    // A null anchor prepends within the range's current parent.
-    if (first.targetId === null) {
-      target = source.array;
-      index = 0;
-      sameArray = true;
-      // Inside appends to the anchor's children.
-    } else if (first.position === "inside") {
-      target = this.requiredArray(this.requiredBlock(first.targetId), "children");
-      index = target.length;
-      sameArray = source.parentId === first.targetId;
-      // Before and after use the anchor's sibling array and index.
-    } else {
-      const targetLocation = this.findContainer(first.targetId)!;
-      target = targetLocation.array;
-      index = targetLocation.index + (first.position === "after" ? 1 : 0);
-      sameArray = source.parentId === targetLocation.parentId;
-    }
-    // The insertion slot was measured before deleting the range.
-    // Deleting earlier siblings shifts that slot left by its length.
-    source.array.delete(sourceStartIndex, rangeIds.length);
-    // Only insertion into the same array after the removed range needs an index adjustment.
-    const insertionIndexShifts = sameArray && index > sourceStartIndex;
-    if (insertionIndexShifts) {
-      index -= rangeIds.length;
-    }
-    target.insert(index, ...rangeIds);
-    return true;
-  }
-
-  /**
-   * Applies one validated placement using the current hierarchy.
-   * @param placement - Placement whose source and anchor are already validated.
-   * @returns No value.
-   */
-  private applyMove({ id, targetId, position }: BlockMove): void {
-    const source = this.findContainer(id)!;
-    let target: CRDTArray<string>;
-    // A null anchor stays in the source's sibling array.
-    if (targetId === null) {
-      target = source.array;
-    }
-    // Inside changes the parent to the anchor block.
-    else if (position === "inside") {
-      target = this.requiredArray(this.requiredBlock(targetId), "children");
-    }
-    // Before and after keep the anchor's parent.
-    else {
-      target = this.findContainer(targetId)!.array;
-    }
-    // Detach first so same-array sibling indexes are computed on
-    // the remaining IDs, then insert at the resolved slot.
-    source.array.delete(source.index, 1);
-    let index: number;
-    // A null anchor inserts at the start of the same sibling list.
-    if (targetId === null) {
-      index = 0;
-    }
-    // Inside inserts after the anchor's existing children.
-    else if (position === "inside") {
-      index = target.length;
-    }
-    // Sibling moves resolve the anchor after detaching the source.
-    else {
-      index = strings(target).indexOf(targetId);
-      if (position === "after") {
-        index += 1;
-      }
-    }
-    target.insert(index, id);
-  }
-
-  /**
    * Creates CRDT containers for a block and inserts its ID into an ordered list.
    *
    * @param block - Portable block data, including its type and optional descendants.
@@ -1186,7 +1152,19 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     if (this.storage.has(id)) {
       throw new Error(`Block ${id} already exists`);
     }
-    const index = this.placementIndex(container, afterId);
+    // Distinguish append, prepend and an explicit sibling that must still exist.
+    let index: number;
+    if (afterId === undefined) {
+      index = container.length;
+    } else if (afterId === null) {
+      index = 0;
+    } else {
+      const anchorIndex = strings(container).indexOf(afterId);
+      if (anchorIndex < 0) {
+        throw new Error(`Target block ${afterId} not found`);
+      }
+      index = anchorIndex + 1;
+    }
     const model = this.crdt.createDetachedMap<BlockStorage>();
     const props = this.crdt.createDetachedMap<Record<string, CRDTType>>();
     const content = this.crdt.createDetachedText();
@@ -1216,39 +1194,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
       content: content.toString(),
       children: insertedChildren,
     };
-  }
-
-  /**
-   * Computes the insertion index after the exact requested sibling.
-   *
-   * @param container - Sibling array that must contain `afterId` when named.
-   * @param afterId - Sibling to insert after, `null` for first, or omitted for last.
-   * @returns Index at which the new ID should be inserted.
-   * @throws {Error} When a named sibling is missing from the container.
-   */
-  private placementIndex(container: CRDTArray<string>, afterId?: string | null): number {
-    if (afterId === undefined) {
-      return container.length;
-    }
-    if (afterId === null) {
-      return 0;
-    }
-    const found = strings(container).indexOf(afterId);
-    if (found < 0) {
-      throw new Error(`Target block ${afterId} not found`);
-    }
-    return found + 1;
-  }
-
-  /**
-   * Preflights one inserted forest against current storage before writing.
-   *
-   * @param blocks - Root inputs that will be written in one insertion.
-   * @returns No value.
-   * @throws {Error} When any descendant is malformed or collides with storage.
-   */
-  private validateInsertedForest(blocks: readonly BlockInput[]): void {
-    validateBlockForest(blocks, { existingIds: this.storage });
   }
 
   /**
@@ -1293,9 +1238,14 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   private readBlockNode(value: CRDTMap<BlockStorage>, id: IDBlock): BlockNode {
     // The adapter can expose plain nested property values by reference.
     // Detach them before callers receive or cache the node.
+    const type = value.get("type");
+    if (typeof type !== "string" || !type) {
+      throw new Error(`Block ${id} has no type`);
+    }
+
     const fields = clone({
       id,
-      type: this.requiredType(value, id),
+      type,
       listProps: validateBlockListProps(this.requiredMap(value, "listProps").toObject()),
       props: this.requiredMap(value, "props").toObject() as Record<IDProp, unknown>,
       pluginData: this.requiredMap(value, "pluginData").toObject() as Record<IDPlugin, unknown>,
@@ -1307,28 +1257,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         strings(this.requiredArray(value, "children")),
       ),
     };
-  }
-
-  /**
-   * Invalidates changed blocks and recursive snapshots of their live ancestors.
-   *
-   * Recursive snapshots include descendants, so they follow the ancestor
-   * chain. Focused caches are dropped only for their relevant record changes.
-   *
-   * @param ids - Changed block IDs whose cached ancestor chains are stale.
-   * @param nodeIds - Blocks whose own node fields changed.
-   * @param childListIds - Blocks whose direct child array changed.
-   * @returns No value.
-   */
-  private invalidateBlocks(
-    ids: ReadonlySet<string>,
-    nodeIds: ReadonlySet<string>,
-    childListIds: ReadonlySet<string>,
-  ): void {
-    const affected = this.cache.getAncestorIds(ids);
-    this.cache.invalidate(affected, nodeIds, childListIds);
-    this.emitFocused(affected, "block");
-    this.emitFocused(new Set([...nodeIds, ...childListIds]), "node");
   }
 
   /**
@@ -1498,29 +1426,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   }
 
   /**
-   * Applies caller-owned prop keys without rebuilding the live CRDT map.
-   *
-   * @param props - Shared property map to patch.
-   * @param patch - Property keys owned by this operation.
-   * @returns No value.
-   */
-  private patchProps(
-    props: CRDTMap<Record<string, CRDTType>>,
-    patch: Record<string, unknown>,
-  ): void {
-    Object.entries(patch).forEach(([key, value]) => {
-      if (value !== undefined) {
-        assertPortableValue(value, `block.props.${key}`);
-      }
-      if (value === undefined) {
-        props.delete(key);
-      } else {
-        props.set(key, clone(value) as CRDTType);
-      }
-    });
-  }
-
-  /**
    * Reads a block map or fails with a domain-specific message.
    *
    * @param id - Block ID to resolve.
@@ -1533,25 +1438,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
       throw new Error(`Block ${id} not found`);
     }
     return value;
-  }
-
-  /**
-   * Reads the immutable native type stored on a block.
-   *
-   * Missing types indicate malformed shared data and are rejected instead of
-   * silently changing the block into a built-in editor type.
-   *
-   * @param block - Stored block map to inspect.
-   * @param id - Block ID included in a descriptive error.
-   * @returns The non-empty native block type.
-   * @throws If shared storage does not contain a valid type.
-   */
-  private requiredType(block: CRDTMap<BlockStorage>, id: string): string {
-    const type = block.get("type");
-    if (typeof type !== "string" || !type) {
-      throw new Error(`Block ${id} has no type`);
-    }
-    return type;
   }
 
   /**

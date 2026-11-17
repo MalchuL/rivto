@@ -89,16 +89,6 @@ const DEMO_PREVIEW_LIFETIME_MS = 30_000;
 const demoImagePreviews = new Map<string, Blob>();
 
 /**
- * Returns whether the demo server can resolve one local filesystem path.
- *
- * @param uri - Candidate file URI or filesystem path.
- * @returns True for file URIs and absolute Unix or Windows paths.
- */
-function isDemoLocalFileUri(uri: string): boolean {
-  return /^file:\/\//i.test(uri) || /^\//.test(uri) || /^[a-z]:[\\/]/i.test(uri);
-}
-
-/**
  * Stores browser-owned bytes in the demo server so a native app can address them.
  *
  * @param data - File or resolved blob to persist temporarily.
@@ -171,7 +161,9 @@ const demoBinaryProvider: BinaryProvider = {
    * @inheritdoc BinaryProvider.read
    */
   async read(uri, context) {
-    if (!isDemoLocalFileUri(uri)) {
+    // The server resolves file URLs and absolute Unix or Windows paths.
+    const isLocalPath = /^file:\/\//i.test(uri) || /^\//.test(uri) || /^[a-z]:[\\/]/i.test(uri);
+    if (!isLocalPath) {
       return undefined;
     }
     context.signal.throwIfAborted();
@@ -338,194 +330,6 @@ function demoThreadAnchor(block: Element): Element | null {
   return null;
 }
 
-/** Borrowed command operation used to seed the canvas showcase. */
-interface DemoCanvasSeedEditor {
-  /** Executes registered edgeless creation and selection commands. */
-  readonly commands: Pick<DocumentEditorAPI["commands"], "execute">;
-}
-
-/** Borrowed document operations used by the feature showcase. */
-interface FeatureSeedEditor extends DemoCanvasSeedEditor {
-  /** Creates, nests, moves and reads showcase blocks. */
-  readonly blocks: Pick<
-    DocumentEditorAPI["blocks"],
-    | "getBlock"
-    | "getInsertionDestinationAfter"
-    | "getRootIds"
-    | "importForest"
-    | "indentBlock"
-    | "insertBlock"
-    | "moveBlocks"
-  >;
-  /** Creates canvas elements and reads their stacking order. */
-  readonly elements: Pick<DocumentEditorAPI["elements"], "getElementNodes" | "insertElement">;
-  /** Groups repeated showcase insertions into one history batch. */
-  readonly history: Pick<DocumentEditorAPI["history"], "batchUpdates">;
-}
-
-/**
- * Seeds canvas visuals that exercise edgeless features in the journal demo.
- *
- * Needed so a fresh demo load already has shapes, text, sticky, drawing,
- * connectors, nested groups, and spare siblings for align / distribute /
- * layer-order practice — without the visitor having to create them first.
- *
- * @param editor - Borrowed command registry used to create and select showcase elements.
- * @returns Showcase elements have been inserted and their selection cleared.
- * @throws If a registered canvas command fails.
- */
-function seedEdgelessShowcase(editor: DemoCanvasSeedEditor): void {
-  // Cards grow with their content, including embeddings. Keep the heading
-  // above their initial frames so collapsing an outline cannot put it over a row.
-  editor.commands.execute("edgeless.visual.create", {
-    kind: "text",
-    ...{
-      text: "Edgeless showcase",
-      frame: { x: 60, y: 0, width: 280, height: 32 },
-      fontSize: 22,
-      fontFamily: "Georgia, Cambria, serif",
-      color: "#212529",
-    },
-  }) as EditorElementNode;
-  editor.commands.execute("edgeless.visual.create", {
-    kind: "text",
-    ...{
-      text: "Shapes · sticky · pencil · connector · nested group · align/distribute extras",
-      frame: { x: 60, y: 32, width: 560, height: 28 },
-      fontSize: 13,
-      color: "#495057",
-    },
-  }) as EditorElementNode;
-
-  const rect = editor.commands.execute("edgeless.visual.create", {
-    kind: "rectangle",
-    ...{
-      frame: { x: 60, y: 530, width: 130, height: 90 },
-      fill: "#d0ebff",
-      stroke: "#1c7ed6",
-      strokeWidth: 2,
-      text: "Rect",
-    },
-  }) as EditorElementNode;
-  const ellipse = editor.commands.execute("edgeless.visual.create", {
-    kind: "ellipse",
-    ...{
-      frame: { x: 240, y: 545, width: 110, height: 80 },
-      fill: "#fff3bf",
-      stroke: "#e67700",
-      strokeWidth: 2,
-      text: "Ellipse",
-    },
-  }) as EditorElementNode;
-  editor.commands.execute("edgeless.visual.create", {
-    kind: "connector",
-    ...{
-      route: "orthogonal",
-      source: { elementId: rect.id, anchor: { x: 1, y: 0.5 }, position: { x: 190, y: 575 } },
-      target: { elementId: ellipse.id, anchor: { x: 0, y: 0.5 }, position: { x: 240, y: 585 } },
-      stroke: "#495057",
-      lineStyle: "dashed",
-      endStyle: "arrow",
-      text: "link",
-      textRotation: "along",
-    },
-  }) as EditorElementNode;
-
-  editor.commands.execute("edgeless.selection.set", [rect.id, ellipse.id]);
-  const shapeGroup = editor.commands.execute("edgeless.selection.group") as EditorElementNode;
-
-  const sticky = editor.commands.execute("edgeless.visual.create", {
-    kind: "sticker",
-    ...{
-      text: "Sticky note\n(double-click to edit)",
-      fill: "#eeeaff",
-      color: "#362b67",
-      frame: { x: 420, y: 530, width: 170, height: 130 },
-    },
-  }) as EditorElementNode;
-
-  // Second connector: animated dashes flow toward the sticky.
-  editor.commands.execute("edgeless.visual.create", {
-    kind: "connector",
-    ...{
-      route: "curve",
-      source: { elementId: ellipse.id, anchor: { x: 1, y: 0.5 }, position: { x: 350, y: 585 } },
-      target: { elementId: sticky.id, anchor: { x: 0, y: 0.5 }, position: { x: 420, y: 595 } },
-      stroke: "#868e96",
-      lineStyle: "dashed-animated",
-      endStyle: "arrow",
-      text: "",
-    },
-  }) as EditorElementNode;
-
-  // Nested group: existing group + sticky (Primary-click / Group again in the UI).
-  editor.commands.execute("edgeless.selection.set", [shapeGroup.id, sticky.id]);
-  editor.commands.execute("edgeless.selection.group") as EditorElementNode;
-
-  editor.commands.execute("edgeless.visual.create", {
-    kind: "drawing",
-    ...{
-      brush: "pencil",
-      frame: { x: 640, y: 530, width: 150, height: 100 },
-      points: [
-        { x: 8, y: 72 },
-        { x: 28, y: 18 },
-        { x: 52, y: 58 },
-        { x: 78, y: 12 },
-        { x: 108, y: 64 },
-        { x: 138, y: 28 },
-      ],
-      stroke: "#212529",
-      strokeWidth: 2,
-    },
-  }) as EditorElementNode;
-  editor.commands.execute("edgeless.visual.create", {
-    kind: "text",
-    ...{
-      text: "Free text — resize corners, drag handle, layer arrows",
-      frame: { x: 640, y: 650, width: 260, height: 48 },
-      fontSize: 14,
-      color: "#343a40",
-    },
-  }) as EditorElementNode;
-
-  // Unrelated siblings for align / distribute / multi-select practice.
-  editor.commands.execute("edgeless.visual.create", {
-    kind: "rectangle",
-    ...{
-      frame: { x: 920, y: 530, width: 56, height: 56 },
-      fill: "#d3f9d8",
-      stroke: "#2b8a3e",
-    },
-  }) as EditorElementNode;
-  editor.commands.execute("edgeless.visual.create", {
-    kind: "rectangle",
-    ...{
-      frame: { x: 1020, y: 560, width: 56, height: 56 },
-      fill: "#d3f9d8",
-      stroke: "#2b8a3e",
-    },
-  }) as EditorElementNode;
-  editor.commands.execute("edgeless.visual.create", {
-    kind: "rectangle",
-    ...{
-      frame: { x: 1120, y: 510, width: 56, height: 56 },
-      fill: "#d3f9d8",
-      stroke: "#2b8a3e",
-    },
-  }) as EditorElementNode;
-  editor.commands.execute("edgeless.visual.create", {
-    kind: "ellipse",
-    ...{
-      frame: { x: 920, y: 640, width: 70, height: 48 },
-      fill: "#ffd8a8",
-      stroke: "#d9480f",
-    },
-  }) as EditorElementNode;
-
-  editor.commands.execute("edgeless.selection.clear");
-}
-
 /**
  * Opens one demo database model before creating its core API and seeding.
  * @returns Host-owned document storage and its database model; the caller or editor cache creates the core.
@@ -541,17 +345,25 @@ async function createDemoDocument() {
   return { storage, document };
 }
 
+/** Editor and host resources owned together by a mounted demo. */
+interface DemoEditorRuntime {
+  readonly storage: DocumentStorage;
+  readonly editor: DocumentEditorAPI;
+  readonly reactEditor: ReactEditorApi;
+  readonly editorStorage?: EditorStorage;
+}
+
+/** The journal additionally exposes its editor cache for embedded documents. */
+interface JournalEditorRuntime extends DemoEditorRuntime {
+  readonly editorStorage: EditorStorage;
+}
+
 /**
  * Releases runtime registrations before closing all document connections.
  * @param runtime - Resources created by a demo factory.
  * @returns Nothing after the host storage has closed its registry and documents.
  */
-async function destroyDemoEditor(runtime: {
-  readonly storage: DocumentStorage;
-  readonly editor: DocumentEditorAPI;
-  readonly reactEditor: ReactEditorApi;
-  readonly editorStorage?: EditorStorage;
-}): Promise<void> {
+async function destroyDemoEditor(runtime: DemoEditorRuntime): Promise<void> {
   if (runtime.editorStorage) {
     await runtime.editorStorage.destroy();
   } else {
@@ -649,367 +461,502 @@ async function createDemoEditor() {
     __rivtoDemo: { token: demoToken, editor, reactEditor },
   });
   if (new URLSearchParams(window.location.search).get("test_features") === "1") {
-    seedFeatureDemo(editor, resources.document.id);
+    // Build the feature fixtures in document order so later selections and embeddings can refer to earlier blocks.
+    const introId = editor.blocks.insertBlock({
+      ...paragraphBlockFactory.createEmptyBlock(),
+      content: "**Rivto editor**",
+    }).id;
+    const paragraphId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content:
+          "This paragraph renders *Markdown*, ~~old text~~, and `inline code` when it is not edited.",
+      },
+      editor.blocks.getInsertionDestinationAfter(introId),
+    ).id;
+
+    const selectionStartId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content:
+          "Start a selection in the middle of this sentence and drag downward. See [Rivto](https://example.com).",
+      },
+      editor.blocks.getInsertionDestinationAfter(paragraphId),
+    ).id;
+    const middleParagraphId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content:
+          "This complete **Markdown paragraph** should be included between partial selections.",
+      },
+      editor.blocks.getInsertionDestinationAfter(selectionStartId),
+    ).id;
+    const listId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Nested branch one owns several Markdown children.",
+      },
+      editor.blocks.getInsertionDestinationAfter(middleParagraphId),
+    ).id;
+    const childId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Level 2: this child owns another nested branch.",
+      },
+      editor.blocks.getInsertionDestinationAfter(listId),
+    ).id;
+    editor.blocks.indentBlock(childId);
+    const grandchildId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Level 3: selection now crosses two indentation boundaries.",
+      },
+      editor.blocks.getInsertionDestinationAfter(childId),
+    ).id;
+    editor.blocks.indentBlock(grandchildId);
+    const greatGrandchildId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Level 4: deepest item for recursive rendering and outdent checks.",
+      },
+      editor.blocks.getInsertionDestinationAfter(grandchildId),
+    ).id;
+    editor.blocks.indentBlock(greatGrandchildId);
+    editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Level 2: sibling after the deep branch.",
+      },
+      editor.blocks.getInsertionDestinationAfter(childId),
+    );
+
+    const reverseSelectionId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Reverse selection should preserve the browser's anchor and focus direction.",
+      },
+      editor.blocks.getInsertionDestinationAfter(listId),
+    ).id;
+    const secondBranchId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Nested branch two is a second independent structure.",
+      },
+      editor.blocks.getInsertionDestinationAfter(reverseSelectionId),
+    ).id;
+    const numberedChildId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Second branch level 2 child.",
+      },
+      editor.blocks.getInsertionDestinationAfter(secondBranchId),
+    ).id;
+    editor.blocks.indentBlock(numberedChildId);
+    const numberedGrandchildId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Second branch level 3 descendant.",
+      },
+      editor.blocks.getInsertionDestinationAfter(numberedChildId),
+    ).id;
+    editor.blocks.indentBlock(numberedGrandchildId);
+    editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Second branch level 2 sibling.",
+      },
+      editor.blocks.getInsertionDestinationAfter(numberedChildId),
+    );
+
+    const sliderId = editor.blocks.insertBlock(
+      {
+        type: SLIDER_BLOCK_TYPE,
+        content: "const selectedBlocks = selection.filter(item => item.type === 'block');",
+        props: { value: 35 },
+      },
+      editor.blocks.getInsertionDestinationAfter(secondBranchId),
+    ).id;
+    const selectionEndId = editor.blocks.insertBlock(
+      {
+        type: COUNTER_BLOCK_TYPE,
+        props: { count: 2 },
+      },
+      editor.blocks.getInsertionDestinationAfter(sliderId),
+    ).id;
+    const finalId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Finish the selection in the middle of this sentence, then try copy or cut.",
+      },
+      editor.blocks.getInsertionDestinationAfter(selectionEndId),
+    ).id;
+    const slashId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Type `/` anywhere here to open searchable slash commands.",
+      },
+      editor.blocks.getInsertionDestinationAfter(finalId),
+    ).id;
+    const uncheckedId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Try the interactive checkbox",
+        listProps: { type: "checkbox", checked: false },
+      },
+      editor.blocks.getInsertionDestinationAfter(slashId),
+    ).id;
+    const checkedId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Completed checkbox item",
+        listProps: { type: "checkbox", checked: true },
+      },
+      editor.blocks.getInsertionDestinationAfter(uncheckedId),
+    ).id;
+    const numberedStartId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Start a numbered sequence",
+        listProps: { type: "start_numbered_list" },
+      },
+      editor.blocks.getInsertionDestinationAfter(checkedId),
+    ).id;
+    const numberedNextId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Continue the adjacent sequence",
+        listProps: { type: "numbered_list" },
+      },
+      editor.blocks.getInsertionDestinationAfter(numberedStartId),
+    ).id;
+    const numberedGapId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Ordinary content between numbered items",
+      },
+      editor.blocks.getInsertionDestinationAfter(numberedNextId),
+    ).id;
+    const numberedContinueId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Continue numbering across the ordinary block",
+        listProps: { type: "continue_numbered_list" },
+      },
+      editor.blocks.getInsertionDestinationAfter(numberedGapId),
+    ).id;
+
+    // The explicit separator is visible in block mode and partitions cards only
+    // because its React block plugin declares `separatesBlockElements`.
+    editor.blocks.insertBlock(
+      separatorBlockFactory.createEmptyBlock(),
+      editor.blocks.getInsertionDestinationAfter(reverseSelectionId),
+    );
+    editor.elements.insertElement({
+      type: "block",
+      frame: { x: 60, y: 60, width: 500, height: 360 },
+      zIndex: 0,
+      props: { startBlockId: introId, endBlockId: reverseSelectionId },
+    });
+    editor.elements.insertElement({
+      type: "block",
+      frame: { x: 600, y: 60, width: 500, height: 360 },
+      zIndex: 1,
+      props: { startBlockId: secondBranchId, endBlockId: numberedContinueId },
+    });
+    editor.blocks.insertBlock(
+      {
+        ...createBentoBlockInput(),
+        children: [
+          {
+            ...paragraphBlockFactory.createEmptyBlock(),
+            content: "A small idea",
+            pluginData: { bentoWidth: 220 },
+          },
+          {
+            ...paragraphBlockFactory.createEmptyBlock(),
+            content:
+              "Room to explore. Drag this tile's left or right edge to resize. Heights follow your content, and tiles wrap with the editor width.",
+            pluginData: { bentoWidth: 400 },
+          },
+          {
+            ...paragraphBlockFactory.createEmptyBlock(),
+            content:
+              "Drag blocks between tiles, nest them inside, or move them back into the editor.",
+          },
+        ],
+      },
+      editor.blocks.getInsertionDestinationAfter(numberedContinueId),
+    );
+    const tableId = editor.blocks.insertBlock(
+      createTableBlockInput(),
+      editor.blocks.getInsertionDestinationAfter(numberedContinueId),
+    ).id;
+    const kanbanId = editor.blocks.insertBlock(
+      createKanbanBlockInput(),
+      editor.blocks.getInsertionDestinationAfter(tableId),
+    ).id;
+    const column = editor.blocks.getBlock(kanbanId)!.children[0]!;
+    const cardId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Drag me between columns or back into the editor",
+      },
+      editor.blocks.getInsertionDestinationAfter(kanbanId),
+    ).id;
+    editor.blocks.moveBlocks([cardId], column.id, "inside");
+    const columnsId = editor.blocks.insertBlock(
+      createColumnsBlockInput(2),
+      editor.blocks.getInsertionDestinationAfter(kanbanId),
+    ).id;
+    const columnsBoard = editor.blocks.getBlock(columnsId)!;
+    const leftColumnId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content:
+          "Left column. Add more blocks here, or use the settings control to change the column count.",
+      },
+      editor.blocks.getInsertionDestinationAfter(columnsId),
+    ).id;
+    const rightColumnId = editor.blocks.insertBlock(
+      {
+        ...paragraphBlockFactory.createEmptyBlock(),
+        content: "Right column. Deleting a column moves its blocks into the remaining column.",
+      },
+      editor.blocks.getInsertionDestinationAfter(columnsId),
+    ).id;
+    editor.blocks.moveBlocks([leftColumnId], columnsBoard.children[0]!.id, "inside");
+    editor.blocks.moveBlocks([rightColumnId], columnsBoard.children[1]!.id, "inside");
+    const repeatCount = demoRepeatCount();
+    if (repeatCount > 0) {
+      const rootIds = editor.blocks.getRootIds();
+      const start = rootIds.indexOf(secondBranchId);
+      const end = rootIds.indexOf(numberedContinueId);
+      const template = rootIds.slice(start, end + 1).flatMap((id) => {
+        const block = editor.blocks.getBlock(id);
+        return block ? [block] : [];
+      });
+      editor.history.batchUpdates(() => {
+        for (let index = 0; index < repeatCount; index += 1) {
+          editor.blocks.insertBlock(separatorBlockFactory.createEmptyBlock());
+          editor.blocks.importForest(template);
+        }
+      });
+    }
+    const todoStorageId = editor.blocks.insertBlock({
+      type: TODO_STORAGE_BLOCK_TYPE,
+      content: "",
+    }).id;
+    const todoId = editor.blocks.insertBlock(
+      {
+        type: TODO_ITEM_BLOCK_TYPE,
+        content: "Review the project brief",
+        props: {
+          status: "todo",
+          description: "Confirm scope and acceptance criteria.",
+          priority: 2,
+          project: "Planning",
+        },
+      },
+      editor.blocks.getInsertionDestinationAfter(todoStorageId),
+    ).id;
+    editor.blocks.indentBlock(todoId);
+    const doingId = editor.blocks.insertBlock(
+      {
+        type: TODO_ITEM_BLOCK_TYPE,
+        content: "Build the editor extension",
+        props: {
+          status: "doing",
+          description: "Prompt conversion and task properties are in progress.",
+          priority: 1,
+          project: "Rivto",
+        },
+      },
+      editor.blocks.getInsertionDestinationAfter(todoId),
+    ).id;
+    editor.blocks.insertBlock(
+      {
+        type: TODO_ITEM_BLOCK_TYPE,
+        content: "Set up the workspace",
+        props: {
+          status: "done",
+          description: "Core packages and demo are ready.",
+          priority: 3,
+          project: "Rivto",
+        },
+      },
+      editor.blocks.getInsertionDestinationAfter(doingId),
+    );
+    // Seed the editable shapes and their connectors after the document blocks exist.
+    // Cards grow with their content, including embeddings. Keep the heading
+    // above their initial frames so collapsing an outline cannot put it over a row.
+    editor.commands.execute("edgeless.visual.create", {
+      kind: "text",
+      ...{
+        text: "Edgeless showcase",
+        frame: { x: 60, y: 0, width: 280, height: 32 },
+        fontSize: 22,
+        fontFamily: "Georgia, Cambria, serif",
+        color: "#212529",
+      },
+    }) as EditorElementNode;
+    editor.commands.execute("edgeless.visual.create", {
+      kind: "text",
+      ...{
+        text: "Shapes · sticky · pencil · connector · nested group · align/distribute extras",
+        frame: { x: 60, y: 32, width: 560, height: 28 },
+        fontSize: 13,
+        color: "#495057",
+      },
+    }) as EditorElementNode;
+
+    const rect = editor.commands.execute("edgeless.visual.create", {
+      kind: "rectangle",
+      ...{
+        frame: { x: 60, y: 530, width: 130, height: 90 },
+        fill: "#d0ebff",
+        stroke: "#1c7ed6",
+        strokeWidth: 2,
+        text: "Rect",
+      },
+    }) as EditorElementNode;
+    const ellipse = editor.commands.execute("edgeless.visual.create", {
+      kind: "ellipse",
+      ...{
+        frame: { x: 240, y: 545, width: 110, height: 80 },
+        fill: "#fff3bf",
+        stroke: "#e67700",
+        strokeWidth: 2,
+        text: "Ellipse",
+      },
+    }) as EditorElementNode;
+    editor.commands.execute("edgeless.visual.create", {
+      kind: "connector",
+      ...{
+        route: "orthogonal",
+        source: { elementId: rect.id, anchor: { x: 1, y: 0.5 }, position: { x: 190, y: 575 } },
+        target: { elementId: ellipse.id, anchor: { x: 0, y: 0.5 }, position: { x: 240, y: 585 } },
+        stroke: "#495057",
+        lineStyle: "dashed",
+        endStyle: "arrow",
+        text: "link",
+        textRotation: "along",
+      },
+    }) as EditorElementNode;
+
+    editor.commands.execute("edgeless.selection.set", [rect.id, ellipse.id]);
+    const shapeGroup = editor.commands.execute("edgeless.selection.group") as EditorElementNode;
+
+    const sticky = editor.commands.execute("edgeless.visual.create", {
+      kind: "sticker",
+      ...{
+        text: "Sticky note\n(double-click to edit)",
+        fill: "#eeeaff",
+        color: "#362b67",
+        frame: { x: 420, y: 530, width: 170, height: 130 },
+      },
+    }) as EditorElementNode;
+
+    // Second connector: animated dashes flow toward the sticky.
+    editor.commands.execute("edgeless.visual.create", {
+      kind: "connector",
+      ...{
+        route: "curve",
+        source: { elementId: ellipse.id, anchor: { x: 1, y: 0.5 }, position: { x: 350, y: 585 } },
+        target: { elementId: sticky.id, anchor: { x: 0, y: 0.5 }, position: { x: 420, y: 595 } },
+        stroke: "#868e96",
+        lineStyle: "dashed-animated",
+        endStyle: "arrow",
+        text: "",
+      },
+    }) as EditorElementNode;
+
+    // Nested group: existing group + sticky (Primary-click / Group again in the UI).
+    editor.commands.execute("edgeless.selection.set", [shapeGroup.id, sticky.id]);
+    editor.commands.execute("edgeless.selection.group") as EditorElementNode;
+
+    editor.commands.execute("edgeless.visual.create", {
+      kind: "drawing",
+      ...{
+        brush: "pencil",
+        frame: { x: 640, y: 530, width: 150, height: 100 },
+        points: [
+          { x: 8, y: 72 },
+          { x: 28, y: 18 },
+          { x: 52, y: 58 },
+          { x: 78, y: 12 },
+          { x: 108, y: 64 },
+          { x: 138, y: 28 },
+        ],
+        stroke: "#212529",
+        strokeWidth: 2,
+      },
+    }) as EditorElementNode;
+    editor.commands.execute("edgeless.visual.create", {
+      kind: "text",
+      ...{
+        text: "Free text — resize corners, drag handle, layer arrows",
+        frame: { x: 640, y: 650, width: 260, height: 48 },
+        fontSize: 14,
+        color: "#343a40",
+      },
+    }) as EditorElementNode;
+
+    // Unrelated siblings for align / distribute / multi-select practice.
+    editor.commands.execute("edgeless.visual.create", {
+      kind: "rectangle",
+      ...{
+        frame: { x: 920, y: 530, width: 56, height: 56 },
+        fill: "#d3f9d8",
+        stroke: "#2b8a3e",
+      },
+    }) as EditorElementNode;
+    editor.commands.execute("edgeless.visual.create", {
+      kind: "rectangle",
+      ...{
+        frame: { x: 1020, y: 560, width: 56, height: 56 },
+        fill: "#d3f9d8",
+        stroke: "#2b8a3e",
+      },
+    }) as EditorElementNode;
+    editor.commands.execute("edgeless.visual.create", {
+      kind: "rectangle",
+      ...{
+        frame: { x: 1120, y: 510, width: 56, height: 56 },
+        fill: "#d3f9d8",
+        stroke: "#2b8a3e",
+      },
+    }) as EditorElementNode;
+    editor.commands.execute("edgeless.visual.create", {
+      kind: "ellipse",
+      ...{
+        frame: { x: 920, y: 640, width: 70, height: 48 },
+        fill: "#ffd8a8",
+        stroke: "#d9480f",
+      },
+    }) as EditorElementNode;
+
+    editor.commands.execute("edgeless.selection.clear");
+    editor.elements.insertElement(
+      createReviewElementInput({
+        id: "demo-review-element",
+        frame: { x: 920, y: 730, width: 420, height: 260 },
+        zIndex: Math.max(0, ...editor.elements.getElementNodes().map(({ zIndex }) => zIndex)) + 1,
+        problem: "Ошибка структуры на холсте",
+      }),
+    );
+    editor.blocks.insertBlock(
+      {
+        type: EMBEDDING_BLOCK_TYPE,
+        props: { targetDocumentId: resources.document.id, targetBlockId: listId },
+      },
+      editor.blocks.getInsertionDestinationAfter(paragraphId),
+    );
   } else {
     seedJournalDemo(editor, demoRepeatCount());
   }
   editor.history.clear();
 
   return { ...resources, editor, reactEditor, editorStorage };
-}
-
-/**
- * Populates the feature showcase used by browser regression tests and manual exploration.
- *
- * This preserves the original seeded structure, including optional repeated cards and
- * canvas examples. The caller owns the editor and resets its history after seeding.
- *
- * @param editor - Initialized editor whose document receives the showcase blocks and elements.
- * @param documentId - Identity used by the self-referencing embedded block.
- * @returns The feature showcase has been inserted into the document.
- * @throws If a delegated block or element operation fails.
- */
-function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
-  const introId = editor.blocks.insertBlock({
-    ...paragraphBlockFactory.createEmptyBlock(),
-    content: "**Rivto editor**",
-  }).id;
-  const paragraphId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content:
-        "This paragraph renders *Markdown*, ~~old text~~, and `inline code` when it is not edited.",
-    },
-    editor.blocks.getInsertionDestinationAfter(introId),
-  ).id;
-
-  const selectionStartId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content:
-        "Start a selection in the middle of this sentence and drag downward. See [Rivto](https://example.com).",
-    },
-    editor.blocks.getInsertionDestinationAfter(paragraphId),
-  ).id;
-  const middleParagraphId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content:
-        "This complete **Markdown paragraph** should be included between partial selections.",
-    },
-    editor.blocks.getInsertionDestinationAfter(selectionStartId),
-  ).id;
-  const listId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Nested branch one owns several Markdown children.",
-    },
-    editor.blocks.getInsertionDestinationAfter(middleParagraphId),
-  ).id;
-  const childId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Level 2: this child owns another nested branch.",
-    },
-    editor.blocks.getInsertionDestinationAfter(listId),
-  ).id;
-  editor.blocks.indentBlock(childId);
-  const grandchildId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Level 3: selection now crosses two indentation boundaries.",
-    },
-    editor.blocks.getInsertionDestinationAfter(childId),
-  ).id;
-  editor.blocks.indentBlock(grandchildId);
-  const greatGrandchildId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Level 4: deepest item for recursive rendering and outdent checks.",
-    },
-    editor.blocks.getInsertionDestinationAfter(grandchildId),
-  ).id;
-  editor.blocks.indentBlock(greatGrandchildId);
-  editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Level 2: sibling after the deep branch.",
-    },
-    editor.blocks.getInsertionDestinationAfter(childId),
-  );
-
-  const reverseSelectionId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Reverse selection should preserve the browser's anchor and focus direction.",
-    },
-    editor.blocks.getInsertionDestinationAfter(listId),
-  ).id;
-  const secondBranchId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Nested branch two is a second independent structure.",
-    },
-    editor.blocks.getInsertionDestinationAfter(reverseSelectionId),
-  ).id;
-  const numberedChildId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Second branch level 2 child.",
-    },
-    editor.blocks.getInsertionDestinationAfter(secondBranchId),
-  ).id;
-  editor.blocks.indentBlock(numberedChildId);
-  const numberedGrandchildId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Second branch level 3 descendant.",
-    },
-    editor.blocks.getInsertionDestinationAfter(numberedChildId),
-  ).id;
-  editor.blocks.indentBlock(numberedGrandchildId);
-  editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Second branch level 2 sibling.",
-    },
-    editor.blocks.getInsertionDestinationAfter(numberedChildId),
-  );
-
-  const sliderId = editor.blocks.insertBlock(
-    {
-      type: SLIDER_BLOCK_TYPE,
-      content: "const selectedBlocks = selection.filter(item => item.type === 'block');",
-      props: { value: 35 },
-    },
-    editor.blocks.getInsertionDestinationAfter(secondBranchId),
-  ).id;
-  const selectionEndId = editor.blocks.insertBlock(
-    {
-      type: COUNTER_BLOCK_TYPE,
-      props: { count: 2 },
-    },
-    editor.blocks.getInsertionDestinationAfter(sliderId),
-  ).id;
-  const finalId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Finish the selection in the middle of this sentence, then try copy or cut.",
-    },
-    editor.blocks.getInsertionDestinationAfter(selectionEndId),
-  ).id;
-  const slashId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Type `/` anywhere here to open searchable slash commands.",
-    },
-    editor.blocks.getInsertionDestinationAfter(finalId),
-  ).id;
-  const uncheckedId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Try the interactive checkbox",
-      listProps: { type: "checkbox", checked: false },
-    },
-    editor.blocks.getInsertionDestinationAfter(slashId),
-  ).id;
-  const checkedId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Completed checkbox item",
-      listProps: { type: "checkbox", checked: true },
-    },
-    editor.blocks.getInsertionDestinationAfter(uncheckedId),
-  ).id;
-  const numberedStartId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Start a numbered sequence",
-      listProps: { type: "start_numbered_list" },
-    },
-    editor.blocks.getInsertionDestinationAfter(checkedId),
-  ).id;
-  const numberedNextId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Continue the adjacent sequence",
-      listProps: { type: "numbered_list" },
-    },
-    editor.blocks.getInsertionDestinationAfter(numberedStartId),
-  ).id;
-  const numberedGapId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Ordinary content between numbered items",
-    },
-    editor.blocks.getInsertionDestinationAfter(numberedNextId),
-  ).id;
-  const numberedContinueId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Continue numbering across the ordinary block",
-      listProps: { type: "continue_numbered_list" },
-    },
-    editor.blocks.getInsertionDestinationAfter(numberedGapId),
-  ).id;
-
-  // The explicit separator is visible in block mode and partitions cards only
-  // because its React block plugin declares `separatesBlockElements`.
-  editor.blocks.insertBlock(
-    separatorBlockFactory.createEmptyBlock(),
-    editor.blocks.getInsertionDestinationAfter(reverseSelectionId),
-  );
-  editor.elements.insertElement({
-    type: "block",
-    frame: { x: 60, y: 60, width: 500, height: 360 },
-    zIndex: 0,
-    props: { startBlockId: introId, endBlockId: reverseSelectionId },
-  });
-  editor.elements.insertElement({
-    type: "block",
-    frame: { x: 600, y: 60, width: 500, height: 360 },
-    zIndex: 1,
-    props: { startBlockId: secondBranchId, endBlockId: numberedContinueId },
-  });
-  editor.blocks.insertBlock(
-    {
-      ...createBentoBlockInput(),
-      children: [
-        {
-          ...paragraphBlockFactory.createEmptyBlock(),
-          content: "A small idea",
-          pluginData: { bentoWidth: 220 },
-        },
-        {
-          ...paragraphBlockFactory.createEmptyBlock(),
-          content:
-            "Room to explore. Drag this tile's left or right edge to resize. Heights follow your content, and tiles wrap with the editor width.",
-          pluginData: { bentoWidth: 400 },
-        },
-        {
-          ...paragraphBlockFactory.createEmptyBlock(),
-          content:
-            "Drag blocks between tiles, nest them inside, or move them back into the editor.",
-        },
-      ],
-    },
-    editor.blocks.getInsertionDestinationAfter(numberedContinueId),
-  );
-  const tableId = editor.blocks.insertBlock(
-    createTableBlockInput(),
-    editor.blocks.getInsertionDestinationAfter(numberedContinueId),
-  ).id;
-  const kanbanId = editor.blocks.insertBlock(
-    createKanbanBlockInput(),
-    editor.blocks.getInsertionDestinationAfter(tableId),
-  ).id;
-  const column = editor.blocks.getBlock(kanbanId)!.children[0]!;
-  const cardId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Drag me between columns or back into the editor",
-    },
-    editor.blocks.getInsertionDestinationAfter(kanbanId),
-  ).id;
-  editor.blocks.moveBlocks([cardId], column.id, "inside");
-  const columnsId = editor.blocks.insertBlock(
-    createColumnsBlockInput(2),
-    editor.blocks.getInsertionDestinationAfter(kanbanId),
-  ).id;
-  const columnsBoard = editor.blocks.getBlock(columnsId)!;
-  const leftColumnId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content:
-        "Left column. Add more blocks here, or use the settings control to change the column count.",
-    },
-    editor.blocks.getInsertionDestinationAfter(columnsId),
-  ).id;
-  const rightColumnId = editor.blocks.insertBlock(
-    {
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "Right column. Deleting a column moves its blocks into the remaining column.",
-    },
-    editor.blocks.getInsertionDestinationAfter(columnsId),
-  ).id;
-  editor.blocks.moveBlocks([leftColumnId], columnsBoard.children[0]!.id, "inside");
-  editor.blocks.moveBlocks([rightColumnId], columnsBoard.children[1]!.id, "inside");
-  const repeatCount = demoRepeatCount();
-  if (repeatCount > 0) {
-    const rootIds = editor.blocks.getRootIds();
-    const start = rootIds.indexOf(secondBranchId);
-    const end = rootIds.indexOf(numberedContinueId);
-    const template = rootIds.slice(start, end + 1).flatMap((id) => {
-      const block = editor.blocks.getBlock(id);
-      return block ? [block] : [];
-    });
-    editor.history.batchUpdates(() => {
-      for (let index = 0; index < repeatCount; index += 1) {
-        editor.blocks.insertBlock(separatorBlockFactory.createEmptyBlock());
-        editor.blocks.importForest(template);
-      }
-    });
-  }
-  const todoStorageId = editor.blocks.insertBlock({
-    type: TODO_STORAGE_BLOCK_TYPE,
-    content: "",
-  }).id;
-  const todoId = editor.blocks.insertBlock(
-    {
-      type: TODO_ITEM_BLOCK_TYPE,
-      content: "Review the project brief",
-      props: {
-        status: "todo",
-        description: "Confirm scope and acceptance criteria.",
-        priority: 2,
-        project: "Planning",
-      },
-    },
-    editor.blocks.getInsertionDestinationAfter(todoStorageId),
-  ).id;
-  editor.blocks.indentBlock(todoId);
-  const doingId = editor.blocks.insertBlock(
-    {
-      type: TODO_ITEM_BLOCK_TYPE,
-      content: "Build the editor extension",
-      props: {
-        status: "doing",
-        description: "Prompt conversion and task properties are in progress.",
-        priority: 1,
-        project: "Rivto",
-      },
-    },
-    editor.blocks.getInsertionDestinationAfter(todoId),
-  ).id;
-  editor.blocks.insertBlock(
-    {
-      type: TODO_ITEM_BLOCK_TYPE,
-      content: "Set up the workspace",
-      props: {
-        status: "done",
-        description: "Core packages and demo are ready.",
-        priority: 3,
-        project: "Rivto",
-      },
-    },
-    editor.blocks.getInsertionDestinationAfter(doingId),
-  );
-  seedEdgelessShowcase(editor);
-  editor.elements.insertElement(
-    createReviewElementInput({
-      id: "demo-review-element",
-      frame: { x: 920, y: 730, width: 420, height: 260 },
-      zIndex: Math.max(0, ...editor.elements.getElementNodes().map(({ zIndex }) => zIndex)) + 1,
-      problem: "Ошибка структуры на холсте",
-    }),
-  );
-  editor.blocks.insertBlock(
-    {
-      type: EMBEDDING_BLOCK_TYPE,
-      props: { targetDocumentId: documentId, targetBlockId: listId },
-    },
-    editor.blocks.getInsertionDestinationAfter(paragraphId),
-  );
 }
 
 /**
@@ -1354,8 +1301,8 @@ function JournalDemoApp() {
     });
   }, []);
   const [runtime, setRuntime] = useState<{
-    today: Awaited<ReturnType<typeof createDemoEditor>>;
-    yesterday: Awaited<ReturnType<typeof createEmptyDemoEditor>>;
+    today: JournalEditorRuntime;
+    yesterday: DemoEditorRuntime;
   }>();
   const [error, setError] = useState<string>();
   const [showBlockIds, setShowBlockIds] = useState(false);
@@ -1375,8 +1322,8 @@ function JournalDemoApp() {
   // Cleanup also closes factories that finish after this component unmounts.
   useEffect(() => {
     let active = true;
-    const created: Parameters<typeof destroyDemoEditor>[0][] = [];
-    const retain = async <Runtime extends Parameters<typeof destroyDemoEditor>[0]>(
+    const created: DemoEditorRuntime[] = [];
+    const retain = async <Runtime extends DemoEditorRuntime>(
       factory: Promise<Runtime>,
     ): Promise<Runtime> => {
       const resource = await factory;
@@ -1503,24 +1450,9 @@ async function createMultiEditor(
     readonly conflict?: "block";
   } = {},
 ) {
-  const resources = await createDemoDocument();
-  const editor = createDocumentEditor({ document: resources.document });
-  const reactEditor = createReactEditor({
-    editor,
-    extensions: [
-      fileExtension({ provider: demoBinaryProvider }),
-      demoLocalFileExtension,
-      imageExtension({ provider: demoBinaryProvider }),
-      standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
-      pageDragExtension(),
-      ...edgelessPreset({ visuals: edgelessOptions }),
-      mindmapExtension(),
-      blockIdExtension(),
-      blockNumberExtension(),
-      ...customBlockExtensions,
-      ...demoReviewReports(),
-    ],
-  });
+  // Both independent panes start with the same empty journal editor and extensions.
+  const runtime = await createEmptyDemoEditor();
+  const { editor } = runtime;
   if (side === "left") {
     const parentId = editor.blocks.insertBlock({
       id: "left-parent",
@@ -1571,7 +1503,7 @@ async function createMultiEditor(
     });
   }
   editor.history.clear();
-  return { ...resources, editor, reactEditor };
+  return runtime;
 }
 
 /** Used by e2e: hidden `editor.dump()` for asserting structure not shown in the UI. */
@@ -1603,7 +1535,7 @@ function MultiEditorPane({
   runtime,
 }: {
   readonly side: "left" | "right";
-  readonly runtime: Awaited<ReturnType<typeof createMultiEditor>>;
+  readonly runtime: DemoEditorRuntime;
 }) {
   const [showBlockIds, setShowBlockIds] = useState(false);
   const [showBlockNumbers, setShowBlockNumbers] = useState(false);
@@ -1641,13 +1573,13 @@ function MultiEditorApp() {
   const conflictParam = params.get("conflict");
   const conflict = conflictParam === "block" ? conflictParam : undefined;
   const [runtime, setRuntime] = useState<{
-    left: Awaited<ReturnType<typeof createMultiEditor>>;
-    right: Awaited<ReturnType<typeof createMultiEditor>>;
+    left: DemoEditorRuntime;
+    right: DemoEditorRuntime;
   }>();
   const [error, setError] = useState<string>();
   useEffect(() => {
     let active = true;
-    const created: Awaited<ReturnType<typeof createMultiEditor>>[] = [];
+    const created: DemoEditorRuntime[] = [];
     void Promise.all(
       [
         createMultiEditor("left"),
@@ -1821,8 +1753,8 @@ function SyncEditorsApp() {
   const roomId = new URLSearchParams(window.location.search).get("room") ?? "rivto-demo-sync";
   const repeatCount = demoRepeatCount();
   const [peers, setPeers] = useState<{
-    left: Awaited<ReturnType<typeof createSyncedPeer>>;
-    right: Awaited<ReturnType<typeof createSyncedPeer>>;
+    left: DemoEditorRuntime;
+    right: DemoEditorRuntime;
   }>();
   const [error, setError] = useState<string>();
   const [showBlockIds, setShowBlockIds] = useState(false);
@@ -1830,7 +1762,7 @@ function SyncEditorsApp() {
   useEffect(() => {
     let active = true;
     const request = new AbortController();
-    const created: Awaited<ReturnType<typeof createSyncedPeer>>[] = [];
+    const created: DemoEditorRuntime[] = [];
     void (async () => {
       const left = await createSyncedPeer("left", roomId, repeatCount, request.signal);
       if (!active) {

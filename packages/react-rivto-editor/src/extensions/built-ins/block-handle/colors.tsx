@@ -85,76 +85,6 @@ const VISIBLE_BACKGROUND_COLORS = BLOCK_BACKGROUND_COLORS.filter(
   (color) => color && color !== "gray",
 );
 
-/**
- * Routes Tab between the background controls and ordinary menu items.
- *
- * @param event - Native key event captured on the owning menu.
- * @param group - Background controls within the menu.
- * @param menu - Menu owning the captured event and ordinary items.
- * @returns Focus moves when the event is an unmodified Tab in this menu.
- */
-function routeBackgroundTab(event: KeyboardEvent, group: HTMLElement, menu: HTMLElement): void {
-  if (event.key !== "Tab" || event.ctrlKey || event.altKey || event.metaKey) {
-    return;
-  }
-  const target = event.target;
-  if (!(target instanceof HTMLElement) || target.closest('[role="menu"]') !== menu) {
-    return;
-  }
-  const controls = Array.from(
-    group.querySelectorAll<HTMLElement>(
-      'button:not(:disabled), input:not(:disabled), [role="slider"]:not([data-disabled])',
-    ),
-  );
-  if (!controls.length) {
-    return;
-  }
-  const index = controls.indexOf(target);
-  let next: HTMLElement | undefined;
-  if (index === -1) {
-    next = event.shiftKey ? controls.at(-1) : controls[0];
-  } else {
-    next = controls[index + (event.shiftKey ? -1 : 1)];
-    if (!next) {
-      const items = Array.from(
-        menu.querySelectorAll<HTMLElement>(
-          '[role="menuitem"]:not([data-disabled]), [role="menuitemcheckbox"]:not([data-disabled])',
-        ),
-      ).filter((item) => item.closest('[role="menu"]') === menu);
-      next = event.shiftKey ? items.at(-1) : items[0];
-    }
-  }
-  if (next) {
-    event.preventDefault();
-    event.stopPropagation();
-    next.focus();
-  }
-}
-
-/**
- * Lets Tab reach background controls without adding them to menu arrow navigation.
- *
- * The listener belongs to the enclosing menu and is removed with this control.
- * Shift+Tab visits the same controls in reverse; leaving the group returns focus
- * to an ordinary menu item. Nested menus keep their own keyboard behavior.
- *
- * @returns Ref for the background group whose controls participate in Tab navigation.
- */
-function useBackgroundKeyboard() {
-  const groupRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const group = groupRef.current;
-    const menu = group?.closest<HTMLElement>('[role="menu"]');
-    if (!group || !menu) {
-      return;
-    }
-    const routeTab = (event: KeyboardEvent) => routeBackgroundTab(event, group, menu);
-    menu.addEventListener("keydown", routeTab, true);
-    return () => menu.removeEventListener("keydown", routeTab, true);
-  }, []);
-  return groupRef;
-}
-
 /** Menu-owned pending custom-color update. */
 interface BackgroundColorInput {
   /**
@@ -174,15 +104,20 @@ interface BackgroundColorInput {
 }
 
 /**
- * Coalesces native picker input into at most one document update per animation frame.
+ * Renders inline background swatches for the captured explicit block targets.
  *
- * Pending colors flush before other color controls and when the menu unmounts.
- * Missing targets discard the pending update rather than modifying other blocks.
+ * Subscribes to editor changes and derives the pressed swatch from all target
+ * background values; mixed selections have no pressed swatch. Activation rechecks
+ * target existence and batches color updates. Preset and custom selections keep
+ * the menu open for further changes. No color sets an explicit
+ * transparent background; new colored containers have an explicit initial color.
+ * Descendant overrides are not rewritten.
  *
- * @param context - Captured panel and target IDs owned by the current menu.
- * @returns Functions for scheduling and flushing the latest custom color.
+ * @param context - Panel and target IDs captured when the menu opened.
+ * @returns A labeled group of color controls reachable with Tab.
  */
-function useBackgroundColorInput(context: BlockContextMenuContext): BackgroundColorInput {
+function BlockBackgroundColors(context: BlockContextMenuContext) {
+  // Flush the latest native picker input before another control edits the same blocks.
   const current = useRef(context);
   current.current = context;
   const pending = useRef<string | undefined>(undefined);
@@ -206,7 +141,7 @@ function useBackgroundColorInput(context: BlockContextMenuContext): BackgroundCo
     });
   }, []);
   useEffect(() => () => flush(), [flush]);
-  return {
+  const colorInput: BackgroundColorInput = {
     /**
      * Queues the latest picker value for the next frame.
      *
@@ -223,64 +158,55 @@ function useBackgroundColorInput(context: BlockContextMenuContext): BackgroundCo
     },
     flush,
   };
-}
+  // Route Tab within the open menu while keeping arrow navigation on menu items.
+  const groupRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const group = groupRef.current;
+    const menu = group?.closest<HTMLElement>('[role="menu"]');
+    if (!group || !menu) {
+      return;
+    }
+    const routeTab = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || event.ctrlKey || event.altKey || event.metaKey) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || target.closest('[role="menu"]') !== menu) {
+        return;
+      }
+      const controls = Array.from(
+        group.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), input:not(:disabled), [role="slider"]:not([data-disabled])',
+        ),
+      );
+      if (!controls.length) {
+        return;
+      }
+      const index = controls.indexOf(target);
+      let next: HTMLElement | undefined;
+      if (index === -1) {
+        next = event.shiftKey ? controls.at(-1) : controls[0];
+      } else {
+        next = controls[index + (event.shiftKey ? -1 : 1)];
+        if (!next) {
+          const items = Array.from(
+            menu.querySelectorAll<HTMLElement>(
+              '[role="menuitem"]:not([data-disabled]), [role="menuitemcheckbox"]:not([data-disabled])',
+            ),
+          ).filter((item) => item.closest('[role="menu"]') === menu);
+          next = event.shiftKey ? items.at(-1) : items[0];
+        }
+      }
+      if (next) {
+        event.preventDefault();
+        event.stopPropagation();
+        next.focus();
+      }
+    };
+    menu.addEventListener("keydown", routeTab, true);
+    return () => menu.removeEventListener("keydown", routeTab, true);
+  }, []);
 
-/**
- * Checks whether every target uses the same custom color and alpha.
- *
- * @param values - Persisted backgrounds in target order.
- * @param color - Six-digit custom picker color to compare.
- * @param alpha - Alpha percentage that every target must share.
- * @returns True when each target's color and alpha match.
- */
-function allMatchCustomColor(values: string[], color: string, alpha: number): boolean {
-  return values.every((value) => {
-    const parsed = parseBlockBackground(value);
-    return parsed?.color.toLowerCase() === color.toLowerCase() && parsed?.alpha === alpha;
-  });
-}
-
-/**
- * Reads captured block colors for React's external-store comparison.
- *
- * @param context - Captured target IDs and the panel used to read them.
- * @returns Comma-separated colors in target order; missing blocks or overrides contribute an empty string.
- */
-function readBackgroundColors(context: BlockContextMenuContext): string {
-  return context.blockIds.map((id) => readBackground(context, id)).join(",");
-}
-
-/**
- * Subscribes to the persisted background values captured by the menu.
- *
- * @param context - Panel and target IDs whose current colors are read.
- * @returns Comma-separated colors in target order, updated after document changes.
- */
-function useBlockBackgroundColors(context: BlockContextMenuContext): string {
-  const snapshot = () => readBackgroundColors(context);
-  return useSyncExternalStore(
-    (listener) => context.reactPanel.editor.subscribe(listener),
-    snapshot,
-    snapshot,
-  );
-}
-
-/**
- * Renders inline background swatches for the captured explicit block targets.
- *
- * Subscribes to editor changes and derives the pressed swatch from all target
- * background values; mixed selections have no pressed swatch. Activation rechecks
- * target existence and batches color updates. Preset and custom selections keep
- * the menu open for further changes. No color sets an explicit
- * transparent background; new colored containers have an explicit initial color.
- * Descendant overrides are not rewritten.
- *
- * @param context - Panel and target IDs captured when the menu opened.
- * @returns A labeled group of color controls reachable with Tab.
- */
-function BlockBackgroundColors(context: BlockContextMenuContext) {
-  const colorInput = useBackgroundColorInput(context);
-  const groupRef = useBackgroundKeyboard();
   const [palette, setPalette] = useState<Readonly<Record<string, string>>>(BLOCK_PALETTE_COLORS);
   useLayoutEffect(() => {
     const group = groupRef.current;
@@ -306,8 +232,14 @@ function BlockBackgroundColors(context: BlockContextMenuContext) {
     }
     setPalette(next);
   }, [groupRef]);
-  const colors = useBlockBackgroundColors(context);
-  const firstColor = colors.split(",")[0] ?? "";
+  const snapshot = () => context.blockIds.map((id) => readBackground(context, id)).join(",");
+  const colors = useSyncExternalStore(
+    (listener) => context.reactPanel.editor.subscribe(listener),
+    snapshot,
+    snapshot,
+  );
+  const colorValues = colors.split(",");
+  const firstColor = colorValues[0] ?? "";
   const background = parseBlockBackground(firstColor);
   const customColor =
     background?.color.startsWith("#") &&
@@ -317,7 +249,13 @@ function BlockBackgroundColors(context: BlockContextMenuContext) {
   const customSelected =
     !!background?.color.startsWith("#") &&
     !Object.values(palette).includes(background.color.toLowerCase()) &&
-    allMatchCustomColor(colors.split(","), customColor, background.alpha);
+    colorValues.every((value) => {
+      const parsed = parseBlockBackground(value);
+      return (
+        parsed?.color.toLowerCase() === customColor.toLowerCase() &&
+        parsed?.alpha === background.alpha
+      );
+    });
   return (
     <div ref={groupRef} role="group" aria-label="Block background">
       <DropdownMenuLabel className="text-muted-foreground text-xs font-medium">
@@ -414,7 +352,11 @@ interface BackgroundColorSwatchProps {
   readonly alpha: number;
   /** Current concrete values resolved from the visible palette. */
   readonly palette: Readonly<Record<string, string>>;
-  /** Flushes a pending custom color before selecting the preset. */
+  /**
+   * Flushes a pending custom color before selecting the preset.
+   *
+   * @returns Any queued color update has been applied.
+   */
   readonly flushPendingColor: () => void;
 }
 
@@ -487,7 +429,11 @@ interface BackgroundAlphaProps {
   readonly value: number;
   /** Current base color, or undefined when no color is selected. */
   readonly color: string | undefined;
-  /** Flushes a pending custom color before changing its alpha. */
+  /**
+   * Flushes a pending custom color before changing its alpha.
+   *
+   * @returns Any queued color update has been applied.
+   */
   readonly flushPendingColor: () => void;
 }
 
@@ -530,36 +476,25 @@ function BackgroundAlpha({ context, value, color, flushPendingColor }: Backgroun
         onValueChange={([alpha]) => {
           if (alpha !== undefined) {
             flushPendingColor();
-            updateBackgroundAlpha(context, alpha);
+            // Each target keeps its own hue while the slider sets the same alpha for all.
+            const { reactPanel, blockIds } = context;
+            assertBlockMenuTargets(context);
+            assertBackgroundStyles(context);
+            reactPanel.batchUpdates(() => {
+              for (const id of blockIds) {
+                const current = readBackground(context, id);
+                const parsed = parseBlockBackground(current);
+                if (parsed) {
+                  writeBackground(context, id, formatBlockBackground(parsed.color, alpha));
+                }
+              }
+            });
           }
         }}
       />
       <span className="block-color-alpha-value">{value}%</span>
     </div>
   );
-}
-
-/**
- * Applies one alpha percentage to each target's existing background color.
- *
- * @param context - Captured panel and block IDs, checked again before mutation.
- * @param alpha - Integer percentage emitted by the slider.
- * @returns The background updates have completed in one history batch.
- * @throws If a captured target is no longer valid or an update fails.
- */
-function updateBackgroundAlpha(context: BlockContextMenuContext, alpha: number): void {
-  const { reactPanel, blockIds } = context;
-  assertBlockMenuTargets(context);
-  assertBackgroundStyles(context);
-  reactPanel.batchUpdates(() => {
-    for (const id of blockIds) {
-      const current = readBackground(context, id);
-      const parsed = parseBlockBackground(current);
-      if (parsed) {
-        writeBackground(context, id, formatBlockBackground(parsed.color, alpha));
-      }
-    }
-  });
 }
 
 /**

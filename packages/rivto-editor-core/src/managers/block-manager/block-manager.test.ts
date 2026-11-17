@@ -6,6 +6,18 @@
 import { createTestEditor, createStructuralSelection } from "../../editor/test-utils";
 
 describe("block feature ownership independent of presentation", () => {
+  it("reports document removal and outdent eligibility", async () => {
+    const editor = await createTestEditor();
+    const root = editor.blocks.insertBlock({ type: "paragraph" });
+    const child = editor.blocks.insertBlock({ type: "paragraph" }, { parentId: root.id });
+    expect(editor.blocks.includeRoot).toBe(false);
+    expect(editor.blocks.canRemove(root.id)).toBe(true);
+    expect(editor.blocks.canRemove("missing")).toBe(false);
+    expect(editor.blocks.canOutdent(root.id)).toBe(false);
+    expect(editor.blocks.canOutdent(child.id)).toBe(true);
+    expect(editor.blocks.canOutdent("missing")).toBe(false);
+    await editor.destroy();
+  });
   it("persists processor list-property changes on conversion as one undo step", async () => {
     const editor = await createTestEditor();
     editor.blockRegistry.defineBlock({ type: "tinted" });
@@ -517,6 +529,36 @@ test("import preserves requested identities before writing any roots", async () 
     await editor.destroy();
   }
 });
+
+test.each(["mapping", "processor"])(
+  "rejects swapped import identities from a %s",
+  async (source) => {
+    const editor = await createTestEditor();
+    const ids = new Map([
+      ["a", "b"],
+      ["b", "a"],
+    ]);
+    try {
+      if (source === "processor") {
+        editor.blocks.registerProcessor({
+          id: "swap-import-ids",
+          priority: 0,
+          processor: (block) => ({ ...block, id: ids.get(block.id!) }),
+        });
+      }
+      const blocks = ["a", "b"].map((id) => ({ id, type: "paragraph", content: id }));
+      expect(() =>
+        editor.blocks.importForest(blocks, undefined, {
+          preserveIds: true,
+          ids: source === "mapping" ? ids : undefined,
+        }),
+      ).toThrow("preserve block IDs");
+      expect(editor.blocks.getRootIds()).toEqual([]);
+    } finally {
+      await editor.destroy();
+    }
+  },
+);
 
 test("outline commands order selected roots once and preserve undo", async () => {
   const editor = await createTestEditor();

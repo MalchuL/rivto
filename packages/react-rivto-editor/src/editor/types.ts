@@ -1,13 +1,11 @@
 import type { ClipboardApi } from "../managers/clipboard/api";
-import { BlockContextMenuRegistry } from "../managers/block-context-menu/registry";
+import type { BlockContextMenuRegistry } from "../managers/block-context-menu/registry";
 import type { EdgelessToolbarApi } from "../managers/edgeless-toolbar/types";
 import type { ElementTypesApi } from "../managers/elements/types";
-import type { DocumentEditorAPI } from "@chulane/rivto";
+import type { DocumentEditorAPI, PasteStrategyRegistry } from "@chulane/rivto";
 import type {
   BlockRenderer,
   ClipboardFormatRegistry,
-  EventManager,
-  KeyboardManager,
   KeymapOverrides,
   ReactEditorExtension,
   SlashCommandRegistry,
@@ -21,15 +19,14 @@ import type { BlockListPropsApi } from "../managers/blocks/block-list-props-api"
 import type { BlockTypesApi } from "../managers/blocks/block-types-api";
 import type { RenderersApi } from "../managers/blocks/renderers-api";
 import type { PanelRegistry } from "../panels/panel-registry";
-import type { KeyboardApi } from "../managers/keyboard/keyboard-api";
+import type { DocumentEventsApi } from "../managers/events/api";
+import type { DocumentKeyboardApi } from "../managers/keyboard/keyboard-api";
 import type { ExtensionsApi } from "../managers/extensions/api";
 import type { AttachmentApi, AttachmentOptions } from "../attachments";
 import type { SurfacesApi } from "../managers/surfaces/api";
 
 /** Creation options for the React presentation runtime. */
-export interface CreateReactEditorOptions {
-  /** Existing fixed document editor; the caller or EditorStorage owns its destruction. */
-  readonly editor: DocumentEditorAPI;
+export interface ReactEditorConfiguration {
   /** Functional extensions installed synchronously in declaration order. */
   readonly extensions?: readonly ReactEditorExtension[];
   /** Stable binding-ID overrides; empty arrays disable matching bindings. */
@@ -38,6 +35,12 @@ export interface CreateReactEditorOptions {
   readonly attachments?: AttachmentOptions;
   /** Renderer used for persisted block types unknown to this React runtime. */
   readonly unknownBlockRenderer?: BlockRenderer;
+}
+
+/** Settings and fixed document used to construct a React runtime. */
+export interface CreateReactEditorOptions extends ReactEditorConfiguration {
+  /** Existing fixed document editor; the caller or EditorStorage owns its destruction. */
+  readonly editor: DocumentEditorAPI;
 }
 
 /** Loading and construction policies; returned models become storage-owned. */
@@ -50,7 +53,12 @@ export interface EditorStorageOptions extends BlockReferenceOptions {
    * Storage creates and disposes the core; this callback must not replace it.
    */
   readonly createEditor?: (editor: DocumentEditorAPI) => ReactEditorApi;
-  /** Optional registry metadata notifications used to retry unresolved block locations. */
+  /**
+   * Subscribes to document registry changes so unresolved block locations can be retried.
+   *
+   * @param listener - Callback invoked when the host's document registry changes.
+   * @returns Disposer for this listener.
+   */
   readonly subscribeDocumentIds?: (listener: () => void) => () => void;
   /** Reports asynchronous release failures from view cleanup. */
   readonly onError?: (error: unknown) => void;
@@ -71,7 +79,8 @@ export interface EditorAcquisition {
   release(): Promise<void>;
 }
 
-export interface Entry {
+/** One open or closing document and the consumers sharing its runtime. */
+export interface EditorStorageEntry {
   consumers: number;
   pending: Promise<ReactEditorApi>;
   editor?: ReactEditorApi;
@@ -138,13 +147,13 @@ export interface ReactEditorApi extends DocumentEditorAPI {
   /** Attachment handlers, binary resolution, and opening shared across views. */
   readonly attachments: AttachmentApi;
   /** Core paste strategies extended by React clipboard integrations. */
-  readonly pasteStrategies: DocumentEditorAPI["clipboard"]["pasteStrategies"];
+  readonly pasteStrategies: PasteStrategyRegistry;
   /** Root surfaces and their ordered block/editor wrappers. */
   readonly surfaces: SurfacesApi;
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
   readonly extensions: ExtensionsApi;
   /** Delegated surface/document/window DOM event runtime. */
-  readonly events: Pick<EventManager, "register" | "delete" | "has">;
+  readonly events: DocumentEventsApi;
   /** Mounted occurrences and explicit active/default view lookup. */
   readonly panels: Pick<
     PanelRegistry,
@@ -156,11 +165,17 @@ export interface ReactEditorApi extends DocumentEditorAPI {
     | "getDefaultRoot"
   >;
   /** Semantic keyboard bindings and runtime keymap overrides. */
-  readonly keyboard: Pick<KeyboardManager, keyof KeyboardApi>;
+  readonly keyboard: DocumentKeyboardApi;
   /** Dedicated extension-owned block menu contributions. */
-  readonly blockContextMenu: BlockContextMenuRegistry;
+  readonly blockContextMenu: Pick<
+    BlockContextMenuRegistry,
+    "revision" | "register" | "delete" | "getAll" | "get" | "subscribe"
+  >;
   /** React-owned slash-command registry. */
-  readonly slashCommands: SlashCommandRegistry;
+  readonly slashCommands: Pick<
+    SlashCommandRegistry,
+    "revision" | "register" | "delete" | "getAll" | "get" | "subscribe"
+  >;
   /** Maintains the document's block elements and their default canvas geometry.
    * Mounted surfaces share this projection instead of rebuilding it independently. */
   readonly blockElements: BlockElementProjection;

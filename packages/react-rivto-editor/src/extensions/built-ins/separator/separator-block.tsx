@@ -153,19 +153,13 @@ function insertSeparator(
  */
 export const separatorBlockExtension = (): ReactEditorExtension => ({
   id: "block.separator",
+  /**
+   * Installs separator rendering, clipboard conversion and insertion commands for this editor.
+   *
+   * @param reactEditor - Runtime that owns the extension registrations.
+   * @returns Disposer that releases those registrations in reverse installation order.
+   */
   setup: (reactEditor) => {
-    const focusInserted = (reactPanel: ReactPanelApi, blockId: string): void => {
-      const writing = insertSeparator(
-        reactPanel,
-        blockId,
-        separatorBlockFactory,
-        reactEditor.defaultWritingBlockFactory,
-      );
-      const root = reactPanel.getRoot();
-      if (writing && root) {
-        requestAnimationFrame(() => focusBlock(root, writing.id, 0));
-      }
-    };
     const disposers = [
       reactEditor.blockTypes.register({
         definition: {
@@ -188,7 +182,19 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         title: "Separator",
         group: "Insert",
         keywords: ["divider", "split"],
-        execute: ({ blockId, reactPanel }) => focusInserted(reactPanel, blockId),
+        execute: ({ blockId, reactPanel }) => {
+          // Focus the writing block after its new DOM host mounts.
+          const writing = insertSeparator(
+            reactPanel,
+            blockId,
+            separatorBlockFactory,
+            reactEditor.defaultWritingBlockFactory,
+          );
+          const root = reactPanel.getRoot();
+          if (writing && root) {
+            requestAnimationFrame(() => focusBlock(root, writing.id, 0));
+          }
+        },
       }),
       reactEditor.blockContextMenu.register({
         id: "block.insert-separator",

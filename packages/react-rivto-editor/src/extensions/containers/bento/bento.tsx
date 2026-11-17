@@ -96,6 +96,12 @@ function BentoModalWrapper({ block, children }: BlockWrapperProps) {
 export function bentoExtension(): ReactEditorExtension {
   return {
     id: "block.bento",
+    /**
+     * Installs Bento sizing, background defaults and block presentation for this editor.
+     *
+     * @param reactEditor - Runtime that owns the extension registrations.
+     * @returns Disposer that releases those registrations in reverse installation order.
+     */
     setup: (reactEditor) => {
       const disposers = [
         // Defaults missing background on creation/conversion; removes the processor with the extension.
@@ -113,6 +119,12 @@ export function bentoExtension(): ReactEditorExtension {
           reactEditor.blocks.registerProcessor({
             id: "bento.restore-detached-width",
             priority: 0,
+            /**
+             * Restores the saved dimensions of a detached block before its parent applies placement sizing.
+             *
+             * @param block - Input being prepared for insertion or update.
+             * @returns Existing input for a known ID, otherwise the input with its saved size restored.
+             */
             processor: (block) => {
               if (block.id && reactEditor.blocks.hasBlock(block.id)) {
                 return block;

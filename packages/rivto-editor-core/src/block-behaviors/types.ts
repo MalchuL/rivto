@@ -1,5 +1,5 @@
-import type { BlockDestination, BlockInput } from "@chulane/document-model";
-import type { EditorBlock, EditorBlockNode } from "../editor/model";
+import type { BlockFields, BlockDestination, BlockInput } from "@chulane/document-model";
+import type { EditorBlockNode } from "../editor/model";
 import type { BlockManagerApi } from "../managers/types";
 
 /** A direct child's change of parent, before any document write. */
@@ -19,11 +19,15 @@ export interface BlockChildBehaviorContext extends BlockChildTransition {
 }
 
 /** Detached roots and destination used to evaluate a structural move. */
-export interface BlockStructuralMoveContext {
+export interface BlockMoveRequest {
   /** Source records, including records from a different document. */
-  readonly sources: readonly Readonly<Omit<EditorBlock, "children">>[];
+  readonly sources: readonly Readonly<BlockFields>[];
   /** Requested location in the destination document. */
   readonly destination: BlockDestination;
+}
+
+/** Move request with the shallow destination parent resolved for behavior callbacks. */
+export interface BlockStructuralMoveContext extends BlockMoveRequest {
   /** Destination parent, or null for document roots. */
   readonly parent: EditorBlockNode | null;
 }
@@ -44,12 +48,18 @@ export interface BlockStructuralScope extends Pick<
   getRootIds(): readonly string[];
 }
 
+/** Tree reads and moves used to preserve descendants across panel boundaries. */
+export type BlockRelocationCommands = Pick<
+  BlockManagerApi,
+  "getBlockNode" | "getParentId" | "moveBlocks"
+>;
+
 /** Scoped state supplied to structural operation handlers. */
 export interface BlockStructuralContext {
   /** Live scoped block operations; the caller retains transaction ownership. */
   readonly blocks: BlockStructuralScope;
   /** Document-wide operations needed to preserve children across panel boundaries. */
-  readonly documentBlocks: Pick<BlockManagerApi, "getBlockNode" | "getParentId" | "moveBlocks">;
+  readonly documentBlocks: BlockRelocationCommands;
   /** Shallow snapshot of the block selecting this behavior. */
   readonly block: EditorBlockNode;
   /** Panel-relative parent of the selected block, or null at the panel root. */

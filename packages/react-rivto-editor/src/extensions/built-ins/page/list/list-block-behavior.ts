@@ -18,10 +18,7 @@ export class ListBlockBehavior implements BlockBehavior {
    * @returns True unless checkbox or a numbered mode owns this marker.
    */
   isAvailable(context: BlockInput): boolean {
-    return (
-      context.listProps?.type !== "checkbox" &&
-      !isNumberedListType(context.listProps?.type)
-    );
+    return context.listProps?.type !== "checkbox" && !isNumberedListType(context.listProps?.type);
   }
 
   /**

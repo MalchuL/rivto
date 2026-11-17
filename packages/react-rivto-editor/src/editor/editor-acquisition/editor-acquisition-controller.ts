@@ -61,14 +61,39 @@ export class EditorAcquisitionController<Editor> {
   /**
    * Starts at most one asynchronous request for this acquisition.
    *
-   * @returns Loading is scheduled; repeated calls and calls after destruction do nothing.
+   * A rejected load is published only while this occurrence remains active. A lease
+   * delivered after cancellation is released. Publication and release failures are
+   * reported to the host even if the occurrence has already been destroyed.
+   *
+   * @returns Resolves after publication or release, or immediately if loading already started
+   * or the occurrence was destroyed before this call.
+   * @throws Rejects if the host error reporter throws.
    */
-  start(): void {
+  async start(): Promise<void> {
     if (this.started || this.abort.signal.aborted) {
       return;
     }
     this.started = true;
-    void this.load().catch(this.reportError);
+    try {
+      try {
+        this.lease = await this.provider.acquireEditor(this.documentId, {
+          signal: this.abort.signal,
+        });
+      } catch (error) {
+        if (!this.abort.signal.aborted) {
+          this.publish({ error });
+        }
+        return;
+      }
+      // A provider may finish after unmount. Release that lease without publishing it.
+      if (this.abort.signal.aborted) {
+        await this.release();
+      } else {
+        this.publish({ editor: this.lease.editor });
+      }
+    } catch (error) {
+      this.reportError(error);
+    }
   }
 
   /**
@@ -83,30 +108,6 @@ export class EditorAcquisitionController<Editor> {
   destroy(): void {
     this.abort.abort();
     void this.release().catch(this.reportError);
-  }
-
-  /**
-   * Acquires the source and publishes only while this occurrence remains active.
-   *
-   * @returns Completion after publication or release of a cancelled late acquisition.
-   * @throws If publication or release fails; start reports that failure to the host.
-   */
-  private async load(): Promise<void> {
-    try {
-      this.lease = await this.provider.acquireEditor(this.documentId, {
-        signal: this.abort.signal,
-      });
-    } catch (error) {
-      if (!this.abort.signal.aborted) {
-        this.publish({ error });
-      }
-      return;
-    }
-    if (this.abort.signal.aborted) {
-      await this.release();
-    } else {
-      this.publish({ editor: this.lease.editor });
-    }
   }
 
   /**

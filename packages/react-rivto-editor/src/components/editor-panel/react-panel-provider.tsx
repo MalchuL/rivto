@@ -96,9 +96,21 @@ export function ReactPanelProvider({
   useEffect(() => {
     const { hostEditor, rootBlockId, rootElementId, createPanel, mode } = configuration;
     const corePanel = createPanel(hostEditor, { rootBlockId, rootElementId });
-    const instance = new ReactPanel(hostEditor, corePanel, { mode });
+    let instance: ReactPanel;
+    try {
+      instance = new ReactPanel(hostEditor, corePanel, { mode });
+    } catch (error) {
+      void corePanel.destroy().catch(console.error);
+      throw error;
+    }
     setCurrent({ configuration, instance });
-    return instance.destroy;
+    return () => {
+      try {
+        void instance.destroy();
+      } finally {
+        void corePanel.destroy().catch(console.error);
+      }
+    };
   }, [configuration]);
   // A changed editor or root must not render children against the previous panel before its replacement effect runs.
   const instance = current?.configuration === configuration ? current.instance : undefined;

@@ -132,7 +132,7 @@ test("retains failed insertion feedback when a handler returns the wrong placeme
 test("refuses a file block when the receiving block rejects its type", async () => {
   const editor = await createTestCoreEditor();
   const panel = createTestReactEditor({ editor, extensions: [fileExtension({ provider })] });
-  const parent = panel.blocks.insertBlock({ type: "paragraph" }, { root: true });
+  const parent = panel.blocks.insertBlock({ type: "paragraph" }, { parentId: null });
   const { statuses, feedback } = feedbackStore();
   const permission = jestApi.spyOn(panel.editor.blocks, "canMove").mockReturnValue(false);
   const ingestion = new FileIngestion(feedback);
@@ -165,7 +165,7 @@ test("rejects files in a Kanban board but accepts them in a column", async () =>
     editor,
     extensions: [kanbanExtension(), fileExtension({ provider })],
   });
-  const board = panel.blocks.insertBlock({ type: "kanban" }, { root: true });
+  const board = panel.blocks.insertBlock({ type: "kanban" }, { parentId: null });
   const column = panel.blocks.insertBlock({ type: "kanban-column" }, { parentId: board.id });
   const { statuses, feedback } = feedbackStore();
   const ingestion = new FileIngestion(feedback);

@@ -1,7 +1,9 @@
+import type { KeyboardSelectionTarget } from "../keyboard";
 import type { BlockInput } from "@chulane/document-model";
 import type {
   BlockBehavior,
   BlockBehaviorAction,
+  BlockBehaviorContext,
   BlockBehaviorData,
 } from "../../block-behaviors/types";
 import type { BlockDropPlacement } from "@chulane/rivto-page";
@@ -34,13 +36,15 @@ export interface BlockBehaviorsApi {
    * A handled or rejected action claims the event; unhandled continues the chain.
    *
    * @param action - Semantic operation to invoke.
-   * @param args - Block context and operation-specific arguments.
+   * @param context - Block and panel in which the keyboard action originated.
+   * @param target - Captured keyboard selection for the action.
    * @returns True when the operation was handled or explicitly rejected.
    * @throws If a behavior or delegated block operation fails.
    */
-  dispatch<Action extends BlockBehaviorAction>(
-    action: Action,
-    ...args: Parameters<NonNullable<BlockBehavior[Action]>>
+  dispatch(
+    action: BlockBehaviorAction,
+    context: BlockBehaviorContext,
+    target: KeyboardSelectionTarget,
   ): boolean;
   /**
    * Registers an instance whose isAvailable predicate determines applicability.

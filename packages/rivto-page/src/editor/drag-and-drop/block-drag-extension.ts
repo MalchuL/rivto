@@ -6,7 +6,6 @@ import type { BlockInputResult } from "../events/block-input-event";
 import type { BlockEditorApi } from "../block-editor-api";
 import type { BlockEditorBlocks, BlockEditorSelection } from "../../adapter/types";
 import type { BlockEditorExtension } from "../extensions/types";
-import type { BlockInputEvent } from "../events/block-input-event";
 import type { BlockEditorEventsApi } from "../events/block-editor-events";
 import { BlockSelectionRanges } from "../selection/block-selection-ranges";
 import type { BlockDropDestination, BlockDragTargetScope, ResolvedBlockDropTarget } from "./types";
@@ -238,12 +237,85 @@ class BlockDragController {
     this.editor.events.register(
       `${this.prefix}.down`,
       { type: "pointerdown", priority: BLOCK_DRAG_INPUT_PRIORITY, scope: "block" },
-      (event) => this.start(event),
+      (event) => {
+        // Only marked handles acquire the primary pointer.
+        const target = event.raw.target;
+        const ElementType = event.root.ownerDocument.defaultView!.Element;
+        if (
+          event.raw.button !== 0 ||
+          !event.raw.isPrimary ||
+          !event.blockId ||
+          !event.blockElement ||
+          !(target instanceof ElementType) ||
+          !target.closest("[data-block-drag-handle]")
+        ) {
+          return "continue";
+        }
+        this.cancel();
+        const releasePointer = this.editor.pointer.acquire();
+        if (!releasePointer) {
+          return "continue";
+        }
+        event.raw.preventDefault();
+        this.gesture = {
+          releasePointer,
+          root: event.root,
+          feedback: new BlockDropFeedback(event.root),
+          sourceFeedback: new BlockDragSourceFeedback(event.root, event.blockElement),
+          pointerId: event.raw.pointerId,
+          activeId: event.blockId,
+          startX: event.raw.clientX,
+          startY: event.raw.clientY,
+          x: event.raw.clientX,
+          y: event.raw.clientY,
+        };
+        return "handled";
+      },
     );
     this.editor.events.register(
       `${this.prefix}.move`,
       { type: "pointermove", target: "window", priority: BLOCK_DRAG_INPUT_PRIORITY },
-      (event) => this.move(event.raw),
+      ({ raw: event }) => {
+        const gesture = this.gesture;
+        if (!gesture || event.pointerId !== gesture.pointerId) {
+          return "continue";
+        }
+        if ((event.buttons & 1) === 0) {
+          return this.finish(event);
+        }
+        try {
+          gesture.x = event.clientX;
+          gesture.y = event.clientY;
+          if (!gesture.ids) {
+            if (
+              Math.hypot(gesture.x - gesture.startX, gesture.y - gesture.startY) <
+              this.activationDistance
+            ) {
+              return "handled";
+            }
+            gesture.ids = BlockDragSources.get(this.editor.adapter, gesture.activeId);
+            gesture.selected = new Set(gesture.ids);
+          }
+          event.preventDefault();
+          // Captured events still target the source handle and require a fresh geometry lookup.
+          const target = event.target;
+          const hit =
+            target instanceof gesture.root.ownerDocument.defaultView!.Element &&
+            target.isConnected &&
+            !target.hasPointerCapture?.(event.pointerId)
+              ? target
+              : undefined;
+          // Scroll preflight reads styles and geometry before feedback changes the DOM.
+          if (!gesture.autoScroll) {
+            gesture.autoScroll = new BlockAutoScroll(gesture.root, () => this.resolve(gesture));
+          }
+          gesture.autoScroll.update(gesture, hit);
+          this.resolve(gesture, hit);
+        } catch (error) {
+          this.cancelAfterFailure(error);
+        }
+        return "handled";
+      },
     );
     this.editor.events.register(
       `${this.prefix}.up`,
@@ -346,89 +418,6 @@ class BlockDragController {
   }
 
   /**
-   * Reserves a primary pointer from an explicitly marked handle in this occurrence.
-   *
-   * @param event - Normalized pointer input with nearest block identity.
-   * @returns "handled" when the handle acquires pointer ownership; otherwise "continue".
-   */
-  private start(event: BlockInputEvent<"pointerdown">): BlockInputResult {
-    const target = event.raw.target;
-    const ElementType = event.root.ownerDocument.defaultView!.Element;
-    if (
-      event.raw.button !== 0 ||
-      !event.raw.isPrimary ||
-      !event.blockId ||
-      !event.blockElement ||
-      !(target instanceof ElementType) ||
-      !target.closest("[data-block-drag-handle]")
-    ) {
-      return "continue";
-    }
-    this.cancel();
-    const releasePointer = this.editor.pointer.acquire();
-    if (!releasePointer) {
-      return "continue";
-    }
-    event.raw.preventDefault();
-    this.gesture = {
-      releasePointer,
-      root: event.root,
-      feedback: new BlockDropFeedback(event.root),
-      sourceFeedback: new BlockDragSourceFeedback(event.root, event.blockElement),
-      pointerId: event.raw.pointerId,
-      activeId: event.blockId,
-      startX: event.raw.clientX,
-      startY: event.raw.clientY,
-      x: event.raw.clientX,
-      y: event.raw.clientY,
-    };
-    return "handled";
-  }
-
-  /**
-   * Activates after four CSS pixels and updates only bounded DOM feedback.
-   *
-   * Losing the primary button completes the last displayed target when pointerup
-   * was unavailable. Coordinates from movement after release never retarget it.
-   * A last held position without an eligible target finishes without a move.
-   *
-   * @param event - Window pointer event; unrelated pointers are ignored.
-   * @returns "handled" for movement of the active pointer; otherwise "continue".
-   * @throws Activation, target or host completion failures after cleanup; concurrent failures are aggregated.
-   */
-  private move(event: PointerEvent): BlockInputResult {
-    const gesture = this.gesture;
-    if (!gesture || event.pointerId !== gesture.pointerId) {
-      return "continue";
-    }
-    if ((event.buttons & 1) === 0) {
-      return this.finish(event);
-    }
-    try {
-      gesture.x = event.clientX;
-      gesture.y = event.clientY;
-      if (!gesture.ids) {
-        if (
-          Math.hypot(gesture.x - gesture.startX, gesture.y - gesture.startY) <
-          this.activationDistance
-        ) {
-          return "handled";
-        }
-        gesture.ids = BlockDragSources.get(this.editor.adapter, gesture.activeId);
-        gesture.selected = new Set(gesture.ids);
-      }
-      event.preventDefault();
-      const hit = this.uncapturedHit(event, gesture.root);
-      // Scroll preflight reads styles and geometry before feedback changes the DOM.
-      this.schedule(gesture, hit);
-      this.resolve(gesture, hit);
-    } catch (error) {
-      this.cancelAfterFailure(error);
-    }
-    return "handled";
-  }
-
-  /**
    * Completes a real or inferred pointer release through one validating host transaction.
    *
    * A pointerup reads current geometry. Earlier pointerup handlers may release
@@ -455,7 +444,22 @@ class BlockDragController {
     const errors: unknown[] = [];
     let focusRoot = gesture.root;
     try {
-      const target = this.releaseTarget(gesture, event);
+      let target: ResolvedBlockDropTarget | undefined;
+      if (gesture.ids && event.type === "pointerup") {
+        // Earlier release handlers can clear capture while this event still targets
+        // the source handle. Hit-test the release coordinates without that native hint.
+        gesture.x = event.clientX;
+        gesture.y = event.clientY;
+        this.resolve(gesture);
+        target = gesture.target;
+      } else if (
+        gesture.ids &&
+        gesture.target &&
+        this.adapter.canMove(gesture.ids, gesture.target.destination, gesture.target.scope)
+      ) {
+        // Released-button movement revalidates the last displayed target.
+        target = gesture.target;
+      }
       if (target && gesture.ids) {
         if (this.adapter.moveBlocks(gesture.ids, target.destination, target.scope)) {
           focusRoot = target.scope?.root ?? gesture.root;
@@ -485,67 +489,6 @@ class BlockDragController {
       throw new AggregateError(errors, "Block drag completion failed");
     }
     return "handled";
-  }
-
-  /**
-   * Resolves an actual release or revalidates the last displayed target after a lost release.
-   *
-   * Only pointerup coordinates describe the release location. A move with no
-   * primary button arrives after release, so its coordinates cannot select a new
-   * destination. Pending gestures and revoked cached targets do not move blocks.
-   * Actual release updates the gesture coordinates and feedback during resolution;
-   * inferred release reads the captured target without moving its visual frame.
-   *
-   * @param gesture - Captured sources and the last held pointer target.
-   * @param event - Native release or movement reporting the primary button released.
-   * @returns Current permitted target, or undefined for pending, neutral or rejected gestures.
-   * @throws Propagates delegated geometry and permission failures to completion cleanup.
-   */
-  private releaseTarget(
-    gesture: BlockDragGesture,
-    event: PointerEvent,
-  ): ResolvedBlockDropTarget | undefined {
-    if (!gesture.ids) {
-      return undefined;
-    }
-    if (event.type === "pointerup") {
-      gesture.x = event.clientX;
-      gesture.y = event.clientY;
-      // Do not pass pointerup.target: earlier release handlers can clear capture
-      // while this event still targets the source handle. Treating that handle
-      // as the destination rejects a valid drop as a move into its own subtree.
-      // Omit the native hint so the resolver hit-tests the final coordinates.
-      this.resolve(gesture);
-      return gesture.target;
-    }
-    const target = gesture.target;
-    if (target && this.adapter.canMove(gesture.ids, target.destination, target.scope)) {
-      return target;
-    }
-    return undefined;
-  }
-
-  /**
-   * Borrows this native event's target unless pointer capture redirected delivery.
-   *
-   * The result is consumed synchronously during movement; scroll reconciliation
-   * and release still hit-test geometry afresh. No native hit survives into another
-   * input event, including release after pointer capture has already been cleared.
-   *
-   * @param event - Current pointer movement event, before release-time capture cleanup.
-   * @param root - Gesture attachment supplying the correct DOM realm.
-   * @returns Connected uncaptured element, or undefined to request geometric resolution.
-   */
-  private uncapturedHit(event: PointerEvent, root: HTMLElement): Element | undefined {
-    const ElementType = root.ownerDocument.defaultView!.Element;
-    if (
-      event.target instanceof ElementType &&
-      event.target.isConnected &&
-      !event.target.hasPointerCapture?.(event.pointerId)
-    ) {
-      return event.target;
-    }
-    return undefined;
   }
 
   /**
@@ -598,7 +541,22 @@ class BlockDragController {
       // invalidate hit-test data for the whole mounted document.
       if (!gesture.preview && gesture.ids) {
         gesture.sourceFeedback.show(gesture.ids);
-        this.createPreview(gesture, gesture.ids);
+        // Mount one bounded text preview after reading the target geometry.
+        const rows = this.adapter.getPreview?.(gesture.ids, 4) ?? [];
+        const document = gesture.root.ownerDocument;
+        const preview = document.createElement("div");
+        gesture.preview = preview;
+        preview.className = "rivto-block-drag-preview";
+        preview.textContent = `${gesture.ids.length} blocks`;
+        for (const row of rows.slice(0, 4)) {
+          const content = document.createElement("div");
+          content.className = BLOCK_EDITOR_CLASSES.dragPreviewRow;
+          content.textContent = row.text.slice(0, 240);
+          content.style.marginInlineStart = `${Math.max(0, Math.min(3, row.depth)) * 12}px`;
+          preview.append(content);
+        }
+        gesture.root.append(preview);
+        document.documentElement.setAttribute("data-block-drag-active", "");
       }
       if (gesture.preview) {
         gesture.preview.style.transform = `translate3d(${gesture.x + 12}px, ${gesture.y + 12}px, 0)`;
@@ -606,50 +564,5 @@ class BlockDragController {
     } catch (error) {
       this.cancelAfterFailure(error);
     }
-  }
-
-  /**
-   * Creates non-interactive text feedback once, after target geometry has been read.
-   *
-   * The host bounds model reads. Page independently caps DOM rows, displayed text
-   * and indentation; native textContent keeps markup inert. A document marker fixes
-   * the cursor and suppresses handle hover until cleanup. Movement changes only
-   * the outer transform and never asks the host for another snapshot.
-   *
-   * @param gesture - Owner responsible for removing the preview on every exit path.
-   * @param ids - Captured canonical source roots used for the group count.
-   * @returns At most four content rows and the source-root count are mounted.
-   * @throws Host preview reads or DOM creation failures propagate to gesture cleanup.
-   */
-  private createPreview(gesture: BlockDragGesture, ids: readonly string[]): void {
-    const rows = this.adapter.getPreview?.(ids, 4) ?? [];
-    const document = gesture.root.ownerDocument;
-    const preview = document.createElement("div");
-    gesture.preview = preview;
-    preview.className = "rivto-block-drag-preview";
-    preview.textContent = `${ids.length} blocks`;
-    for (const row of rows.slice(0, 4)) {
-      const content = document.createElement("div");
-      content.className = BLOCK_EDITOR_CLASSES.dragPreviewRow;
-      content.textContent = row.text.slice(0, 240);
-      content.style.marginInlineStart = `${Math.max(0, Math.min(3, row.depth)) * 12}px`;
-      preview.append(content);
-    }
-    gesture.root.append(preview);
-    document.documentElement.setAttribute("data-block-drag-active", "");
-  }
-
-  /**
-   * Scrolls nested containers and the window near their edges, then resolves moved targets.
-   *
-   * @param gesture - Current gesture; cancellation prevents further scheduling.
-   * @param hit - Current uncaptured native target, used only to skip unnecessary scroll frames.
-   * @returns At most one scroll frame is pending; no selected subtree is traversed per frame.
-   */
-  private schedule(gesture: BlockDragGesture, hit?: Element): void {
-    if (!gesture.autoScroll) {
-      gesture.autoScroll = new BlockAutoScroll(gesture.root, () => this.resolve(gesture));
-    }
-    gesture.autoScroll.update(gesture, hit);
   }
 }

@@ -13,7 +13,7 @@ Rivto separates persisted data, document commands, and React presentation:
 ## Shared editor and panels
 
 `createReactEditor({ editor: documentApi, extensions })` installs shared infrastructure once.
-Use `panel` for a core `PanelAPI` and `reactPanel` for a `ReactPanelApi`; the latter extends the core contract and exposes `reactPanel.blocks` and `reactPanel.elements` directly. Events, behavior contexts, clipboard contexts and element render/property props expose the React occurrence as `reactPanel`.
+Use `panel` for a core `PanelAPI` and `reactPanel` for a `ReactPanelApi`; they also implement `DocumentEditorAPI` and `ReactEditorApi`, respectively. The panel exposes bounded `blocks`, `elements`, selection and clipboard directly while sharing editor registrations and history. Events, behavior contexts, clipboard contexts and element render/property props expose the React occurrence as `reactPanel`.
 
 Pass it as `<EditorPanel editor={editor}>`. `usePanel()` returns the bounded core panel;
 `useReactPanel()` and event payloads return its browser API. Document-wide operations
@@ -29,7 +29,7 @@ and it can be copied. Both implementations independently restrict elements using
 `panel.blocks` and `panel.elements` expose bounded reads and editing operations. `panel.subscribe(listener)` forwards the document-editor change stream, including changes outside the panel and block-definition updates. It does not emit on registration or selection changes; the returned function unsubscribes. Use the focused block and element subscriptions when a component observes only specific data. `panel.batchUpdates(callback)` groups synchronous changes into one shared document undo step; `panel.batchUpdatesWithoutHistory(callback)` runs maintenance changes without an undo entry. Both return the callback result and propagate errors without rolling back earlier writes. Nested transactions retain the outer capture policy. For components that only read or edit content, use `usePanel()`; use `useReactPanel()` for DOM interaction, selection, events, mode or presentation registrations. Read `panel.blocks.getBlockNode(id)` or `panel.elements.getElementNode(id)` inside deferred handlers to obtain current values and check that the entity still belongs to the panel before writing. Rendered hook snapshots are for rendering, not later read-modify-write operations.
 Top-level parents are null relative to the panel; DocumentEditorAPI returns actual parents.
 Outside destinations and targets are rejected before batch writes. Panel insertion uses
-`{ root: true, beforeId? }` or `{ parentId, beforeId? }`; document insertion uses actual
+`{ parentId: null, beforeId? }` or `{ parentId, beforeId? }`; document insertion uses actual
 `{ parentId: string | null, beforeId? }`. Omitted destinations append to the corresponding roots.
 
 Each React panel owns its mode; pass a `ModeManager` explicitly to retain or share mode.

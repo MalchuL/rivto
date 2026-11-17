@@ -68,175 +68,6 @@ export function nonOverlappingBlockFrame(
 }
 
 /**
- * Measures occupied visual and block-card bounds within one element subtree.
- *
- * Groups have no painted surface of their own; their descendants are already
- * present in the flat element list. Block cards outside this block scope are
- * excluded, matching the projection's existing card ownership rules.
- *
- * @param elements - Flat element snapshot belonging to the receiving subtree.
- * @param cards - Existing block cards belonging to the receiving block scope.
- * @returns Axis-aligned bounds for painted elements and scoped block cards.
- */
-function placementObstacles(
-  elements: readonly EditorElementNode[],
-  cards: readonly EditorElementNode[],
-) {
-  const byId = new Map(elements.map((element) => [element.id, element]));
-  const cardIds = new Set(cards.map((card) => card.id));
-  const geometry = new ElementGeometry((id) => byId.get(id));
-  return elements.flatMap((element) => {
-    if (
-      element.type === "group" ||
-      (element.type === EDGELESS_BLOCK_ELEMENT_TYPE && !cardIds.has(element.id))
-    ) {
-      return [];
-    }
-    return geometry.bounds(element.id) ?? [];
-  });
-}
-
-/**
- * Finds the maximum-weight one-to-one assignment between segments and elements.
- *
- * A greedy match can give the best element to one segment while forcing a much
- * worse recreation elsewhere. The Hungarian assignment maximizes continuity
- * across the complete canvas and remains deterministic because rows and columns
- * follow document and previous-element order.
- *
- * @param weights - Segment rows containing non-negative element continuity scores.
- * @returns Element-column index for each segment, or -1 when no positive match exists.
- */
-function maximumWeightMatching(weights: readonly (readonly number[])[]): number[] {
-  const rows = weights.length;
-  const columns = weights[0]?.length ?? 0;
-  if (!rows || !columns) {
-    return Array(rows).fill(-1);
-  }
-  const size = Math.max(rows, columns);
-  const maximum = weights.reduce(
-    (max, row) => row.reduce((value, weight) => Math.max(value, weight), max),
-    0,
-  );
-  const potentialsByRow = Array(size + 1).fill(0) as number[];
-  const potentialsByColumn = Array(size + 1).fill(0) as number[];
-  const columnRows = Array(size + 1).fill(0) as number[];
-  const previousColumns = Array(size + 1).fill(0) as number[];
-
-  for (let row = 1; row <= size; row += 1) {
-    columnRows[0] = row;
-    let column = 0;
-    const minimums = Array(size + 1).fill(Number.POSITIVE_INFINITY) as number[];
-    const used = Array(size + 1).fill(false) as boolean[];
-    do {
-      used[column] = true;
-      const currentRow = columnRows[column]!;
-      let delta = Number.POSITIVE_INFINITY;
-      let nextColumn = 0;
-      for (let candidate = 1; candidate <= size; candidate += 1) {
-        if (used[candidate]) {
-          continue;
-        }
-        const weight =
-          currentRow <= rows && candidate <= columns ? weights[currentRow - 1]![candidate - 1]! : 0;
-        const cost =
-          maximum - weight - potentialsByRow[currentRow]! - potentialsByColumn[candidate]!;
-        if (cost < minimums[candidate]!) {
-          minimums[candidate] = cost;
-          previousColumns[candidate] = column;
-        }
-        if (minimums[candidate]! < delta) {
-          delta = minimums[candidate]!;
-          nextColumn = candidate;
-        }
-      }
-      for (let candidate = 0; candidate <= size; candidate += 1) {
-        if (used[candidate]) {
-          potentialsByRow[columnRows[candidate]!] += delta;
-          potentialsByColumn[candidate] -= delta;
-        } else {
-          minimums[candidate] -= delta;
-        }
-      }
-      column = nextColumn;
-    } while (columnRows[column] !== 0);
-    do {
-      const previous = previousColumns[column]!;
-      columnRows[column] = columnRows[previous]!;
-      column = previous;
-    } while (column !== 0);
-  }
-
-  const result = Array(rows).fill(-1) as number[];
-  for (let column = 1; column <= columns; column += 1) {
-    const row = columnRows[column]! - 1;
-    if (row >= 0 && row < rows && weights[row]![column - 1]! > 0) {
-      result[row] = column - 1;
-    }
-  }
-  return result;
-}
-
-/**
- * Matches independent groups separately so unrelated cards do not enlarge the matrix.
- * @param scores - Sparse segment-to-card scores; absent entries have zero weight.
- * @returns Existing card index for each segment, or -1 without a reusable card.
- */
-function matchConnectedSegments(scores: readonly ReadonlyMap<number, number>[]): number[] {
-  const rowsByCard = new Map<number, number[]>();
-  scores.forEach((row, index) =>
-    row.forEach((weight, card) => {
-      const rows = rowsByCard.get(card) ?? [];
-      rows.push(index);
-      rowsByCard.set(card, rows);
-    }),
-  );
-  const result = Array<number>(scores.length).fill(-1);
-  const visited = new Set<number>();
-  scores.forEach((rowScores, start) => {
-    if (visited.has(start)) {
-      return;
-    }
-    const rows = [start];
-    const cards = new Set<number>();
-    visited.add(start);
-    for (const row of rows) {
-      scores[row]!.forEach((weight, card) => {
-        if (cards.has(card)) {
-          return;
-        }
-        cards.add(card);
-        for (const neighbor of rowsByCard.get(card)!) {
-          if (visited.has(neighbor)) {
-            continue;
-          }
-          visited.add(neighbor);
-          rows.push(neighbor);
-        }
-      });
-    }
-    if (!cards.size) {
-      return;
-    }
-    rows.sort((a, b) => a - b);
-    const columns = [...cards].sort((a, b) => a - b);
-    if (rows.length === 1 && columns.length === 1) {
-      result[start] = columns[0]!;
-      return;
-    }
-    const matches = maximumWeightMatching(
-      rows.map((row) => columns.map((card) => scores[row]!.get(card) ?? 0)),
-    );
-    matches.forEach((column, index) => {
-      if (column >= 0) {
-        result[rows[index]!] = columns[column]!;
-      }
-    });
-  });
-  return result;
-}
-
-/**
  * Resolves the inclusive root range stored by a block element.
  *
  * @param element - Generic document element containing range boundary props.
@@ -422,11 +253,9 @@ export class BlockElementProjection {
     if (!entry) {
       const projection = this.createPanelProjection(rootBlockId, rootElementId);
       const unsubscribeBlocks = this.reactEditor.blocks.subscribeStructure(projection.schedule);
-      const unsubscribeElements = new PanelElements(
-        this.reactEditor.elements,
-        this.reactEditor.getDocument(),
-        rootElementId,
-      ).subscribe(projection.schedule);
+      const unsubscribeElements = new PanelElements(this.reactEditor, rootElementId).subscribe(
+        projection.schedule,
+      );
       entry = {
         consumers: 0,
         release: () => {
@@ -549,11 +378,7 @@ export class BlockElementProjection {
     if (this.rootElementId !== null && !reactEditor.elements.hasElement(this.rootElementId)) {
       return;
     }
-    const elements = new PanelElements(
-      reactEditor.elements,
-      reactEditor.getDocument(),
-      this.rootElementId,
-    );
+    const elements = new PanelElements(reactEditor, this.rootElementId);
     const rootIds =
       this.rootBlockId !== null
         ? reactEditor.blocks.getBlockNode(this.rootBlockId)!.childIds
@@ -667,7 +492,117 @@ export class BlockElementProjection {
     });
 
     // Solve competing assignments together, preserving split/merge continuity.
-    const matches = matchConnectedSegments(scores);
+    const rowsByCard = new Map<number, number[]>();
+    scores.forEach((row, index) =>
+      row.forEach((weight, card) => {
+        const rows = rowsByCard.get(card) ?? [];
+        rows.push(index);
+        rowsByCard.set(card, rows);
+      }),
+    );
+    const matches = Array<number>(scores.length).fill(-1);
+    const visited = new Set<number>();
+    for (const start of scores.keys()) {
+      if (visited.has(start)) {
+        continue;
+      }
+      const rows = [start];
+      const cards = new Set<number>();
+      visited.add(start);
+      for (const row of rows) {
+        scores[row]!.forEach((weight, card) => {
+          if (cards.has(card)) {
+            return;
+          }
+          cards.add(card);
+          for (const neighbor of rowsByCard.get(card)!) {
+            if (visited.has(neighbor)) {
+              continue;
+            }
+            visited.add(neighbor);
+            rows.push(neighbor);
+          }
+        });
+      }
+      if (!cards.size) {
+        continue;
+      }
+      rows.sort((a, b) => a - b);
+      const columns = [...cards].sort((a, b) => a - b);
+      if (rows.length === 1 && columns.length === 1) {
+        matches[start] = columns[0]!;
+        continue;
+      }
+
+      // Match competing segments as a group. Greedy assignment can consume the only
+      // usable card of another segment. The Hungarian algorithm minimizes lost overlap.
+      const weights = rows.map((row) => columns.map((card) => scores[row]!.get(card) ?? 0));
+      const rowCount = rows.length;
+      const columnCount = columns.length;
+      const size = Math.max(rowCount, columnCount);
+      const maximum = weights.reduce(
+        (max, row) => row.reduce((value, weight) => Math.max(value, weight), max),
+        0,
+      );
+      const potentialsByRow = Array(size + 1).fill(0) as number[];
+      const potentialsByColumn = Array(size + 1).fill(0) as number[];
+      const columnRows = Array(size + 1).fill(0) as number[];
+      const previousColumns = Array(size + 1).fill(0) as number[];
+
+      for (let row = 1; row <= size; row += 1) {
+        columnRows[0] = row;
+        let column = 0;
+        const minimums = Array(size + 1).fill(Number.POSITIVE_INFINITY) as number[];
+        const used = Array(size + 1).fill(false) as boolean[];
+        do {
+          used[column] = true;
+          const currentRow = columnRows[column]!;
+          let delta = Number.POSITIVE_INFINITY;
+          let nextColumn = 0;
+          for (let candidate = 1; candidate <= size; candidate += 1) {
+            if (used[candidate]) {
+              continue;
+            }
+            const weight =
+              currentRow <= rowCount && candidate <= columnCount
+                ? weights[currentRow - 1]![candidate - 1]!
+                : 0;
+            const cost =
+              maximum - weight - potentialsByRow[currentRow]! - potentialsByColumn[candidate]!;
+            if (cost < minimums[candidate]!) {
+              minimums[candidate] = cost;
+              previousColumns[candidate] = column;
+            }
+            if (minimums[candidate]! < delta) {
+              delta = minimums[candidate]!;
+              nextColumn = candidate;
+            }
+          }
+          for (let candidate = 0; candidate <= size; candidate += 1) {
+            if (used[candidate]) {
+              potentialsByRow[columnRows[candidate]!] += delta;
+              potentialsByColumn[candidate] -= delta;
+            } else {
+              minimums[candidate] -= delta;
+            }
+          }
+          column = nextColumn;
+        } while (columnRows[column] !== 0);
+        do {
+          const previous = previousColumns[column]!;
+          columnRows[column] = columnRows[previous]!;
+          column = previous;
+        } while (column !== 0);
+      }
+
+      // Discard the zero-weight padding used to make the assignment matrix square.
+      for (let column = 1; column <= columnCount; column++) {
+        const row = columnRows[column]! - 1;
+        if (row >= 0 && row < rowCount && weights[row]![column - 1]! > 0) {
+          matches[rows[row]!] = columns[column - 1]!;
+        }
+      }
+    }
     const avoidOverlap = this.avoidOverlap;
     const defaultWidth = this.defaultWidth;
     let occupied: EditorElementNode["frame"][] | undefined;
@@ -684,12 +619,36 @@ export class BlockElementProjection {
       };
       let frame = existingElement?.frame ?? preferred;
       if (!existingElement && avoidOverlap) {
-        occupied ??= placementObstacles(elementNodes, existing);
+        // Groups have no painted bounds. Measure visible leaves and cards in this scope once.
+        if (!occupied) {
+          const byId = new Map(elementNodes.map((element) => [element.id, element]));
+          const cardIds = new Set(existing.map((card) => card.id));
+          const geometry = new ElementGeometry((id) => byId.get(id));
+          occupied = elementNodes.flatMap((element) => {
+            if (
+              element.type === "group" ||
+              (element.type === EDGELESS_BLOCK_ELEMENT_TYPE && !cardIds.has(element.id))
+            ) {
+              return [];
+            }
+            return geometry.bounds(element.id) ?? [];
+          });
+        }
         frame = nonOverlappingBlockFrame(preferred, occupied);
         occupied.push(frame);
       }
+      // Retain a matched identity. New cards use the first block and element scope
+      // for a deterministic ID unless another element already owns it.
+      let cardId = existingElement?.id;
+      if (cardId === undefined) {
+        const scopePrefix = this.rootElementId === null ? "" : this.rootElementId + ":";
+        const preferredId = EDGELESS_BLOCK_ELEMENT_ID_PREFIX + scopePrefix + blocks[0]!.id;
+        cardId = this.reactEditor.elements.hasElement(preferredId)
+          ? crypto.randomUUID()
+          : preferredId;
+      }
       return {
-        id: existingElement?.id ?? this.availableElementId(blocks[0]!.id),
+        id: cardId,
         childIds: existingElement?.childIds ?? [],
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
         frame,
@@ -741,18 +700,5 @@ export class BlockElementProjection {
         elements.updateElements(update);
       }
     });
-  }
-
-  /**
-   * Keeps the ordinary document-card ID deterministic while avoiding collisions
-   * when another element subtree already displays the same block. Existing cards
-   * are matched before this method, so their identities and geometry remain stable.
-   */
-  private availableElementId(blockId: string): string {
-    const base = `${EDGELESS_BLOCK_ELEMENT_ID_PREFIX}${this.rootElementId === null ? "" : `${this.rootElementId}:`}${blockId}`;
-    if (!this.reactEditor.elements.hasElement(base)) {
-      return base;
-    }
-    return crypto.randomUUID();
   }
 }

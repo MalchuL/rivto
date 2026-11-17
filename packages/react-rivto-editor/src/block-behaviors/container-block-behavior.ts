@@ -12,11 +12,7 @@ import type { BlockInput } from "@chulane/document-model";
  */
 import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
 import { scheduleBlockFocus } from "./utils/focus-ops";
-import type {
-  BlockBehavior,
-  BlockBehaviorContext,
-  BlockBehaviorOutcome,
-} from "./types";
+import type { BlockBehavior, BlockBehaviorContext, BlockBehaviorOutcome } from "./types";
 import type { KeyboardSelectionTarget } from "../managers";
 
 /**

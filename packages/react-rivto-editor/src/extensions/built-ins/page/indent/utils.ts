@@ -9,11 +9,7 @@
  */
 import { getSelectedBlockIds, isStructuralSelection } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../../../panels/types";
-import {
-  firstKeyboardTarget,
-  isEditableKeyboardEvent,
-  type KeyboardSelectionTarget,
-} from "../../../../managers";
+import { firstKeyboardTarget, isEditableKeyboardEvent } from "../../../../managers";
 import type { PanelSelectionApi } from "../../../../managers/selection/api";
 import { PageNavigationController } from "../../../../surfaces/page/page-navigation-controller";
 
@@ -28,16 +24,6 @@ interface ViewportSettlement {
 }
 
 const viewportSettlements = new WeakMap<HTMLElement, ViewportSettlement>();
-
-/**
- * Resolves the identifiers moved by one indent shortcut.
- *
- * @param target - Keyboard target that qualified the shortcut.
- * @returns Selected structural IDs or the active text block ID.
- */
-function indentTargetIds(target: KeyboardSelectionTarget): string[] {
-  return getSelectedBlockIds(target.item);
-}
 
 /**
  * Returns the viewport position of a rendered block used to anchor a reparent.
@@ -58,75 +44,6 @@ interface BlockViewportAnchor {
   readonly id: string;
   /** Viewport top before the command. */
   readonly top: number;
-}
-
-/**
- * Chooses the visible selected block nearest the viewport center.
- *
- * Large virtual selections commonly have both endpoints unmounted. Anchoring
- * a rendered member keeps the user's current reading position stable regardless
- * of which selected endpoint owns keyboard focus.
- *
- * @param root - Page surface containing mounted members of the selection.
- * @param blockIds - Complete selected block IDs in document order.
- * @returns A visible anchor, or a mounted endpoint when none is visible.
- */
-function selectedViewportAnchor(
-  root: HTMLElement,
-  blockIds: readonly string[],
-): BlockViewportAnchor | undefined {
-  const selected = new Set(blockIds);
-  const viewportHeight = root.ownerDocument.defaultView?.innerHeight ?? 0;
-  const viewportCenter = viewportHeight / 2;
-  let anchor: BlockViewportAnchor | undefined;
-  let anchorDistance = Number.POSITIVE_INFINITY;
-  for (const element of root.querySelectorAll<HTMLElement>("[data-block-id]")) {
-    const id = element.dataset.blockId;
-    if (!id || !selected.has(id)) {
-      continue;
-    }
-    const rect = element.getBoundingClientRect();
-    if (rect.bottom <= 0 || rect.top >= viewportHeight) {
-      continue;
-    }
-    const distance = Math.abs(rect.top + rect.height / 2 - viewportCenter);
-    if (distance < anchorDistance) {
-      anchor = { id, top: rect.top };
-      anchorDistance = distance;
-    }
-  }
-  if (!anchor) {
-    let id: string | undefined;
-    for (let index = blockIds.length - 1; index >= 0 && !id; index -= 1) {
-      const blockId = blockIds[index]!;
-      if (blockViewportTop(root, blockId) !== undefined) {
-        id = blockId;
-      }
-    }
-    const top = id ? blockViewportTop(root, id) : undefined;
-    if (id && top !== undefined) {
-      anchor = { id, top };
-    }
-  }
-  return anchor;
-}
-
-/**
- * Returns selected blocks already represented in the current virtual window.
- *
- * @param root - Page surface containing the mounted window.
- * @param blockIds - Complete selected block IDs.
- * @returns Mounted selected IDs without duplicates.
- */
-function mountedSelectedBlockIds(root: HTMLElement, blockIds: readonly string[]): string[] {
-  const selected = new Set(blockIds);
-  return [
-    ...new Set(
-      [...root.querySelectorAll<HTMLElement>("[data-block-id]")]
-        .map((element) => element.dataset.blockId)
-        .filter((id): id is string => Boolean(id && selected.has(id))),
-    ),
-  ];
 }
 
 /**
@@ -190,7 +107,7 @@ export function applyIndentShortcut(
   if (!reactPanel.blocks.getBlockNode(target.blockId)) {
     return false;
   }
-  const targetIds = indentTargetIds(target);
+  const targetIds = getSelectedBlockIds(target.item);
   if (outdent && targetIds.some((id) => !reactPanel.blocks.canOutdent(id))) {
     return true;
   }
@@ -198,7 +115,15 @@ export function applyIndentShortcut(
   // both the root count and its DOM parent. Preserve the viewport through that
   // render instead of letting browser scroll anchoring reveal the hidden row edge.
   const virtualizationController = PageNavigationController.getForElement(root);
-  const mountedTargetIds = mountedSelectedBlockIds(root, targetIds);
+  // Capture mounted targets before the reparent changes the virtual window.
+  const selected = new Set(targetIds);
+  const mountedTargetIds = [
+    ...new Set(
+      [...root.querySelectorAll<HTMLElement>("[data-block-id]")]
+        .map((element) => element.dataset.blockId)
+        .filter((id): id is string => Boolean(id && selected.has(id))),
+    ),
+  ];
   const previousSettlement = viewportSettlements.get(root);
   const inheritedAnchor =
     previousSettlement?.anchorId &&
@@ -210,7 +135,43 @@ export function applyIndentShortcut(
   previousSettlement?.cancel();
   const releaseScrollAdjustments = virtualizationController?.suspendScrollAdjustments();
   const scrollElement = virtualizationController ? root.ownerDocument.scrollingElement : null;
-  const anchor = inheritedAnchor ?? selectedViewportAnchor(root, targetIds);
+  let anchor: BlockViewportAnchor | undefined = inheritedAnchor;
+  if (!anchor) {
+    // Virtualized endpoints can be absent. Prefer a visible member near the viewport center.
+
+    const viewportHeight = root.ownerDocument.defaultView?.innerHeight ?? 0;
+    const viewportCenter = viewportHeight / 2;
+
+    let anchorDistance = Number.POSITIVE_INFINITY;
+    for (const element of root.querySelectorAll<HTMLElement>("[data-block-id]")) {
+      const id = element.dataset.blockId;
+      if (!id || !selected.has(id)) {
+        continue;
+      }
+      const rect = element.getBoundingClientRect();
+      if (rect.bottom <= 0 || rect.top >= viewportHeight) {
+        continue;
+      }
+      const distance = Math.abs(rect.top + rect.height / 2 - viewportCenter);
+      if (distance < anchorDistance) {
+        anchor = { id, top: rect.top };
+        anchorDistance = distance;
+      }
+    }
+    if (!anchor) {
+      let id: string | undefined;
+      for (let index = targetIds.length - 1; index >= 0 && !id; index -= 1) {
+        const blockId = targetIds[index]!;
+        if (blockViewportTop(root, blockId) !== undefined) {
+          id = blockId;
+        }
+      }
+      const top = id ? blockViewportTop(root, id) : undefined;
+      if (id && top !== undefined) {
+        anchor = { id, top };
+      }
+    }
+  }
   const anchorId = anchor?.id;
   const anchorTop = anchor?.top;
   const view = root.ownerDocument.defaultView;

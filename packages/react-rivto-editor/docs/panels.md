@@ -48,14 +48,32 @@ ModeManager; the host can pass `mode` to retain or explicitly share its state.
 they create no DOM bindings, subscriptions or storage acquisitions. Whole-document
 display is a ChildrenPanel with omitted roots.
 
+The core panel implements `DocumentEditorAPI` by borrowing its source editor;
+its block and element managers derive from the corresponding document managers.
+They borrow the existing editor's live processor pipelines, behavior registrations,
+clipboard strategies and history. Destroying a core panel
+releases its own manager subscriptions without destroying the borrowed editor or
+its registrations. Constructing one requires the standard core block and element
+managers on the supplied editor. Clipboard paste strategies receive
+the destination through `PasteContext.editor`; stateful strategies can implement
+`forEditor` to bind their operations to that destination.
+When a panel is used as the editor for another panel, the inner panel cannot
+access block or element subtrees hidden by its source panel. An omitted inner
+root uses the source panel's roots; choosing the same hidden root preserves that
+boundary. Structural behavior still receives document-wide commands where its
+contract explicitly requires them.
+
 `EditorPanel` and `EditorEmbed` create these core panels from their root props and
 create and connect an internal ReactPanel in an effect after commit. Cleanup
 destroys that instance; StrictMode replay creates a fresh one. The first render,
 root/editor replacement, and SSR show loading until the effect supplies a panel.
 React components must not construct ReactPanel or ReactEditor manually: use
 EditorPanel/EditorEmbed and useReactEditor respectively. `usePanel()` returns that object typed as `PanelAPI`.
-`useReactPanel()` returns the same object typed as `ReactPanelApi`, extending `PanelAPI`
-with browser operations. Bounded `.blocks` and `.elements` are available directly;
+`useReactPanel()` returns the same object typed as `ReactPanelApi`, which also implements
+`ReactEditorApi`. Bounded `.blocks`, `.elements`, selection and clipboard operations
+are available directly; `getDocument()`, `load()` and `dump()` retain whole-document scope.
+The `.document` property is the borrowed source and can itself be another panel, so
+its block and element commands may also have boundaries.
 `.editor` is the shared ReactEditorApi, and `.selection`, `.events`, `.keyboard`, `.clipboard`, `.mode`,
 and `.slashCommands` belong to browser interaction. Canvas actions are created by
 `useEdgelessOperations()` inside the edgeless representation and remain bound to
@@ -78,7 +96,7 @@ element container explicitly removes that subtree through normal element command
 `editor.elements` exposes document-wide commands. `usePanel().elements`
 is the handle restricted to the selected container's descendants. Reads exclude the
 container, insertion appends to its children, and writes reject existing outside targets.
-Use `{ root: true }` for that panel's root list and `{ parentId }` for an included parent.
+Use `{ parentId: null }` for that panel's root list and `{ parentId }` for an included parent.
 The core element manager has no `forRoot` method or root arguments; actual document
 roots use `{ parentId: null }` in document-wide operations.
 

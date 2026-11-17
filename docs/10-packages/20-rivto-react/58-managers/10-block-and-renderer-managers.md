@@ -70,7 +70,7 @@ Native поведения имеют приоритет `0`, list/collapse — `
 `prepareInput(input)` делегирует recursive preparation core `BlockManager`.
 
 `destination` задаёт реального parentId (null для document roots) и optional beforeId.
-ReactPanelApi принимает `{ root: true }` для своих корней либо локальный parentId и ограничивает операции поддеревом.
+ReactPanelApi принимает `{ parentId: null }` для своих корней либо локальный parentId и ограничивает операции поддеревом.
 
 ### Mutation methods
 

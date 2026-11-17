@@ -3,8 +3,10 @@ export * from "./editor";
 export * from "./panels";
 export type {
   BlockChildBehaviorContext,
+  BlockMoveRequest,
   BlockStructuralBehavior,
   BlockStructuralScope,
+  BlockRelocationCommands,
   BlockStructuralMoveContext,
   BlockStructuralContext,
   BlockStructuralOutcome,

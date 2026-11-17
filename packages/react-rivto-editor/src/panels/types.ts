@@ -1,4 +1,4 @@
-import { PanelBlockContextMenuManager } from "../managers/block-context-menu/panel-manager";
+import type { PanelBlockContextMenuManager } from "../managers/block-context-menu/panel-manager";
 import type { ReactPanel } from "./react-panel";
 import type { DocumentModel } from "@chulane/document-model";
 import type { PanelAPI, ModeManagerApi, EditorMode } from "@chulane/rivto";
@@ -32,13 +32,14 @@ export interface PanelPageApi {
  * document managers for whole-document operations; reactPanel.editor owns registrations. Use this
  * panel's selection, clipboard, and slashCommands for browser interaction with its
  * own surface. Use reactPanel.blocks and reactPanel.elements for bounded editing; reactPanel.document.elements spans the document.
- * The interface exposes cleanup registration without exposing mutable registries or panel destruction.
+ * Shared registration methods delegate to the React editor; destroy releases only
+ * this occurrence's resources and does not destroy the shared editor.
  *
  * Writing-block factories are installed by defaultWritingBlockExtension or a host
  * extension through editor.installDefaultWriting. ReactPanel implements
  * this contract; components obtain it from useReactPanel rather than constructing it.
  */
-export interface ReactPanelApi extends PanelAPI {
+export interface ReactPanelApi extends PanelAPI, ReactEditorApi {
   /** Occurrence-local Page placement without attachment or registration ownership. */
   readonly page: PanelPageApi;
   /**
@@ -81,7 +82,10 @@ export interface ReactPanelApi extends PanelAPI {
   /** Reads the selection owned by this panel and synchronizes its DOM caret and highlights. */
   readonly selection: PanelSelectionApi;
   /** Menu actions bound to this panel and captured structural targets. */
-  readonly blockContextMenu: PanelBlockContextMenuManager;
+  readonly blockContextMenu: Pick<
+    PanelBlockContextMenuManager,
+    keyof ReactEditorApi["blockContextMenu"] | "execute"
+  >;
   /** Filters and executes shared command definitions using this panel as their context. */
   readonly slashCommands: PanelSlashCommandsApi;
   /** Observes deactivation so transient UI closes when another occurrence receives focus. */
@@ -118,7 +122,7 @@ export type PanelSnapshot =
     };
 
 /** Local registration identity and DOM root belonging to one mounted EditorPanel. */
-export interface PanelRegistration {
+export interface PanelEventScope {
   /** Stable occurrence identity; shared shortcut settings continue to use semantic action IDs. */
   readonly id: string;
   /**
@@ -127,6 +131,10 @@ export interface PanelRegistration {
    * @returns Mounted root, or null before mounting, when disabled, or after cleanup.
    */
   getRoot(): HTMLElement | null;
+}
+
+/** A panel event scope that also retains the disposers of its local registrations. */
+export interface PanelRegistration extends PanelEventScope {
   /**
    * Retains local registration cleanup until this occurrence is destroyed.
    *

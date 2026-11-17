@@ -11,7 +11,7 @@ import type { BlockInput } from "@chulane/document-model";
  *
  * @module
  */
-import type { BlockManagerApi } from "@chulane/rivto";
+import type { BlockRelocationCommands } from "@chulane/rivto";
 import { ContainerBlockBehavior } from "../../../block-behaviors/container-block-behavior";
 
 export const COLUMNS_BLOCK_TYPE = "columns";
@@ -29,7 +29,7 @@ export const COLUMNS_COLUMN_BLOCK_TYPE = "columns-column";
  * @returns Nothing; callers delete the empty shells afterwards.
  */
 export function relocateColumnContents(
-  blocks: Pick<BlockManagerApi, "getBlockNode" | "getParentId" | "moveBlocks">,
+  blocks: BlockRelocationCommands,
   columnIds: readonly string[],
 ): void {
   const unique = [...new Set(columnIds)].filter(

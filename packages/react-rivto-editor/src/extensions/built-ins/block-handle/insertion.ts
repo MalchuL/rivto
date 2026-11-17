@@ -57,7 +57,9 @@ export function registerBlockInsertionActions(menu: InsertionMenu): void {
         let destination = reactPanel.blocks.getInsertionDestinationAfter(blockId);
         if (position === "above") {
           destination =
-            parentId === null ? { root: true, beforeId: blockId } : { parentId, beforeId: blockId };
+            parentId === null
+              ? { parentId: null, beforeId: blockId }
+              : { parentId, beforeId: blockId };
         }
         const block = reactPanel.blocks.insertBlock(
           reactPanel.editor.defaultWritingBlockFactory.createEmptyBlock(),

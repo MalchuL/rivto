@@ -221,17 +221,6 @@ export function orderTodoStorageChildren(
   );
 }
 
-/** Toggles one value in a copied filter set. */
-function toggleFilter<T>(current: ReadonlySet<T>, value: T): ReadonlySet<T> {
-  const next = new Set(current);
-  if (next.has(value)) {
-    next.delete(value);
-  } else {
-    next.add(value);
-  }
-  return next;
-}
-
 /**
  * Renders one labelled filter checkbox using the shadcn Checkbox primitive.
  *
@@ -393,7 +382,16 @@ function StorageFilterGroup<T>({
           id={`${id}-${index}`}
           checked={selected.has(value)}
           label={label(value)}
-          onToggle={() => onChange(toggleFilter(selected, value))}
+          onToggle={() => {
+            // Publish a new selection so other views retain their current filter set.
+            const next = new Set(selected);
+            if (next.has(value)) {
+              next.delete(value);
+            } else {
+              next.add(value);
+            }
+            onChange(next);
+          }}
         />
       ))}
     </fieldset>

@@ -51,7 +51,9 @@ test("resolve falls back to DefaultBlockBehavior and indent stays free at the ro
     { type: "paragraph", content: "Second" },
     editor.blocks.getInsertionDestinationAfter(first),
   ).id;
-  const behaviors = reactPanel.editor.blockBehaviors.resolveAll(editor.blocks.getBlockNode(second)!);
+  const behaviors = reactPanel.editor.blockBehaviors.resolveAll(
+    editor.blocks.getBlockNode(second)!,
+  );
   expect(behaviors[0]).toBeInstanceOf(DefaultBlockBehavior);
   expect(behaviors.some((behavior) => !(behavior instanceof DefaultBlockBehavior))).toBe(false);
   editor.blocks.indentBlock(second);

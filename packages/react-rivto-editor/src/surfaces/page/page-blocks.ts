@@ -3,7 +3,6 @@ import type {
   BlockEditorBlocks,
   BlockEditorNodePatch,
   BlockEditorNodeSnapshot,
-  BlockListType,
 } from "@chulane/rivto-page";
 import type { BlockBehaviorsApi } from "../../managers/blocks/block-behaviors-api";
 import { isBlockStyle } from "../../blocks/block-style";
@@ -112,7 +111,12 @@ export class PageBlocks implements BlockEditorBlocks {
    * @throws Propagates host node reads and visibility-rule failures.
    */
   getBlockNode(blockId: string): BlockEditorNodeSnapshot | undefined {
-    const node = this.readNode(blockId);
+    // The hidden panel root still supplies the child list for its displayed subtree.
+    const node =
+      this.panel.blocks.getBlockNode(blockId) ??
+      (blockId === this.panel.rootBlockId
+        ? this.panel.document.blocks.getBlockNode(blockId)
+        : undefined);
     if (!node) {
       return undefined;
     }
@@ -121,11 +125,21 @@ export class PageBlocks implements BlockEditorBlocks {
       return cached.snapshot;
     }
     const style = isBlockStyle(node.listProps.style) ? node.listProps.style : undefined;
+    // Portable lists can carry extension metadata that has no Page decoration.
+    const listTypeValue = node.listProps.type;
+    const listType =
+      listTypeValue === "list" ||
+      listTypeValue === "checkbox" ||
+      listTypeValue === "numbered_list" ||
+      listTypeValue === "start_numbered_list" ||
+      listTypeValue === "continue_numbered_list"
+        ? listTypeValue
+        : undefined;
     const snapshot: BlockEditorNodeSnapshot = {
       id: node.id,
       type: node.type,
       childIds: node.childIds,
-      listType: this.readListType(node.listProps.type),
+      listType,
       checked: node.listProps.checked === true,
       collapsed: !this.behaviors.childrenVisible(node),
       dropPlacement: this.behaviors.childDropPlacement(node),
@@ -226,39 +240,5 @@ export class PageBlocks implements BlockEditorBlocks {
         this.panel.blocks.deleteListProps(blockId, removals);
       }
     });
-  }
-
-  /**
-   * Reads only a panel member or its explicitly configured hidden boundary.
-   *
-   * @param blockId - Requested model identity.
-   * @returns Existing cached node, or undefined outside the occurrence.
-   */
-  private readNode(blockId: string): EditorBlockNode | undefined {
-    return (
-      this.panel.blocks.getBlockNode(blockId) ??
-      (blockId === this.panel.rootBlockId
-        ? this.panel.document.blocks.getBlockNode(blockId)
-        : undefined)
-    );
-  }
-
-  /**
-   * Narrows host list metadata to Page's supported structural list modes.
-   *
-   * @param value - Opaque persisted list annotation.
-   * @returns Supported list mode, or undefined for no recognized list decoration.
-   */
-  private readListType(value: unknown): BlockListType | undefined {
-    switch (value) {
-      case "list":
-      case "checkbox":
-      case "numbered_list":
-      case "start_numbered_list":
-      case "continue_numbered_list":
-        return value;
-      default:
-        return undefined;
-    }
   }
 }

@@ -1,26 +1,22 @@
-import type { DocumentEditorAPI } from "@chulane/rivto";
+import type { BlockTransferBlocks } from "../../../block-transfer/types";
+import type { BlockManagerApi } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../../panels/types";
 import type { BlockBehaviorsApi } from "../../../managers/blocks/block-behaviors-api";
 
 /** Stable model identity used by drag operations. */
 interface BlockDragModel {
-  readonly id: ReturnType<DocumentEditorAPI["getDocument"]>["id"];
+  readonly id: string;
+}
+
+/** Transfer operations plus the reads and moves needed within one document. */
+interface BlockDragBlocks extends BlockTransferBlocks {
+  readonly getChildIds: BlockManagerApi["getChildIds"];
+  readonly moveBlocks: BlockManagerApi["moveBlocks"];
 }
 
 /** Model operations borrowed by local moves and cross-document transfer. */
 interface BlockDragDocument {
-  readonly blocks: Pick<
-    DocumentEditorAPI["blocks"],
-    | "getBlock"
-    | "getChildIds"
-    | "getParentId"
-    | "hasBlock"
-    | "removeBlocks"
-    | "importForest"
-    | "canMove"
-    | "getInsertionDestinationAfter"
-    | "moveBlocks"
-  >;
+  readonly blocks: BlockDragBlocks;
   /**
    * Reads the stable document used for identity comparisons.
    *
@@ -32,7 +28,7 @@ interface BlockDragDocument {
 /** Shared host behavior capability used by receiving occurrences. */
 interface BlockDragEditor {
   readonly blockBehaviors: Pick<BlockBehaviorsApi, "childrenVisible">;
-  readonly blocks: Pick<DocumentEditorAPI["blocks"], "canMove">;
+  readonly blocks: Pick<BlockManagerApi, "canMove">;
 }
 
 /** Addressed source and receiving commands; excludes panel registration and destruction. */

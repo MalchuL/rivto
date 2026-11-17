@@ -10,6 +10,7 @@ import {
 } from "@chulane/rivto";
 import { EditorPanel } from "../components/editor-panel/editor-panel";
 import { createReactEditor } from "../editor/react-editor";
+import type { ReactEditorApi } from "../editor/types";
 import { usePanel } from "../hooks/editor/use-panel";
 import { useReactPanel } from "../hooks/editor/use-react-panel";
 import { ReactPanel } from "../panels/react-panel";
@@ -55,6 +56,8 @@ it("shares core managers and exposes the same panel through both hooks", async (
     expect(markup).toContain("Loading document…");
     expect(maintainBlockCards).not.toHaveBeenCalled();
     const panel = new ReactPanel(editor, new ChildrenPanel(editor, { rootBlockId: root.id }));
+    const compatible: ReactEditorApi = panel;
+    expect(compatible.blocks).toBe(panel.blocks);
     try {
       renderToStaticMarkup(
         <TestPanel panel={panel}>
@@ -62,7 +65,7 @@ it("shares core managers and exposes the same panel through both hooks", async (
         </TestPanel>,
       );
     } finally {
-      panel.destroy();
+      await panel.destroy();
     }
     await editor.destroy();
     expect(core.blocks.getBlockNode(root.id)).toBeDefined();

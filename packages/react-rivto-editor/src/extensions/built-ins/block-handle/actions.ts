@@ -29,38 +29,6 @@ interface BlockContextMenuRegistration {
 }
 
 /**
- * Copies selected root subtrees, optionally deleting them after a successful write.
- *
- * Returns without writing when the panel cannot produce a clipboard bundle. For
- * cut, targets and a freshly copied bundle are checked after the asynchronous
- * write. If the source changed, the copied data remains on the clipboard while
- * the document is left intact. Successful deletion uses container-aware policies.
- *
- * @param context - Invoking panel and captured ancestor-deduplicated root IDs.
- * @param cut - Whether to delete the unchanged source after copying it.
- * @returns Completion of the write and, for cut, source deletion and focus scheduling.
- * @throws If clipboard writing fails, targets disappear, the copied source changes,
- * or the invoking panel cannot perform deletion.
- */
-async function copyBlocks(context: BlockContextMenuContext, cut: boolean): Promise<void> {
-  const { reactPanel, rootIds } = context;
-  const bundle = reactPanel.clipboard.copy(createStructuralSelection([...rootIds]));
-  if (!bundle) {
-    return;
-  }
-  await writeClipboardBundle(reactPanel.editor.clipboardFormats, bundle);
-  if (cut) {
-    assertBlockMenuTargets(context);
-    // Do not remove edits that arrived while the clipboard permission prompt was open.
-    const current = reactPanel.clipboard.copy(createStructuralSelection([...rootIds]));
-    if (JSON.stringify(current) !== JSON.stringify(bundle)) {
-      throw new Error("Blocks changed while copying; copied content was kept and nothing was cut");
-    }
-    deleteMenuBlocks(context);
-  }
-}
-
-/**
  * Registers Copy, Cut, and Delete contributions independently of slash commands.
  *
  * Copy and Cut operate on captured root subtrees. Delete restores those roots as
@@ -87,7 +55,25 @@ export function registerBlockClipboardActions(menu: BlockContextMenuRegistration
        * @returns Completion of the write and guarded deletion when this entry is Cut.
        * @throws If clipboard writing or the post-write source checks fail.
        */
-      execute: (context) => copyBlocks(context, cut),
+      execute: async (context) => {
+        const { reactPanel, rootIds } = context;
+        const bundle = reactPanel.clipboard.copy(createStructuralSelection([...rootIds]));
+        if (!bundle) {
+          return;
+        }
+        await writeClipboardBundle(reactPanel.editor.clipboardFormats, bundle);
+        if (cut) {
+          assertBlockMenuTargets(context);
+          // Do not remove edits that arrived while the clipboard permission prompt was open.
+          const current = reactPanel.clipboard.copy(createStructuralSelection([...rootIds]));
+          if (JSON.stringify(current) !== JSON.stringify(bundle)) {
+            throw new Error(
+              "Blocks changed while copying; copied content was kept and nothing was cut",
+            );
+          }
+          deleteMenuBlocks(context);
+        }
+      },
     });
   }
   menu.register({

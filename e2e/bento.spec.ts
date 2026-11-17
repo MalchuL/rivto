@@ -1,6 +1,6 @@
 import { blockDropRegion } from "./drop-regions";
 /** Browser coverage for responsive Bento layout, widths, shared modal and editing. */
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const RESIZE_RIGHT = "Resize Bento tile from the right";
@@ -12,25 +12,6 @@ const BENTO_TILES_SELECTOR =
   ":scope > .rivto-block-children > .rivto-bento-tile > .rivto-block-drop-wrapper-content > [data-block-id]";
 // Page owns the tile placement in both writing pages and canvas cards.
 const BENTO_ITEMS_SELECTOR = ":scope > .rivto-block-children > .rivto-bento-tile";
-
-/**
- * Drags one Bento edge handle by a horizontal pixel delta.
- *
- * @param page - Browser page owning the editor.
- * @param handle - Left or right resize separator.
- * @param dx - Horizontal movement in CSS pixels; positive is rightward.
- * @returns After pointer release.
- */
-async function dragResizeHandle(page: Page, handle: Locator, dx: number): Promise<void> {
-  await handle.hover();
-  const box = (await handle.boundingBox())!;
-  const x = box.x + box.width / 2;
-  const y = box.y + box.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x + dx, y, { steps: 8 });
-  await page.mouse.up();
-}
 
 for (const mode of ["block", "edgeless"]) {
   test(`Bento editing and layout in ${mode}`, async ({ page }) => {
@@ -45,7 +26,8 @@ for (const mode of ["block", "edgeless"]) {
           type: "block",
           zIndex: 0,
           frame: { x: 20, y: 20, width: 800, height: 600 },
-          props: { startBlockId: board.id, endBlockId: board.id },
+          // The expand button sits in the gutter of a framed card.
+          props: { startBlockId: board.id, endBlockId: board.id, borderless: false },
         });
       }
     }, mode);
@@ -64,7 +46,15 @@ for (const mode of ["block", "edgeless"]) {
     const rightHandle = first.getByRole("separator", { name: RESIZE_RIGHT });
     await expect(rightHandle).toBeVisible();
     const startWidth = await first.evaluate((element) => (element as HTMLElement).offsetWidth);
-    await dragResizeHandle(page, rightHandle, 80);
+    // Drag from the separator center and release to commit the preview width.
+    await rightHandle.hover();
+    const handleBounds = (await rightHandle.boundingBox())!;
+    const handleX = handleBounds.x + handleBounds.width / 2;
+    const handleY = handleBounds.y + handleBounds.height / 2;
+    await page.mouse.move(handleX, handleY);
+    await page.mouse.down();
+    await page.mouse.move(handleX + 80, handleY, { steps: 8 });
+    await page.mouse.up();
     const committed = `${Math.max(160, Math.min(960, startWidth + 80))}px`;
     await expect(first).toHaveCSS("flex-basis", committed);
     const placementWidth = await first

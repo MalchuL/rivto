@@ -40,7 +40,13 @@ export interface SlashMenuPositionOptions {
 
 const DEFAULT_POSITION = { width: 280, maxHeight: 320, gap: 6, viewportPadding: 8 };
 
-interface SlashSession {
+interface SlashMenuPosition {
+  readonly left: number;
+  readonly top: number;
+  readonly above: boolean;
+}
+
+interface SlashSession extends SlashMenuPosition {
   readonly document?: DocumentModel;
   readonly rootBlockId?: string;
   readonly panelRoot: HTMLElement;
@@ -48,23 +54,7 @@ interface SlashSession {
   readonly slashOffset: number;
   readonly query: string;
   readonly lastMatchedLength: number;
-  readonly left: number;
-  readonly top: number;
-  readonly above: boolean;
   readonly activeIndex: number;
-}
-
-/** Returns the last valid slash trigger ending at a collapsed caret. */
-function findSlash(
-  source: string,
-  caret: number,
-): { slashOffset: number; query: string } | undefined {
-  const prefix = source.slice(0, caret);
-  const slashOffset = prefix.lastIndexOf("/");
-  if (slashOffset < 0 || /\s/.test(prefix.slice(slashOffset + 1))) {
-    return;
-  }
-  return { slashOffset, query: prefix.slice(slashOffset + 1) };
 }
 
 /**
@@ -80,7 +70,7 @@ function findSlash(
 export function popupPosition(
   content: HTMLElement,
   options: Required<SlashMenuPositionOptions> = DEFAULT_POSITION,
-): Pick<SlashSession, "left" | "top" | "above"> {
+): SlashMenuPosition {
   const selection = content.ownerDocument.getSelection();
   const rect = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : undefined;
   const fallback = content.getBoundingClientRect();
@@ -103,29 +93,6 @@ export function popupPosition(
     top,
     above,
   };
-}
-
-/** Reads a collapsed native caret owned by the supplied editable element. */
-function caretOffset(content: HTMLElement): number | undefined {
-  const selection = content.ownerDocument.getSelection();
-  if (
-    !selection?.rangeCount ||
-    !selection.isCollapsed ||
-    !selection.focusNode ||
-    !content.contains(selection.focusNode)
-  ) {
-    return;
-  }
-  const range = content.ownerDocument.createRange();
-  range.selectNodeContents(content);
-  let offset: number | undefined;
-  try {
-    range.setEnd(selection.focusNode, selection.focusOffset);
-    offset = range.toString().length;
-  } catch {
-    offset = undefined;
-  }
-  return offset;
 }
 
 /** Groups already-ranked commands without changing their search order. */
@@ -198,9 +165,30 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   /** Validates the current caret and optionally discovers a freshly typed slash. */
   const refresh = useCallback(
     (content: HTMLElement, blockId: string, discover: boolean) => {
-      const offset = caretOffset(content);
+      // A live collapsed caret in this host determines the prefix to inspect. A stale
+      // browser range can disappear during a render; in that case close the old session below.
+      const selection = content.ownerDocument.getSelection();
+      let offset: number | undefined;
+      if (
+        selection?.rangeCount &&
+        selection.isCollapsed &&
+        selection.focusNode &&
+        content.contains(selection.focusNode)
+      ) {
+        const range = content.ownerDocument.createRange();
+        range.selectNodeContents(content);
+        try {
+          range.setEnd(selection.focusNode, selection.focusOffset);
+          offset = range.toString().length;
+        } catch {
+          offset = undefined;
+        }
+      }
       const source = content.textContent ?? "";
-      const trigger = offset === undefined ? undefined : findSlash(source, offset);
+      const prefix = source.slice(0, offset ?? 0);
+      const slashOffset = prefix.lastIndexOf("/");
+      const query = prefix.slice(slashOffset + 1);
+      const trigger = slashOffset >= 0 && !/\s/.test(query) ? { slashOffset, query } : undefined;
       const current = sessionRef.current;
       const triggerChanged = Boolean(
         current &&

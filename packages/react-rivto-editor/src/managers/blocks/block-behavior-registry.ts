@@ -1,3 +1,4 @@
+import type { KeyboardSelectionTarget } from "../keyboard";
 import type { BlockInput } from "@chulane/document-model";
 import type { BlockRegistryManagerApi } from "@chulane/rivto";
 import { RevisionStore } from "../../internal-store";
@@ -5,8 +6,8 @@ import { DefaultBlockBehavior } from "../../block-behaviors/default-block-behavi
 import type {
   BlockBehavior,
   BlockBehaviorAction,
+  BlockBehaviorContext,
   BlockBehaviorData,
-  BlockBehaviorOutcome,
 } from "../../block-behaviors/types";
 import type { RegistrationOwner } from "../extensions/types";
 import type { BlockBehaviorsApi } from "./block-behaviors-api";
@@ -151,16 +152,29 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
    * did not change: explicit rejection and a handled no-op both claim the action.
    *
    * @param action - Semantic operation requested by a keyboard or selection extension.
-   * @param args - Existing action context and operation-specific arguments; the caller owns its transaction.
+   * @param context - Block and panel receiving the action within the caller’s transaction.
+   * @param target - Keyboard selection used by the selected behavior.
    * @returns True when a behavior handles or rejects the requested operation;
    * false when every applicable handler is absent or defers.
    * @throws If context resolution, availability predicates, action handlers or delegated mutations fail.
    */
-  dispatch<Action extends BlockBehaviorAction>(
-    action: Action,
-    ...args: Parameters<NonNullable<BlockBehavior[Action]>>
+  dispatch(
+    action: BlockBehaviorAction,
+    context: BlockBehaviorContext,
+    target: KeyboardSelectionTarget,
   ): boolean {
-    return this.dispatchBlockAction(this.behaviors, args[0].block, action, ...args);
+    // An explicit rejection claims the key just like a handled action; only deferral continues.
+    for (const behavior of this.behaviors) {
+      const handler = behavior[action];
+      if (
+        handler &&
+        behavior.isAvailable(context.block) &&
+        handler.call(behavior, context, target) !== "unhandled"
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -175,47 +189,6 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
         !behavior.isAvailable(block) ||
         behavior.childrenVisible(block) !== false,
     );
-  }
-
-  /**
-   * Invokes an ordered behavior chain until a behavior handles or explicitly rejects the operation.
-   *
-   * The dispatcher resolves the supplied ordered chain against the context block
-   * and calls the requested semantic method. Applicability is checked immediately
-   * before invoking a handler, using detached block
-   * fields without method names. Inherited methods are called normally, without
-   * fallback exceptions. `unhandled` is the only outcome that continues to later
-   * applicable registrations. The caller owns the transaction boundary.
-   *
-   * @param behaviors - Registered behaviors in descending priority order, possibly a selected subset.
-   * @param block - Detached fields used for applicability, preserving shallow selection reads.
-   * @param action - Semantic method to invoke.
-   * @param args - Arguments accepted by that method, starting with its block context.
-   * @returns True when a behavior handles or explicitly rejects the operation;
-   * false when every applicable handler defers or is absent.
-   * @throws If an availability predicate, action handler, or delegated operation fails.
-   */
-  private dispatchBlockAction<Action extends BlockBehaviorAction>(
-    behaviors: readonly BlockBehavior[],
-    block: BlockBehaviorData,
-    action: Action,
-    ...args: Parameters<NonNullable<BlockBehavior[Action]>>
-  ): boolean {
-    for (const behavior of behaviors) {
-      const handler = behavior[action];
-      if (!handler || !behavior.isAvailable(block)) {
-        continue;
-      }
-      const outcome = (
-        handler as (
-          ...values: Parameters<NonNullable<BlockBehavior[Action]>>
-        ) => BlockBehaviorOutcome
-      ).call(behavior, ...args);
-      if (outcome !== "unhandled") {
-        return true;
-      }
-    }
-    return false;
   }
 
   /**

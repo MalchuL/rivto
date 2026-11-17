@@ -3,13 +3,14 @@ import {
   type BlockDestination,
   type BlockInput,
 } from "@chulane/document-model";
-import type { EditorBlock, EditorBlockNode } from "../../../editor/model";
+import type { EditorBlockNode } from "../../../editor/model";
 import type { BlockManagerApi } from "../../types";
 import type {
   BlockChildTransition,
+  BlockMoveRequest,
+  BlockRelocationCommands,
   BlockStructuralAction,
   BlockStructuralBehavior,
-  BlockStructuralScope,
   BlockStructuralContext,
 } from "../../../block-behaviors/types";
 
@@ -20,11 +21,19 @@ export class BlockStructuralBehaviorStrategy {
    *
    * @param blocks - Owning manager; this strategy never destroys it.
    * @param registry - Editor-local ordered registrations, borrowed without lifecycle ownership.
+   * @param documentBlocks - Document-wide operations used by behaviors across panel boundaries.
    */
   constructor(
     private readonly blocks: Pick<
       BlockManagerApi,
-      "getBlockNode" | "getParentId" | "getInsertionDestinationAfter" | "moveBlocks"
+      | "getBlockNode"
+      | "getParentId"
+      | "getInsertionDestinationAfter"
+      | "moveBlocks"
+      | "getOrderedIds"
+      | "getChildIds"
+      | "getRootIds"
+      | "updateBlock"
     >,
     private readonly registry: {
       /**
@@ -34,6 +43,7 @@ export class BlockStructuralBehaviorStrategy {
        */
       getBehaviorRegistrations(): readonly { readonly behavior: BlockStructuralBehavior }[];
     },
+    private readonly documentBlocks: BlockRelocationCommands,
   ) {}
 
   /**
@@ -44,10 +54,7 @@ export class BlockStructuralBehaviorStrategy {
    * @param request - Nonempty detached source roots and the destination location.
    * @returns False for a missing destination, invalid neighbor, or a behavior veto.
    */
-  canMove(request: {
-    sources: readonly Readonly<Omit<EditorBlock, "children">>[];
-    destination: BlockDestination;
-  }): boolean {
+  canMove(request: BlockMoveRequest): boolean {
     const { sources, destination } = request;
     const parent =
       destination.parentId === null ? null : this.blocks.getBlockNode(destination.parentId);
@@ -77,29 +84,27 @@ export class BlockStructuralBehaviorStrategy {
    *
    * @param action - Requested outline direction.
    * @param ids - Complete requested group led by its active block.
-   * @param scope - Panel-scoped reads and mutation boundary.
    * @returns Whether the leading block is missing, a behavior claimed the request, or all deferred.
    * @throws If a behavior or delegated operation fails.
    */
   interceptOutline(
     action: "indent" | "outdent",
     ids: string[],
-    scope: BlockStructuralScope,
   ): "missing" | "handled" | "unhandled" {
-    const block = ids[0] ? scope.getBlockNode(ids[0]) : undefined;
+    const block = ids[0] ? this.blocks.getBlockNode(ids[0]) : undefined;
     if (!block) {
       return "missing";
     }
-    const parentId = scope.getParentId(block.id) ?? null;
+    const parentId = this.blocks.getParentId(block.id) ?? null;
     const context: BlockStructuralContext = {
-      blocks: scope,
-      documentBlocks: this.blocks,
+      blocks: this.blocks,
+      documentBlocks: this.documentBlocks,
       block,
       parentId,
     };
-    const parent = parentId ? scope.getBlockNode(parentId) : undefined;
+    const parent = parentId ? this.blocks.getBlockNode(parentId) : undefined;
     const parentContext = parent
-      ? { ...context, block: parent, parentId: scope.getParentId(parent.id) ?? null }
+      ? { ...context, block: parent, parentId: this.blocks.getParentId(parent.id) ?? null }
       : undefined;
     const parentAction = action === "indent" ? "onChildIndent" : "onChildOutdent";
     const blockAction = action === "indent" ? "onIndent" : "onOutdent";
@@ -116,11 +121,10 @@ export class BlockStructuralBehaviorStrategy {
    * Lets each matching behavior claim a structural deletion once per group.
    *
    * @param ids - Selected block IDs in their original order.
-   * @param scope - Panel scope used for block reads and mutations.
    * @returns True if a behavior handled or rejected the group.
    * @throws If an availability predicate or deletion handler fails.
    */
-  interceptDeletion(ids: readonly string[], scope: BlockStructuralScope): boolean {
+  interceptDeletion(ids: readonly string[]): boolean {
     if (
       !this.registry.getBehaviorRegistrations().some(({ behavior }) => behavior.onStructuralDelete)
     ) {
@@ -128,15 +132,15 @@ export class BlockStructuralBehaviorStrategy {
     }
     const consulted = new Set<BlockStructuralBehavior>();
     for (const id of ids) {
-      const block = scope.getBlockNode(id);
+      const block = this.blocks.getBlockNode(id);
       if (!block) {
         continue;
       }
       const context: BlockStructuralContext = {
-        blocks: scope,
-        documentBlocks: this.blocks,
+        blocks: this.blocks,
+        documentBlocks: this.documentBlocks,
         block,
-        parentId: scope.getParentId(id) ?? null,
+        parentId: this.blocks.getParentId(id) ?? null,
       };
       if (this.dispatch("onStructuralDelete", context, ids, consulted)) {
         return true;

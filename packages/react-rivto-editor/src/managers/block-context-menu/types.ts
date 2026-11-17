@@ -2,15 +2,19 @@ import type { ComponentType, ReactNode, SVGProps } from "react";
 import type { ReactPanelApi } from "../../panels/types";
 
 /** Stable targets captured when a block context menu opens. IDs belong to the invoking panel. */
-export interface BlockContextMenuContext {
-  /** Guarded operations of the occurrence that opened the menu. */
-  readonly reactPanel: ReactPanelApi;
+export interface BlockContextMenuTargets {
   /** Clicked block, whose presence in selection determines group targeting. */
   readonly blockId: string;
   /** Explicit structural targets in document order, retained across menu focus changes. */
   readonly blockIds: readonly string[];
   /** Targets excluding descendants of another target, for subtree operations and clipboard output. */
   readonly rootIds: readonly string[];
+}
+
+/** Captured target identities and the occurrence in which menu actions execute. */
+export interface BlockContextMenuContext extends BlockContextMenuTargets {
+  /** Guarded operations of the occurrence that opened the menu. */
+  readonly reactPanel: ReactPanelApi;
 }
 
 /** Context for interactive extension content; close dismisses the current menu. */

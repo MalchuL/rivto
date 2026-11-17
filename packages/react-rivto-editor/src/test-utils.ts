@@ -1,3 +1,4 @@
+import type { ReactEditorConfiguration } from "./editor/types";
 import type { ReactPanelApi } from "./panels/types";
 import { ReactPanel } from "./panels/react-panel";
 import { YjsDoc } from "@chulane/crdt-doc";
@@ -101,12 +102,13 @@ export async function createTestCoreEditor(
   return proxy;
 }
 
-/** Creates a React runtime bound directly to the fixture's document. */
-export function createTestReactEditor(
-  options: Omit<CreateReactEditorOptions, "editor"> & {
-    readonly editor: DocumentEditorAPI;
-  },
-): ReactPanel {
+/**
+ * Opens a headless panel over the fixture's document and registers panel disposal with its runtime.
+ *
+ * @param options - Fixed core document editor, extensions and React runtime settings.
+ * @returns The panel configured with the fixture's initial mode.
+ */
+export function createTestReactEditor(options: CreateReactEditorOptions): ReactPanel {
   const runtime = createReactEditor(options);
   const editor = new ReactPanel(runtime, new ChildrenPanel(options.editor, {}), {
     mode: new ModeManager(modes.get(options.editor)),
@@ -131,9 +133,7 @@ export function createTestReactEditor(
 export async function createTestMultiEditor(
   models: readonly DocumentModel[],
   storage?: DocumentStorage,
-  options:
-    | Omit<CreateReactEditorOptions, "editor">
-    | (() => Omit<CreateReactEditorOptions, "editor">) = {},
+  options: ReactEditorConfiguration | (() => ReactEditorConfiguration) = {},
 ): Promise<EditorStorage> {
   const seeds = new Map(models.map((model) => [model.id, model]));
   const runtime = new EditorStorage({

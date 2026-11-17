@@ -33,16 +33,6 @@ const openCreateMenu = async (
   return menu;
 };
 
-const visualKind = (name: "Rectangle" | "Ellipse" | "Text") => {
-  if (name === "Rectangle") {
-    return "rectangle";
-  }
-  if (name === "Ellipse") {
-    return "ellipse";
-  }
-  return "text";
-};
-
 const visualFrame = (visual: Locator) =>
   visual.evaluate((element) => {
     const style = (element as HTMLElement).style;
@@ -76,7 +66,7 @@ const createVisual = async (page: Page, name: "Rectangle" | "Ellipse" | "Text") 
   const point = await emptyCanvasPoint(page);
   await clickPlaceCapture(page, point);
   const selected = page.locator(
-    `[data-edgeless-visual-kind="${visualKind(name)}"][data-selected="true"]`,
+    `[data-edgeless-visual-kind="${name.toLowerCase()}"][data-selected="true"]`,
   );
   await expect(selected).toHaveCount(1);
   const id = await selected.getAttribute("data-edgeless-object-id");

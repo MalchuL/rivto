@@ -58,26 +58,17 @@ export function isImageFile(file: File): boolean {
 }
 
 /**
- * Checks whether clipboard text is a host-resolvable local image path.
- *
- * @param uri - Candidate path or file URI.
- * @returns True for a supported image extension on an absolute local path.
- */
-function isLocalImageUri(uri: string): boolean {
-  return IMAGE_FILE_EXTENSION.test(uri) && isLocalFileUri(uri);
-}
-
-/**
  * Extracts one supported local image URI from clipboard text.
  *
- * URI lists may contain comments; only the first non-comment line is considered.
+ * URI lists may contain comments; only the first non-comment line is considered. A supported image
+ * extension and an absolute local path are both required.
  *
  * @param text - URI-list or plain clipboard text.
  * @returns The supported URI, or undefined when no supported URI is present.
  */
 export function findImageUri(text: string): string | undefined {
   const uri = firstUriListEntry(text);
-  return uri && isLocalImageUri(uri) ? uri : undefined;
+  return uri && IMAGE_FILE_EXTENSION.test(uri) && isLocalFileUri(uri) ? uri : undefined;
 }
 
 /**

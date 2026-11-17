@@ -437,7 +437,7 @@ test.each(["unhandled", "handled", "rejected"] as const)(
       children: [{ type: "paragraph", content: "nested" }],
     });
     const third = panel.blocks.insertBlock({ type: "paragraph", content: "third" });
-    const ids = ["missing", block.id, second.id, third.id];
+    const ids = [block.id, second.id, third.id];
     const before = panel.blocks.getBlocks();
     const calls: string[] = [];
     core.blockRegistry.registerBehavior(
@@ -447,7 +447,7 @@ test.each(["unhandled", "handled", "rejected"] as const)(
          * Records the shared handler's first matching block and defers for the whole group.
          *
          * @param current - First selected block's full context.
-         * @param selected - Complete group, including IDs absent from the document.
+         * @param selected - Complete panel-visible group.
          * @returns Unhandled so later distinct handlers can participate.
          */
         onStructuralDelete(current, selected) {
@@ -520,7 +520,7 @@ test.each(["unhandled", "handled", "rejected"] as const)(
     }
     for (let request = 0; request < 2; request++) {
       calls.length = 0;
-      expect(core.blocks.removeBlocks(ids, panel.blocks)).toBe(outcome === "unhandled");
+      expect(panel.blocks.removeBlocks(ids)).toBe(outcome === "unhandled");
       expect(calls).toEqual(expected);
       if (outcome === "unhandled") {
         core.history.undo();
@@ -551,7 +551,7 @@ test.each([{ ids: [] }, { ids: ["missing"] }])(
         return "handled";
       },
     });
-    expect(core.blocks.removeBlocks(ids, panel.blocks)).toBe(true);
+    expect(core.blocks.removeBlocks(ids)).toBe(true);
     expect(calls).toEqual([]);
     expect(panel.blocks.getRootIds()).toEqual([block.id]);
     panel.editor.destroy();

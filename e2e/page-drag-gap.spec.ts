@@ -665,33 +665,6 @@ test("hovering a row body still puts the drop inside that block", async ({ page 
   await expect.poll(readParent).toBeNull();
 });
 
-/**
- * Checks child and sibling depth choices on both sides of the first child seam.
- *
- * @param page - Page with an active drag.
- * @param parentRow - Parent row above the seam.
- * @param sourceRow - First child row below the seam.
- * @returns Resolves after both depth choices retain their shared line.
- */
-async function sweepFirstChildBoundary(page: Page, parentRow: Locator, sourceRow: Locator) {
-  const parent = (await parentRow.boundingBox())!;
-  const source = (await sourceRow.boundingBox())!;
-  const line = page.locator(DROP_LINE_SELECTOR);
-  const sibling = (await line.boundingBox())!;
-  for (const y of [parent.y + parent.height - 1, source.y + 1]) {
-    await page.mouse.move(source.x + 50, y);
-    await expect(line).toBeVisible();
-    const child = (await line.boundingBox())!;
-    expect(child.x).toBeGreaterThan(sibling.x);
-    expect(child.y).toBeCloseTo(sibling.y, 0);
-    await page.mouse.move(parent.x + CHILD_DROP_INDENT / 2, y);
-    await expect(line).toBeVisible();
-    const current = (await line.boundingBox())!;
-    expect(current.x).toBeCloseTo(sibling.x, 0);
-    expect(current.y).toBeCloseTo(sibling.y, 0);
-  }
-}
-
 test("shows the only-child outdent line on its parent's bottom edge", async ({ page }) => {
   await page.setViewportSize({ width: 635, height: 360 });
   const cases = [
@@ -726,7 +699,20 @@ test("shows the only-child outdent line on its parent's bottom edge", async ({ p
     await expect(line).toBeVisible();
     const lineBox = (await line.boundingBox())!;
     expect(lineBox.y + lineBox.height / 2).toBeCloseTo(parentRowBox.y + parentRowBox.height, 0);
-    await sweepFirstChildBoundary(page, parentRow, sourceRow);
+    // Both sides of the parent/child seam must offer the same two depths at the same height.
+    const sourceRowBox = (await sourceRow.boundingBox())!;
+    for (const y of [parentRowBox.y + parentRowBox.height - 1, sourceRowBox.y + 1]) {
+      await page.mouse.move(sourceRowBox.x + 50, y);
+      await expect(line).toBeVisible();
+      const child = (await line.boundingBox())!;
+      expect(child.x).toBeGreaterThan(lineBox.x);
+      expect(child.y).toBeCloseTo(lineBox.y, 0);
+      await page.mouse.move(parentRowBox.x + CHILD_DROP_INDENT / 2, y);
+      await expect(line).toBeVisible();
+      const current = (await line.boundingBox())!;
+      expect(current.x).toBeCloseTo(lineBox.x, 0);
+      expect(current.y).toBeCloseTo(lineBox.y, 0);
+    }
     await page.mouse.up();
     await expect
       .poll(() =>

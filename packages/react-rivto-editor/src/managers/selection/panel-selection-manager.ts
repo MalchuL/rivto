@@ -7,7 +7,7 @@ import type { PendingSelectionCallback } from "./types";
  * effective core selection changes so newer selection changes always win,
  * including transitions from an empty selection back to an empty selection.
  */
-import { isStructuralSelection, type Selection, type SelectionManagerApi } from "@chulane/rivto";
+import type { Selection, SelectionManagerApi } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../panels/types";
 import type { RestoreDOMSelectionOptions, PanelSelectionApi } from "./api";
 import { readEditorDOMSelection, restoreEditorDOMSelection } from "./editor-dom-selection";
@@ -29,20 +29,13 @@ export class PanelSelectionManager implements PanelSelectionApi {
    * by root. Removing a surface cancels its own pending work; panel teardown
    * cancels its remaining requests before shared extensions are destroyed.
    * @param reactPanel - Owning panel editor providing its fixed DOM occurrence.
-   * @param coreSelection - Core manager providing the document's local selection state.
+   * @param panelSelection - Bounded core selection for range lookup, deletion and visibility notifications.
    */
   constructor(
     private readonly reactPanel: ReactPanelApi,
-    private readonly coreSelection: Pick<
+    private readonly panelSelection: Pick<
       SelectionManagerApi,
-      | "clear"
-      | "delete"
-      | "get"
-      | "isBlockSelected"
-      | "isElementSelected"
-      | "set"
-      | "snapshot"
-      | "subscribe"
+      "resolveBlockSelection" | "delete" | "subscribe"
     >,
   ) {}
 
@@ -55,38 +48,68 @@ export class PanelSelectionManager implements PanelSelectionApi {
     return root !== null && this.pendingSelectionCallbacks.has(root);
   }
 
-  /** @returns Detached current selection, or undefined when empty, outside this subtree,
-   * or owned by another panel. */
+  /**
+   * Reads a detached copy of the selection owned by this occurrence.
+   *
+   * @returns The current selection, or undefined when empty, outside this subtree,
+   * or owned by another panel.
+   */
   get(): Selection | undefined {
-    return this.isSelectionInActivePanel() ? this.coreSelection.get() : undefined;
+    return this.isSelectionInActivePanel() ? this.reactPanel.editor.selection.get() : undefined;
+  }
+
+  /**
+   * Resolves a selection only when all its members belong to this panel.
+   *
+   * @param selection - Explicit selection, or the active panel selection when omitted.
+   * @returns Resolved live ranges, or undefined when the selection is unavailable or outside this panel.
+   */
+  resolveBlockSelection(
+    selection = this.get(),
+  ): ReturnType<SelectionManagerApi["resolveBlockSelection"]> {
+    return selection ? this.panelSelection.resolveBlockSelection(selection) : undefined;
   }
 
   /**
    * Publishes selection through core without activating or focusing this panel.
-   * A selection containing blocks outside this panel's subtree clears shared selection.
+   * A selection containing blocks or elements outside this panel's subtree clears shared selection.
+   *
    * @param selection - Document selection values to publish.
-   * @returns No value.
+   * @returns After publishing the selection or clearing an inaccessible selection.
+   * @throws If the core manager rejects the supplied selection.
    */
   set(selection: Selection): void {
     if (!this.containsSelection(selection)) {
       this.clear();
       return;
     }
-    this.coreSelection.set(selection);
-  }
-
-  /** Clears the document's shared selection, even when another panel last set it. */
-  clear(): void {
-    this.coreSelection.clear();
+    this.reactPanel.editor.selection.set(selection);
   }
 
   /**
-   * Subscribes to the document's shared selection changes, including other panels.
-   * @param listener - Callback invoked after an effective change.
-   * @returns Function that removes the listener.
+   * Clears the document's shared selection, even when another panel last set it.
+   *
+   * @returns After releasing the selection and notifying observers of an effective change.
+   */
+  clear(): void {
+    this.reactPanel.editor.selection.clear();
+  }
+
+  /**
+   * Observes changes to the shared selection, including changes made by other panels.
+   *
+   * @param listener - Callback invoked when shared selection changes or a move changes its visibility here.
+   * @returns Idempotent disposer also invoked when this occurrence is destroyed.
+   * @throws If the panel has already been destroyed.
    */
   subscribe(listener: () => void): () => void {
-    return this.coreSelection.subscribe(listener);
+    const unsubscribe = this.panelSelection.subscribe(listener);
+    try {
+      return this.reactPanel.registerCleanup(unsubscribe);
+    } catch (error) {
+      unsubscribe();
+      throw error;
+    }
   }
 
   /**
@@ -94,7 +117,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
    *
    * Structural block removal and selected element deletion share one history batch.
    * A structural behavior that claims the block group leaves the selection intact.
-   * Text and element-only selections are deleted by the shared selection manager.
+   * Text and element-only selections follow the same bounded core deletion path.
    *
    * @returns After deletion, or without changes for an inaccessible selection.
    * @throws If a structural behavior or delegated deletion fails.
@@ -103,28 +126,19 @@ export class PanelSelectionManager implements PanelSelectionApi {
     if (!this.isSelectionInActivePanel()) {
       return;
     }
-    const selection = this.coreSelection.get();
-    if (!selection || !isStructuralSelection(selection)) {
-      this.coreSelection.delete();
-      return;
-    }
-    const ids = selection.blocks.map(({ id }) => id);
-    if (ids.some((id) => !this.reactPanel.blocks.canRemove(id))) {
-      return;
-    }
-    this.reactPanel.batchUpdates(() => {
-      if (!this.reactPanel.blocks.removeBlocks(ids)) {
-        return;
-      }
-      this.reactPanel.elements.removeElements(selection.elements ?? []);
-      this.coreSelection.clear();
-    });
+    this.panelSelection.delete();
   }
 
-  /** @returns Immutable core selection snapshot with stable identity until selection changes,
-   * or undefined when empty, outside this subtree, or owned by another panel. */
+  /**
+   * Reads the immutable core selection while this occurrence owns its visible members.
+   *
+   * @returns A snapshot with stable identity until selection changes, or undefined
+   * when empty, outside this subtree, or owned by another panel.
+   */
   snapshot(): Selection | undefined {
-    return this.isSelectionInActivePanel() ? this.coreSelection.snapshot() : undefined;
+    return this.isSelectionInActivePanel()
+      ? this.reactPanel.editor.selection.snapshot()
+      : undefined;
   }
 
   /**
@@ -138,12 +152,19 @@ export class PanelSelectionManager implements PanelSelectionApi {
    * when another panel owns the selection. Text ranges and carets return false.
    */
   isBlockSelected(id: string): boolean {
-    return this.coreSelection.isBlockSelected(id);
+    return this.reactPanel.editor.selection.isBlockSelected(id);
   }
 
-  /** @returns Whether an element belongs to the current selection. */
+  /**
+   * Checks a canvas element against the selection owned by this occurrence.
+   *
+   * @param id - Document-local element identity.
+   * @returns Whether this panel owns the current selection and it includes the element.
+   */
   isElementSelected(id: string): boolean {
-    return this.isSelectionInActivePanel() && this.coreSelection.isElementSelected(id);
+    return (
+      this.isSelectionInActivePanel() && this.reactPanel.editor.selection.isElementSelected(id)
+    );
   }
 
   /**
@@ -245,7 +266,25 @@ export class PanelSelectionManager implements PanelSelectionApi {
       root.removeEventListener("keydown", cancel);
       root.removeEventListener("focusout", leaveRoot);
     };
-    pending.frame = view.requestAnimationFrame(() => this.runSelectionCallback(pending));
+    pending.frame = view.requestAnimationFrame(() => {
+      if (!pending.active) {
+        return;
+      }
+      // The same model selection can outlive its DOM surface. A replacement root
+      // invalidates work prepared for the old surface even without a selection update.
+      if (pending.panel.getRoot() !== pending.root) {
+        this.cancelSelectionCallback(pending);
+      } else {
+        // Unregister before invoking: the callback may publish selection or
+        // schedule further work, which must not cancel the completed operation.
+        pending.active = false;
+        pending.unsubscribe?.();
+        this.pendingSelectionCallbacks.delete(pending.root);
+        // The caller performs any selection restoration or focus work. This scheduler
+        // only guards invocation; it does not restore anything after the callback runs.
+        pending.callback();
+      }
+    });
     // One callback owns this root's deferred selection work. Release the predecessor's
     // subscription and caller-owned resources after publishing the initialized request:
     // onCancel may schedule newer work, which must replace this request rather than leak.
@@ -300,7 +339,8 @@ export class PanelSelectionManager implements PanelSelectionApi {
    * Ownership requires the last activated root, or the default root when no active
    * root is remembered, to match this panel's root. The shared selection must exist
    * and every selected block and element must belong to this panel's boundaries.
-   * Subtree containment is cached by selection identity and block revision.
+   * Block-only subtree containment is cached by selection identity and block revision.
+   * Selected elements are checked live because element moves have an independent hierarchy.
    *
    * This guards get(), snapshot(), delete(), and isElementSelected(); it does not
    * assign ownership or focus a panel. isBlockSelected() deliberately bypasses it so an original block
@@ -318,11 +358,11 @@ export class PanelSelectionManager implements PanelSelectionApi {
     ) {
       return false;
     }
-    const value = this.coreSelection.snapshot();
+    const value = this.reactPanel.editor.selection.snapshot();
     if (!value) {
       return false;
     }
-    if (!this.reactPanel.rootBlockId) {
+    if (!this.reactPanel.rootBlockId || value.elements?.length) {
       return this.containsSelection(value);
     }
     const revision = this.reactPanel.document.getDocument().blocks.revision;
@@ -356,30 +396,5 @@ export class PanelSelectionManager implements PanelSelectionApi {
       this.pendingSelectionCallbacks.delete(pending.root);
     }
     pending.onCancel?.();
-  }
-
-  /**
-   * Runs a still-active request only on the DOM surface where it was scheduled.
-   * @param pending - Request whose animation frame has arrived.
-   * @returns No value.
-   */
-  private runSelectionCallback(pending: PendingSelectionCallback): void {
-    if (!pending.active) {
-      return;
-    }
-    // The same model selection can outlive its DOM surface. A replacement root
-    // invalidates work prepared for the old surface even without a selection update.
-    if (pending.panel.getRoot() !== pending.root) {
-      this.cancelSelectionCallback(pending);
-    } else {
-      // Unregister before invoking: the callback may publish selection or
-      // schedule further work, which must not cancel the completed operation.
-      pending.active = false;
-      pending.unsubscribe?.();
-      this.pendingSelectionCallbacks.delete(pending.root);
-      // The caller performs any selection restoration or focus work. This scheduler
-      // only guards invocation; it does not restore anything after the callback runs.
-      pending.callback();
-    }
   }
 }

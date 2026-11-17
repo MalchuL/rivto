@@ -21,6 +21,7 @@ describe("ElementPasteStrategy", () => {
     const uninstall = installEdgelessRuntime(reactPanel);
     const created = new ElementPasteStrategy(reactPanel).paste(
       {
+        editor: reactPanel,
         bundle: {
           version: 4,
           blocks: [],
@@ -81,6 +82,7 @@ describe("ElementPasteStrategy", () => {
 
     const created = new ElementPasteStrategy(reactPanel).paste(
       {
+        editor: reactPanel,
         bundle: { version: 4, blocks: [], elements: [source], selectedElementIds: [source.id] },
         selection: undefined,
       },
@@ -103,6 +105,7 @@ describe("ElementPasteStrategy", () => {
 
     const created = new ElementPasteStrategy(reactPanel).paste(
       {
+        editor: reactPanel,
         bundle: {
           version: 4,
           blocks: [

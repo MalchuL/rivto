@@ -1,4 +1,4 @@
-import type { BlockManagerApi } from "@chulane/rivto";
+import type { BlockProcessor } from "@chulane/rivto";
 import { isBlockStyle } from "./block-style";
 
 /** Explicit default background stored for colored containers. */
@@ -13,9 +13,7 @@ export const CONTAINER_DEFAULT_BACKGROUND = "#eceef6";
  * @param type - Native container type receiving the default.
  * @returns Processor for creation and type conversion.
  */
-export function createContainerBackgroundProcessor(
-  type: string,
-): Parameters<BlockManagerApi["registerProcessor"]>[0] {
+export function createContainerBackgroundProcessor(type: string): BlockProcessor {
   return {
     id: `${type}.background`,
     priority: 0,

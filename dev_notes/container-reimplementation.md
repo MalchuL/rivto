@@ -21,12 +21,12 @@ All four use ordinary persisted blocks with stable IDs, ordered children,
 `content`, `props`, and `listProps.collapsed`. There is no separate persisted
 card, lane, tile, row, or column collection alongside the block hierarchy.
 
-| Container | Current hierarchy                                                        | Persisted container-specific values                                                             |
-| --------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| Kanban    | `kanban` → `kanban-column` → ordinary blocks/subtrees                    | Column title is its `content`; a card has no special native type.                               |
+| Container | Current hierarchy                                                        | Persisted container-specific values                                                                  |
+| --------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Kanban    | `kanban` → `kanban-column` → ordinary blocks/subtrees                    | Column title is its `content`; a card has no special native type.                                    |
 | Bento     | `bento` → ordinary blocks/subtrees                                       | Preferred width is `pluginData.bentoWidth` on the direct child block, not on a separate tile record. |
-| Columns   | `columns` → `columns-column` → ordinary blocks/subtrees                  | Board `props.showDividers`, boolean, defaults to true.                                          |
-| Table     | `table` → `table-row` → `table-cell` → optional ordinary blocks/subtrees | Cell text is its `content`; `props.tableColumnWidth` is stored separately on each cell.         |
+| Columns   | `columns` → `columns-column` → ordinary blocks/subtrees                  | Board `props.showDividers`, boolean, defaults to true.                                               |
+| Table     | `table` → `table-row` → `table-cell` → optional ordinary blocks/subtrees | Cell text is its `content`; `props.tableColumnWidth` is stored separately on each cell.              |
 
 Factories create empty `content` on structural nodes except Kanban column titles.
 Conversion from an existing writing block can retain its original text even when

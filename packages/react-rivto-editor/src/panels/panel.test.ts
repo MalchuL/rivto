@@ -20,8 +20,8 @@ it("reconciles separate element groups of one subtree without resetting their ge
   const second = runtime.elements.insertElement(groupInput);
   const releaseFirst = runtime.blockElements.maintainBlockCards(root.id, first.id);
   const releaseSecond = runtime.blockElements.maintainBlockCards(root.id, second.id);
-  const a = new PanelElements(runtime.elements, runtime.getDocument(), first.id);
-  const b = new PanelElements(runtime.elements, runtime.getDocument(), second.id);
+  const a = new PanelElements(runtime, first.id);
+  const b = new PanelElements(runtime, second.id);
   const card = a.getElementNodes()[0]!;
   expect(card.props.startBlockId).toBe(root.children[0]!.id);
   expect(b.getElementNodes()[0]!.id).not.toBe(card.id);
@@ -133,6 +133,7 @@ it("remaps copied group and connector references into the receiving element subt
   });
   const result = new ElementPasteStrategy(reactPanel).paste(
     {
+      editor: reactPanel,
       bundle: {
         version: 4,
         blocks: [],
@@ -232,7 +233,7 @@ it("keeps an explicit element root empty after deletion and restores it through 
   const root = core.blocks.insertBlock({ type: "paragraph", children: [{ type: "paragraph" }] });
   const container = core.elements.insertElement(groupInput);
   const release = fullPanel.editor.blockElements.maintainBlockCards(root.id, container.id);
-  const elements = new PanelElements(core.elements, core.getDocument(), container.id);
+  const elements = new PanelElements(core, container.id);
   const card = elements.getElementNodes()[0]!;
   await Promise.resolve();
   expect(elements.getElementNodes()).toHaveLength(1);
@@ -267,11 +268,7 @@ it("adopts a compatible existing card when an explicit element group is opened",
   });
   const release = fullPanel.editor.blockElements.maintainBlockCards(null, container.id);
   await Promise.resolve();
-  const cards = new PanelElements(
-    core.elements,
-    core.getDocument(),
-    container.id,
-  ).getElementNodes();
+  const cards = new PanelElements(core, container.id).getElementNodes();
   expect(cards).toHaveLength(1);
   expect(cards[0]).toMatchObject({
     id: "existing-card",
@@ -295,7 +292,7 @@ it("repairs and removes only block elements in the Panel's block scope", async (
     ],
   });
   const container = core.elements.insertElement(groupInput);
-  const elements = new PanelElements(core.elements, core.getDocument(), container.id);
+  const elements = new PanelElements(core, container.id);
   const shape = elements.insertElement({ ...groupInput, type: "rectangle" });
   const projection = fullPanel.editor.blockElements.createPanelProjection(root.id, container.id);
   projection.reconcile();
@@ -329,11 +326,7 @@ it("does not recreate valid block elements in overlapping Panel areas", async ()
   const second = fullPanel.editor.blockElements.createPanelProjection(null, b.id);
   first.reconcile();
   second.reconcile();
-  const secondCard = new PanelElements(
-    core.elements,
-    core.getDocument(),
-    b.id,
-  ).getElementNodes()[0]!;
+  const secondCard = new PanelElements(core, b.id).getElementNodes()[0]!;
   core.elements.updateElement(secondCard.id, { frame: { x: 456 }, props: { rotation: 25 } });
   const before = core.elements.getElementNodes();
   // The document area includes both groups. Revisiting any area must be idempotent.

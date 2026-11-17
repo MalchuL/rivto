@@ -4,57 +4,6 @@ import type { DocumentEditorAPI, EditorBlockInput } from "@chulane/rivto";
 type ContainerType = "bento" | "kanban" | "columns" | "todo-storage" | "table";
 
 /**
- * Builds the same writing subtrees under each container's native hierarchy.
- *
- * @param type - Layout under test; structural lanes remain real persisted blocks.
- * @returns One portable container with stable card identities for browser assertions.
- */
-function containerInput(type: ContainerType): EditorBlockInput {
-  const cards: EditorBlockInput[] = [
-    {
-      id: "layout-card-one",
-      type: "paragraph",
-      content: "First card",
-      children: [{ type: "paragraph", content: "Nested child" }],
-    },
-    {
-      id: "layout-card-two",
-      type: "paragraph",
-      content: "Second card",
-      listProps: { style: { background: { color: "#fcdddd" } } },
-    },
-  ];
-  if (type === "table") {
-    return {
-      id: "layout-board",
-      type,
-      children: [{ type: "table-row", children: [{ type: "table-cell", children: cards }] }],
-    };
-  }
-  if (type === "kanban" || type === "columns") {
-    return {
-      id: "layout-board",
-      type,
-      children: cards.map((card, index) => ({
-        id: `layout-lane-${index}`,
-        type: `${type}-column`,
-        content: type === "kanban" ? `Lane ${index}` : "",
-        children: [card],
-      })),
-    };
-  }
-  if (type === "todo-storage") {
-    cards.push({
-      id: "priority-task",
-      type: "todo-item",
-      content: "Priority task",
-      props: { priority: 1 },
-    });
-  }
-  return { id: "layout-board", type, children: cards };
-}
-
-/**
  * Reads a rendered screenshot pixel in an opaque or blank part of a child surface.
  *
  * Browser canvas decodes the screenshot so the assertion covers actual composited
@@ -92,17 +41,61 @@ async function selectionPixel(page: Page, board: Locator, sample: Locator): Prom
 /**
  * Loads one native container hierarchy into the main demo and activates its surface.
  *
+ * Every layout receives the same two writing subtrees. Tables wrap them in a cell,
+ * column layouts place one in each lane, and task storage adds a prioritized task.
+ *
  * @param page - Browser page owning the fixture and editor instance.
  * @param type - Container whose native layout is exercised.
  * @param mode - Surface in which pointer selection is tested.
+ * @param card - Optional Edgeless card appearance; omit to use the normal single-root default.
+ * @param card.borderless - Set to false for tests that click controls in the outer gutter.
  * @returns Resolves after the surface mode control has been clicked.
  */
-async function loadContainer(page: Page, type: ContainerType, mode: "block" | "edgeless") {
+async function loadContainer(
+  page: Page,
+  type: ContainerType,
+  mode: "block" | "edgeless",
+  card: { borderless?: boolean } = {},
+) {
+  // Keep card identities stable across layouts. Only their structural parents differ.
+  const cards: EditorBlockInput[] = [
+    {
+      id: "layout-card-one",
+      type: "paragraph",
+      content: "First card",
+      children: [{ type: "paragraph", content: "Nested child" }],
+    },
+    {
+      id: "layout-card-two",
+      type: "paragraph",
+      content: "Second card",
+      listProps: { style: { background: { color: "#fcdddd" } } },
+    },
+  ];
+  if (type === "todo-storage") {
+    cards.push({
+      id: "priority-task",
+      type: "todo-item",
+      content: "Priority task",
+      props: { priority: 1 },
+    });
+  }
+  let children = cards;
+  if (type === "table") {
+    children = [{ type: "table-row", children: [{ type: "table-cell", children: cards }] }];
+  } else if (type === "kanban" || type === "columns") {
+    children = cards.map((card, index) => ({
+      id: `layout-lane-${index}`,
+      type: `${type}-column`,
+      content: type === "kanban" ? `Lane ${index}` : "",
+      children: [card],
+    }));
+  }
   await page.setViewportSize({ width: 1400, height: 1000 });
   await page.goto("/?test_features=1");
   await page.locator('[data-journal-document="today"] > .page-surface').waitFor();
   await page.evaluate(
-    ({ input, mode }) => {
+    ({ input, mode, card }) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
         .__rivtoDemo.editor;
       editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
@@ -112,11 +105,11 @@ async function loadContainer(page: Page, type: ContainerType, mode: "block" | "e
           type: "block",
           zIndex: 0,
           frame: { x: 20, y: 20, width: 950, height: 600 },
-          props: { startBlockId: input.id, endBlockId: input.id },
+          props: { startBlockId: input.id, endBlockId: input.id, ...card },
         });
       }
     },
-    { input: containerInput(type), mode },
+    { input: { id: "layout-board", type, children }, mode, card },
   );
   await page.locator(`[data-editor-mode="${mode}"]`).click();
 }
@@ -304,7 +297,7 @@ for (const mode of ["block", "edgeless"] as const) {
   test(`Columns hides expanded headers and restores collapsed controls in ${mode}`, async ({
     page,
   }) => {
-    await loadContainer(page, "columns", mode);
+    await loadContainer(page, "columns", mode, { borderless: false });
     const board = page.locator('[data-block-id="layout-board"]');
     const boardRow = board.locator(":scope > .rivto-block-row");
     const lane = page.locator('[data-block-id="layout-lane-0"]');
@@ -363,7 +356,7 @@ for (const type of ["bento", "kanban", "columns", "todo-storage"] as const) {
 for (const type of ["bento", "kanban", "todo-storage"] as const) {
   for (const mode of ["block", "edgeless"] as const) {
     test(`${type} palette reflects the saved default background in ${mode}`, async ({ page }) => {
-      await loadContainer(page, type, mode);
+      await loadContainer(page, type, mode, { borderless: false });
       await page.evaluate(() => {
         const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
           .__rivtoDemo.editor;

@@ -37,7 +37,7 @@ export function useAcquiredEditor(
       setResult,
       console.error,
     );
-    acquisition.start();
+    void acquisition.start();
     return () => acquisition.destroy();
   }, [storage, documentId]);
   return result;

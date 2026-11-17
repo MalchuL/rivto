@@ -259,7 +259,8 @@ test("restores a height captured on a legacy Bento tile without a width marker",
 });
 
 test("cross-document moves retain Bento size and restore the original width on exit", async () => {
-  const { transferBlocksBetweenDocuments } = await import("../../../block-transfer/cross-document-block-transfer");
+  const { transferBlocksBetweenDocuments } =
+    await import("../../../block-transfer/cross-document-block-transfer");
   const source = await createTestCoreEditor({ registerWritingBlock: false });
   const destination = await createTestCoreEditor({ registerWritingBlock: false });
   const sourcePanel = createReactEditor({

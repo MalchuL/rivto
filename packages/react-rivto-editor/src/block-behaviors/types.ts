@@ -1,3 +1,4 @@
+import type { BlockFields } from "@chulane/document-model";
 import type { BlockStructuralBehavior, EditorBlock, Selection } from "@chulane/rivto";
 import type { BlockDropPlacement } from "@chulane/rivto-page";
 import type { ReactPanelApi } from "../panels/types";
@@ -28,7 +29,7 @@ export interface BlockBehaviorContext {
 }
 
 /** Persisted block fields used for applicability without reading a recursive subtree. */
-export type BlockBehaviorData = Readonly<Omit<EditorBlock, "children">>;
+export type BlockBehaviorData = Readonly<BlockFields>;
 
 /**
  * Editing and movement operations supplied by an extension for one block type.

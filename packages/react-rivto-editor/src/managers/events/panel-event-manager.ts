@@ -1,5 +1,4 @@
-import type { PanelEventsApi } from "./api";
-import type { EventManager } from "./event-manager";
+import type { DocumentEventsApi, PanelEventsApi } from "./api";
 import type { PanelRegistration } from "../../panels/types";
 
 /** Local operations over the document's shared registrations. */
@@ -14,7 +13,7 @@ export class PanelEventManager implements PanelEventsApi {
    * @param owner - Stable occurrence identity, current DOM root, and registration cleanup.
    */
   constructor(
-    private readonly shared: Pick<EventManager, "register" | "delete">,
+    private readonly shared: DocumentEventsApi,
     private readonly owner: PanelRegistration,
   ) {}
   /**
@@ -35,5 +34,15 @@ export class PanelEventManager implements PanelEventsApi {
    */
   delete(id: string): boolean {
     return this.shared.delete(`${this.owner.id}:${id}`);
+  }
+  /**
+   * Checks this panel's registration in the native event's captured snapshot.
+   *
+   * @param id - Local registration identifier without the panel prefix.
+   * @param event - Native event being dispatched.
+   * @returns Whether the local registration is still active in that snapshot.
+   */
+  has(id: string, event: Event): boolean {
+    return this.shared.has(`${this.owner.id}:${id}`, event);
   }
 }

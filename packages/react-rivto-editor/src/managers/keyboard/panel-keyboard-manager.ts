@@ -1,6 +1,5 @@
 import type { PanelRegistration } from "../../panels/types";
-import type { KeyboardApi } from "./keyboard-api";
-import type { KeyboardManager } from "./keyboard-manager";
+import type { DocumentKeyboardApi, KeyboardApi } from "./keyboard-api";
 
 /** Local operations over the document's shared registrations. */
 export class PanelKeyboardManager implements KeyboardApi {
@@ -14,7 +13,7 @@ export class PanelKeyboardManager implements KeyboardApi {
    * @param owner - Occurrence that owns local registration IDs and cleanup.
    */
   constructor(
-    private readonly shared: Pick<KeyboardManager, keyof KeyboardApi>,
+    private readonly shared: DocumentKeyboardApi,
     private readonly owner: PanelRegistration,
   ) {}
   /**

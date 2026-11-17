@@ -1,3 +1,4 @@
+import type { DocumentModel } from "@chulane/document-model";
 import { AttachmentManager } from "../attachments/attachment-manager";
 import { BlockContextMenuRegistry } from "../managers/block-context-menu/registry";
 import { EdgelessToolbarManager } from "../managers/edgeless-toolbar/edgeless-toolbar-manager";
@@ -15,7 +16,7 @@ import type { ReactEditorApi } from "./types";
  *
  * @module
  */
-import type { DocumentEditorAPI } from "@chulane/rivto";
+import type { DocumentEditorAPI, EditorSnapshot, EditorSnapshotUpdate } from "@chulane/rivto";
 import { BlockElementProjection } from "../elements/block-element-projection";
 import type { BlockFactory } from "../block-factories";
 import type { BlockBehaviorsApi } from "../managers/blocks/block-behaviors-api";
@@ -107,16 +108,30 @@ export class ReactEditor implements ReactEditorApi {
   }
   /** @inheritdoc DocumentEditorAPI.subscribe */
   readonly subscribe = (listener: () => void): (() => void) => this.core.subscribe(listener);
-  /** @inheritdoc DocumentEditorAPI.getDocument */
-  getDocument(): ReturnType<DocumentEditorAPI["getDocument"]> {
+  /**
+   * Reads the collaborative model bound to the supplied core editor.
+   *
+   * @returns The same model used by the core for this runtime’s lifetime.
+   */
+  getDocument(): DocumentModel {
     return this.core.getDocument();
   }
-  /** @inheritdoc DocumentEditorAPI.load */
-  load(snapshot: Parameters<DocumentEditorAPI["load"]>[0]): void {
+  /**
+   * Loads supplied snapshot sections through the core editor and clears prior local history.
+   *
+   * @param snapshot - Document sections to replace in the fixed model.
+   * @returns The core has loaded the supplied sections.
+   * @throws If the core rejects the snapshot.
+   */
+  load(snapshot: EditorSnapshotUpdate): void {
     this.core.load(snapshot);
   }
-  /** @inheritdoc DocumentEditorAPI.dump */
-  dump(): ReturnType<DocumentEditorAPI["dump"]> {
+  /**
+   * Reads the current portable representation of the core document.
+   *
+   * @returns A detached snapshot for persistence or transfer.
+   */
+  dump(): EditorSnapshot {
     return this.core.dump();
   }
 

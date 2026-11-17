@@ -84,8 +84,13 @@ export class BlockPointerSelection {
   /**
    * Installs one independently disposable selection capability.
    *
+   * The extension scope captures the input registrations. Its returned cleanup
+   * releases the feature identity and cancels any pending gesture. Installation
+   * failure also clears both so the extension can be installed again.
+   *
    * @param feature - Capability to install for the current extension scope.
    * @returns Cleanup cancelling active work before captured registrations are released.
+   * @throws If the feature is already installed or an event registration fails.
    */
   install(feature: BlockPointerSelectionFeature): () => void {
     if (this.features.has(feature)) {
@@ -93,7 +98,134 @@ export class BlockPointerSelection {
     }
     this.features.add(feature);
     try {
-      return this.installFeature(feature);
+      const events = this.editor.events;
+      if (feature === "pointer" || feature === "range") {
+        // Pointer and range share a start event. A held range binding takes priority.
+        // Gaps and gutters belong to the occurrence root but may have no owning block.
+        events.register(
+          `selection.${feature}.start`,
+          { type: "pointerdown", scope: "root", priority: feature === "range" ? 20 : 0 },
+          (event) => {
+            if (
+              feature === "range" &&
+              !this.editor.keyboard.isHeld(this.editor.keyboard.capture(this.bindings.range))
+            ) {
+              return "continue";
+            }
+            if (
+              feature === "pointer" &&
+              this.bindingHeld(this.bindings.range) &&
+              this.features.has("range")
+            ) {
+              return "continue";
+            }
+            return this.onPointerDown(event);
+          },
+        );
+      }
+      if (feature === "pointer") {
+        // Track this pointer outside the root through release or cancellation.
+        events.register(
+          "selection.move",
+          {
+            type: "pointermove",
+            target: "window",
+            capture: true,
+            priority: BLOCK_SELECTION_INPUT_PRIORITY,
+          },
+          this.onPointerMove,
+        );
+        events.observe(
+          "selection.end",
+          {
+            type: "pointerup",
+            target: "window",
+            capture: true,
+            priority: BLOCK_SELECTION_INPUT_PRIORITY,
+          },
+          (event) => {
+            if (event.raw.pointerId === this.pointerId) {
+              this.stop();
+            }
+          },
+        );
+        events.observe(
+          "selection.cancel",
+          {
+            type: "pointercancel",
+            target: "window",
+            capture: true,
+            priority: BLOCK_SELECTION_INPUT_PRIORITY,
+          },
+          (event) => {
+            if (event.raw.pointerId === this.pointerId) {
+              this.cancel();
+            }
+          },
+        );
+        events.register(
+          "selection.suppress-click",
+          { type: "click", capture: true, scope: "block", priority: 100 },
+          (event) => {
+            if (this.suppressClickBlockId === event.blockId) {
+              this.suppressClickBlockId = undefined;
+              event.raw.preventDefault();
+              return "handled";
+            }
+            return "continue";
+          },
+        );
+      }
+      if (feature === "click") {
+        // Clear previous coverage before the browser starts a fresh text selection.
+        events.register(
+          "selection.click",
+          {
+            type: "click",
+            capture: true,
+            scope: "block",
+            priority: BLOCK_SELECTION_INPUT_PRIORITY,
+          },
+          this.onClick,
+        );
+        events.observe(
+          "selection.clear",
+          {
+            type: "pointerdown",
+            capture: true,
+            scope: "root",
+            priority: BLOCK_SELECTION_INPUT_PRIORITY,
+          },
+          this.onPlainPointerDown,
+        );
+      }
+      if (feature === "toggle") {
+        // The toggle binding runs before ordinary block selection.
+        events.register(
+          "selection.toggle",
+          { type: "pointerdown", capture: true, scope: "block", priority: 50 },
+          this.onToggle,
+        );
+      }
+      events.onDetach(this.cancel);
+      events.observe(
+        `selection.${feature}.escape`,
+        { type: "keydown", target: "window", priority: BLOCK_SELECTION_INPUT_PRIORITY },
+        (event) => {
+          if (event.raw.key === "Escape") {
+            this.cancel();
+          }
+        },
+      );
+      events.observe(
+        `selection.${feature}.blur`,
+        { type: "blur", target: "window", priority: BLOCK_SELECTION_INPUT_PRIORITY },
+        this.cancel,
+      );
+      return () => {
+        this.features.delete(feature);
+        this.cancel();
+      };
     } catch (error) {
       this.features.delete(feature);
       this.cancel();
@@ -119,158 +251,6 @@ export class BlockPointerSelection {
     return this.features.has("toggle");
   }
 
-  /**
-   * Installs scoped listeners after reserving the feature identity.
-   *
-   * @param feature - Capability to activate.
-   * @returns Cleanup removing active feature state and pending gesture work.
-   */
-  private installFeature(feature: BlockPointerSelectionFeature): () => void {
-    const events = this.editor.events;
-    if (feature === "pointer" || feature === "range") {
-      this.installStart(feature);
-    }
-    if (feature === "pointer") {
-      this.installPointer();
-    }
-    if (feature === "click") {
-      this.installClick();
-    }
-    if (feature === "toggle") {
-      this.installToggle();
-    }
-    events.onDetach(this.cancel);
-    events.observe(
-      `selection.${feature}.escape`,
-      { type: "keydown", target: "window", priority: BLOCK_SELECTION_INPUT_PRIORITY },
-      (event) => {
-        if (event.raw.key === "Escape") {
-          this.cancel();
-        }
-      },
-    );
-    events.observe(
-      `selection.${feature}.blur`,
-      { type: "blur", target: "window", priority: BLOCK_SELECTION_INPUT_PRIORITY },
-      this.cancel,
-    );
-    return () => {
-      this.features.delete(feature);
-      this.cancel();
-    };
-  }
-
-  /**
-   * Installs start selection registrations into the current extension scope.
-   *
-   * @param feature - Pointer-start behavior and dispatch priority to install.
-   * @returns Feature registrations have been captured by the extension owner.
-   */
-  private installStart(feature: "pointer" | "range"): void {
-    const events = this.editor.events;
-    // Gaps and gutters belong to the occurrence root but may have no owning block.
-    events.register(
-      `selection.${feature}.start`,
-      { type: "pointerdown", scope: "root", priority: feature === "range" ? 20 : 0 },
-      (event) => {
-        if (
-          feature === "range" &&
-          !this.editor.keyboard.isHeld(this.editor.keyboard.capture(this.bindings.range))
-        ) {
-          return "continue";
-        }
-        if (
-          feature === "pointer" &&
-          this.bindingHeld(this.bindings.range) &&
-          this.features.has("range")
-        ) {
-          return "continue";
-        }
-        return this.onPointerDown(event);
-      },
-    );
-  }
-  /**
-   * Installs pointer selection registrations into the current extension scope.
-   *
-   * @returns Feature registrations have been captured by the extension owner.
-   */
-  private installPointer(): void {
-    const events = this.editor.events;
-    events.register(
-      "selection.move",
-      {
-        type: "pointermove",
-        target: "window",
-        capture: true,
-        priority: BLOCK_SELECTION_INPUT_PRIORITY,
-      },
-      this.onPointerMove,
-    );
-    events.observe(
-      "selection.end",
-      {
-        type: "pointerup",
-        target: "window",
-        capture: true,
-        priority: BLOCK_SELECTION_INPUT_PRIORITY,
-      },
-      (event) => {
-        if (event.raw.pointerId === this.pointerId) {
-          this.stop();
-        }
-      },
-    );
-    events.observe(
-      "selection.cancel",
-      {
-        type: "pointercancel",
-        target: "window",
-        capture: true,
-        priority: BLOCK_SELECTION_INPUT_PRIORITY,
-      },
-      (event) => {
-        if (event.raw.pointerId === this.pointerId) {
-          this.cancel();
-        }
-      },
-    );
-    events.register(
-      "selection.suppress-click",
-      { type: "click", capture: true, scope: "block", priority: 100 },
-      (event) => {
-        if (this.suppressClickBlockId === event.blockId) {
-          this.suppressClickBlockId = undefined;
-          event.raw.preventDefault();
-          return "handled";
-        }
-        return "continue";
-      },
-    );
-  }
-  /**
-   * Installs click selection registrations into the current extension scope.
-   *
-   * @returns Feature registrations have been captured by the extension owner.
-   */
-  private installClick(): void {
-    const events = this.editor.events;
-    events.register(
-      "selection.click",
-      { type: "click", capture: true, scope: "block", priority: BLOCK_SELECTION_INPUT_PRIORITY },
-      this.onClick,
-    );
-    events.observe(
-      "selection.clear",
-      {
-        type: "pointerdown",
-        capture: true,
-        scope: "root",
-        priority: BLOCK_SELECTION_INPUT_PRIORITY,
-      },
-      this.onPlainPointerDown,
-    );
-  }
   /**
    * Releases existing coverage before a plain pointer enters text or page whitespace.
    *
@@ -299,29 +279,6 @@ export class BlockPointerSelection {
   };
 
   /**
-   * Installs toggle selection registrations into the current extension scope.
-   *
-   * @returns Feature registrations have been captured by the extension owner.
-   */
-  private installToggle(): void {
-    const events = this.editor.events;
-    events.register(
-      "selection.toggle",
-      { type: "pointerdown", capture: true, scope: "block", priority: 50 },
-      this.onToggle,
-    );
-  }
-
-  /**
-   * Reads canonical selectable order from the host, including collapse filtering.
-   *
-   * @param _root - Current occurrence; ordering comes from its adapter, not DOM queries.
-   * @returns Block IDs in the order selection commands must cover.
-   */
-  private selectionBlockIds = (_root: HTMLElement): readonly string[] =>
-    this.editor.adapter.selection.getSelectableBlockIds();
-
-  /**
    * Publishes the synthetic endpoint chosen for a cross-host gesture.
    *
    * @param active - Current gesture retaining the fixed endpoint and latest coverage.
@@ -342,7 +299,7 @@ export class BlockPointerSelection {
     active.wholeBlocks = forceWholeBlocks;
     active.selection = active.wholeBlocks
       ? this.dom.createVisibleStructuralSelection(
-          this.selectionBlockIds(root),
+          this.editor.adapter.selection.getSelectableBlockIds(),
           active.anchorPosition.blockId,
           headPosition.blockId,
         )
@@ -527,49 +484,6 @@ export class BlockPointerSelection {
   /**
    * Starts or extends text and structural pointer selection while respecting interactive targets and modifier keys.
    *
-   * @param input - Pointer-down event with the occurrence root, native input, and optional block ID.
-   * @returns "handled" when shift-extension consumes input; otherwise "continue".
-   */
-  private onPointerDown = (input: BlockInputEvent<"pointerdown">): BlockInputResult => {
-    const { raw, root } = input;
-    if (this.editor.adapter.selection.canStartSelection?.(raw) === false) {
-      return "continue";
-    }
-    if (raw.button !== 0 || (this.pointer && raw.pointerId !== this.pointerId)) {
-      return "continue";
-    }
-    this.cancel();
-    if (this.features.has("toggle") && this.bindingHeld(this.bindings.toggle)) {
-      return "continue";
-    }
-    const start = this.readPointerStart(input);
-    if (!start) {
-      return "continue";
-    }
-    this.releasePointer = this.editor.pointer.acquire();
-    if (!this.releasePointer) {
-      return "continue";
-    }
-    this.pointerId = raw.pointerId;
-    this.exactBinding = this.editor.keyboard.capture(this.bindings.exact);
-    this.timerView = root.ownerDocument.defaultView;
-    const extend = this.features.has("range") && this.bindingHeld(this.bindings.range);
-    const handled = extend && this.extendRange(start);
-    if (!handled) {
-      this.pointer = start;
-    }
-    if (handled) {
-      raw.preventDefault();
-    }
-    if (!this.features.has("pointer")) {
-      this.stop();
-    }
-    return handled ? "handled" : "continue";
-  };
-
-  /**
-   * Resolves an eligible text or structural gesture origin without consuming input.
-   *
    * Keep the original event target, not only its owning anchor. Nested
    * controls and structural selection receive the same pointerdown;
    * checking only the ancestor would start both gestures at once.
@@ -597,58 +511,53 @@ export class BlockPointerSelection {
    * Whitespace starts a structural gesture anchored to the nearest block;
    * controls remain excluded and no selection is published until movement.
    *
-   * @param input - Primary pointer input inside this occurrence.
-   * @returns Fixed gesture origin, or undefined for excluded controls or missing caret geometry.
+   * @param input - Pointer-down event with the occurrence root, native input, and optional block ID.
+   * @returns "handled" when shift-extension consumes input; otherwise "continue".
    */
-  private readPointerStart(input: BlockInputEvent<"pointerdown">): PointerSelection | undefined {
-    const { raw, root, blockId } = input;
+  private onPointerDown = (input: BlockInputEvent<"pointerdown">): BlockInputResult => {
+    const { raw, root } = input;
+    if (this.editor.adapter.selection.canStartSelection?.(raw) === false) {
+      return "continue";
+    }
+    if (raw.button !== 0 || (this.pointer && raw.pointerId !== this.pointerId)) {
+      return "continue";
+    }
+    this.cancel();
+    if (this.features.has("toggle") && this.bindingHeld(this.bindings.toggle)) {
+      return "continue";
+    }
     const target = this.isElement(raw.target) ? raw.target : null;
     const region = target?.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR);
     if (!target || (region && !root.contains(region))) {
-      return;
+      return "continue";
     }
-    if (!region) {
-      if (this.isExcluded(target)) {
-        return;
-      }
-      // A nested gap can hit its wrapping parent, so resolve its nearest row first.
-      let blockId = this.dom.readBlockIdAtPoint(root, raw.clientX, raw.clientY);
-      if (!blockId) {
-        // Surface whitespace has no block ancestor; include contentless rows too.
-        blockId = this.dom.readNearestBlockId(root, raw.clientX, raw.clientY);
-      }
-      if (!blockId) {
-        return;
-      }
-      // Without a native caret, movement selects whole blocks from this anchor.
-      return {
-        root,
-        startX: raw.clientX,
-        startY: raw.clientY,
-        anchorPosition: { blockId, offset: 0 },
-        crossBlock: false,
-        wholeBlocks: false,
-      };
-    }
-    const optedControl =
-      target.closest(STRUCTURAL_SELECTION_EXCLUDED_TARGET_SELECTOR) === region &&
-      !target.closest(PREVENT_TEXT_EDITING_SELECTOR);
-    if (!region.isContentEditable && !optedControl && this.isExcluded(target)) {
-      return;
-    }
-    const anchor = region.isContentEditable
-      ? this.dom.readDOMSelectionPoint(root, raw.clientX, raw.clientY)
-      : undefined;
+    let anchor: DOMSelectionPoint | undefined;
     let anchorPosition: EditorPosition | undefined;
-    if (region.isContentEditable) {
+    if (region?.isContentEditable) {
+      anchor = this.dom.readDOMSelectionPoint(root, raw.clientX, raw.clientY);
       anchorPosition = anchor && this.dom.readDOMPointPosition(root, anchor);
-    } else if (blockId) {
-      anchorPosition = { blockId, offset: 0 };
+    } else {
+      // Only an explicitly marked control can start a structural drag. Its ordinary
+      // click still fires if the pointer never crosses the movement threshold.
+      const optedControl =
+        region &&
+        target.closest(STRUCTURAL_SELECTION_EXCLUDED_TARGET_SELECTOR) === region &&
+        !target.closest(PREVENT_TEXT_EDITING_SELECTOR);
+      if (!optedControl && this.isExcluded(target)) {
+        return "continue";
+      }
+      const blockId = region
+        ? input.blockId
+        : (this.dom.readBlockIdAtPoint(root, raw.clientX, raw.clientY) ??
+          this.dom.readNearestBlockId(root, raw.clientX, raw.clientY));
+      if (blockId) {
+        anchorPosition = { blockId, offset: 0 };
+      }
     }
     if (!anchorPosition) {
-      return;
+      return "continue";
     }
-    return {
+    const start: PointerSelection = {
       root,
       startX: raw.clientX,
       startY: raw.clientY,
@@ -657,82 +566,82 @@ export class BlockPointerSelection {
       crossBlock: false,
       wholeBlocks: false,
     };
-  }
+    this.releasePointer = this.editor.pointer.acquire();
+    if (!this.releasePointer) {
+      return "continue";
+    }
+    this.pointerId = raw.pointerId;
+    this.exactBinding = this.editor.keyboard.capture(this.bindings.exact);
+    this.timerView = root.ownerDocument.defaultView;
+    const extend = this.features.has("range") && this.bindingHeld(this.bindings.range);
+    let handled = false;
+    if (extend) {
+      // A second click can precede selectionchange. Extend from the live native anchor when available.
+      const selection = this.editor.adapter.selection;
+      const native = this.dom.readEditorDOMSelection(root);
+      if (native) {
+        selection.set(native);
+      }
+      const current = native ?? selection.get();
+      const ends = current
+        ? BlockSelectionEndpoints.resolve(current, (id) => selection.getTextLength(id) ?? 0)
+        : undefined;
+      const originId = ends?.anchor.blockId ?? current?.anchorBlockId;
 
-  /**
-   * Extends current directed coverage using the host's configured range binding.
-   *
-   * Live DOM selection is read before stored coverage because selectionchange can
-   * arrive after a second click. The fixed endpoint stays with the existing gesture.
-   *
-   * @param clicked - Resolved pointer-down endpoint and occurrence.
-   * @returns Whether an existing anchor could be extended.
-   */
-  private extendRange(clicked: PointerSelection): boolean {
-    const selection = this.editor.adapter.selection;
-    const native = this.dom.readEditorDOMSelection(clicked.root);
-    if (native) {
-      selection.set(native);
+      if (
+        originId &&
+        originId !== start.anchorPosition.blockId &&
+        !this.bindingHeld(this.bindings.exact)
+      ) {
+        this.ownsCrossBlockSelection = true;
+        const next = this.dom.createVisibleStructuralSelection(
+          this.editor.adapter.selection.getSelectableBlockIds(),
+          originId,
+          start.anchorPosition.blockId,
+        );
+        if (next) {
+          this.editor.adapter.selection.set(next);
+        }
+        root.ownerDocument.getSelection()?.removeAllRanges();
+        root.focus({ preventScroll: true });
+        this.releaseTimer = this.timerView?.setTimeout(() => {
+          this.ownsCrossBlockSelection = false;
+          this.releaseTimer = undefined;
+        });
+        handled = true;
+      } else if (originId) {
+        let position = ends?.anchor;
+        if (!position) {
+          const ids = selection.getSelectableBlockIds();
+          position = {
+            blockId: originId,
+            offset:
+              ids.indexOf(originId) > ids.indexOf(start.anchorPosition.blockId)
+                ? (selection.getTextLength(originId) ?? 0)
+                : 0,
+          };
+        }
+        const anchor = this.dom.resolveDOMSelectionPoint(root, position);
+        if (anchor && start.anchor) {
+          this.ownsCrossBlockSelection = true;
+          const active = { ...start, anchor, anchorPosition: position };
+          this.pointer = active;
+          this.publish(active, start.anchor, start.anchorPosition);
+          handled = true;
+        }
+      }
     }
-    const current = native ?? selection.get();
-    const ends = current
-      ? BlockSelectionEndpoints.resolve(current, (id) => selection.getTextLength(id) ?? 0)
-      : undefined;
-    const originId = ends?.anchor.blockId ?? current?.anchorBlockId;
-    if (!originId) {
-      return false;
+    if (!handled) {
+      this.pointer = start;
     }
-    if (originId !== clicked.anchorPosition.blockId && !this.bindingHeld(this.bindings.exact)) {
-      this.extendWholeBlocks(clicked.root, originId, clicked.anchorPosition.blockId);
-      return true;
+    if (handled) {
+      raw.preventDefault();
     }
-    let position = ends?.anchor;
-    if (!position) {
-      const ids = selection.getSelectableBlockIds();
-      position = {
-        blockId: originId,
-        offset:
-          ids.indexOf(originId) > ids.indexOf(clicked.anchorPosition.blockId)
-            ? (selection.getTextLength(originId) ?? 0)
-            : 0,
-      };
+    if (!this.features.has("pointer")) {
+      this.stop();
     }
-    const anchor = this.dom.resolveDOMSelectionPoint(clicked.root, position);
-    if (!anchor || !clicked.anchor) {
-      return false;
-    }
-    this.ownsCrossBlockSelection = true;
-    const active = { ...clicked, anchor, anchorPosition: position };
-    this.pointer = active;
-    this.publish(active, clicked.anchor, clicked.anchorPosition);
-    return true;
-  }
-
-  /**
-   * Publishes a structural extension and protects it from delayed native selectionchange.
-   *
-   * @param root - Current occurrence root.
-   * @param originId - Existing fixed endpoint.
-   * @param headId - Clicked moving endpoint.
-   * @returns Host coverage is extended and focus is routed to the editor root.
-   */
-  private extendWholeBlocks(root: HTMLElement, originId: string, headId: string): void {
-    this.ownsCrossBlockSelection = true;
-    const next = this.dom.createVisibleStructuralSelection(
-      this.selectionBlockIds(root),
-      originId,
-      headId,
-    );
-    if (next) {
-      this.editor.adapter.selection.set(next);
-    }
-    root.ownerDocument.getSelection()?.removeAllRanges();
-    root.focus({ preventScroll: true });
-    this.releaseTimer = this.timerView?.setTimeout(() => {
-      this.ownsCrossBlockSelection = false;
-      this.releaseTimer = undefined;
-    });
-  }
+    return handled ? "handled" : "continue";
+  };
 
   /**
    * Updates an active selection after the movement threshold and schedules edge auto-scroll.
@@ -800,7 +709,7 @@ export class BlockPointerSelection {
     }
 
     const selection = this.dom.createVisibleStructuralSelection(
-      this.selectionBlockIds(root),
+      this.editor.adapter.selection.getSelectableBlockIds(),
       blockId,
       blockId,
     );

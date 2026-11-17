@@ -35,19 +35,10 @@ export interface ElementFrame {
   height: number;
 }
 
-/**
- * Detached flat canvas record with direct child IDs rather than nested snapshots.
- *
- * Element-specific props are interpreted by renderers. Parentage is derived
- * from document roots and child lists. Manager reads may return cached objects; treat them as
- * read-only and use manager commands for mutations. Use DocumentElement when a
- * complete child tree is needed; persisted snapshots use ElementSnapshot instead.
- */
-export interface ElementNode<Props extends Record<string, unknown> = Record<string, unknown>> {
+/** Persisted canvas fields shared by shallow nodes and complete element trees. */
+interface ElementFields<Props extends Record<string, unknown>> {
   /** Stable collaborative identity. */
   id: string;
-  /** Ordered direct children. Structural operations, rather than props patches, change this list. */
-  childIds: string[];
   /** Renderer-defined discriminator; core does not register or interpret it. */
   type: string;
   /** Common persisted geometry shared by all element types. */
@@ -59,6 +50,21 @@ export interface ElementNode<Props extends Record<string, unknown> = Record<stri
 }
 
 /**
+ * Detached flat canvas record with direct child IDs rather than nested snapshots.
+ *
+ * Element-specific props are interpreted by renderers. Parentage is derived
+ * from document roots and child lists. Manager reads may return cached objects; treat them as
+ * read-only and use manager commands for mutations. Use DocumentElement when a
+ * complete child tree is needed; persisted snapshots use ElementSnapshot instead.
+ */
+export interface ElementNode<
+  Props extends Record<string, unknown> = Record<string, unknown>,
+> extends ElementFields<Props> {
+  /** Ordered direct children. Structural operations, rather than props patches, change this list. */
+  childIds: string[];
+}
+
+/**
  * Detached element and its complete child tree, assembled only when requested.
  *
  * children replaces childIds and follows the stored sibling order at every level.
@@ -67,10 +73,11 @@ export interface ElementNode<Props extends Record<string, unknown> = Record<stri
  * the entire value as read-only. The Props parameter describes this node's props;
  * descendants may use other element types and property shapes.
  */
-export type DocumentElement<Props extends Record<string, unknown> = Record<string, unknown>> = Omit<
-  ElementNode<Props>,
-  "childIds"
-> & { children: DocumentElement[] };
+export interface DocumentElement<
+  Props extends Record<string, unknown> = Record<string, unknown>,
+> extends ElementFields<Props> {
+  children: DocumentElement[];
+}
 
 /**
  * Creation data for an element and optional new child subtrees.
@@ -129,8 +136,8 @@ export interface ElementUpdate {
   patch: ElementPatch;
 }
 
-/** Serializable block value read from collaborative storage. */
-export interface Block {
+/** Persisted fields shared by recursive blocks and shallow block nodes. */
+export interface BlockFields {
   id: string;
   type: string;
   /** Opaque page/outline properties interpreted by installed extensions. */
@@ -139,11 +146,17 @@ export interface Block {
   pluginData: Record<string, unknown>;
   /** Plain Markdown source stored collaboratively as CRDTText. */
   content: string;
+}
+
+/** Serializable block value read from collaborative storage. */
+export interface Block extends BlockFields {
   children: Block[];
 }
 
 /** Detached block fields with direct child IDs instead of child subtrees. */
-export type BlockNode = Omit<Block, "children"> & { readonly childIds: readonly string[] };
+export interface BlockNode extends BlockFields {
+  readonly childIds: readonly string[];
+}
 
 /** Complete input accepted when creating a block. */
 export interface BlockInput {

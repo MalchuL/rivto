@@ -10,6 +10,7 @@
 import {
   validateBlockForest,
   type BlockInput,
+  type BlockListProps,
   type BlockDestination,
   type BlockUpdate,
   type DocumentModel,
@@ -22,17 +23,34 @@ import type {
   EditorBlockPatch,
   EditorBlockUpdate,
 } from "../../editor/model";
-import type { DocumentEditorAPI } from "../../editor/types";
-import type { BlockManagerApi, ImportedBlockForest } from "../types";
+import type { BlockMoveRequest } from "../../block-behaviors/types";
+import type { DocumentCommandsEditor } from "../../editor/types";
+import type { BlockManagerApi, BlockPreparationRegistry, ImportedBlockForest } from "../types";
 import type { BlockImportOptions, BlockPrepareErrorHandler } from "./types";
 import { Pipe } from "../../utils/pipe";
-import type { BlockStructuralScope } from "../../block-behaviors/types";
 import type { BlockRegistryManager } from "../block-registry-manager/block-registry-manager";
 import { BlockStructuralBehaviorStrategy } from "./structural-behavior/block-structural-behavior-strategy";
 
 interface BlockProcessorRegistration {
   readonly processor: BlockProcessor;
   dispose: () => void;
+}
+
+/** Editor capabilities required by block operations and their validation pipeline. */
+export interface BlockManagerEditor extends DocumentCommandsEditor {
+  /** Definitions and validation required by creation and conversion. */
+  readonly blockRegistry: BlockPreparationRegistry;
+  /** Semantic validation of list-property updates. */
+  readonly blockListProps: {
+    /**
+     * Applies the registered list defaults and validates the candidate record.
+     *
+     * @param candidate - Supplied list properties, omitted for defaults alone.
+     * @returns Detached properties accepted by every registered policy.
+     * @throws If any registered policy rejects the properties.
+     */
+    prepare(candidate?: BlockListProps): BlockListProps;
+  };
 }
 
 /**
@@ -43,36 +61,56 @@ interface BlockProcessorRegistration {
  * manager. This manager validates command payloads and applies outline
  * grouping to the identifiers the caller supplied.
  */
-export class BlockManager implements BlockManagerApi {
+export class BlockManager<
+  Editor extends BlockManagerEditor = BlockManagerEditor,
+> implements BlockManagerApi {
+  /** The document manager has no protected boundary root. */
+  readonly includeRoot: boolean = false;
   /**
    * Editor-owned block processing pipeline.
    *
    * It remains stable across operations on its permanently bound document, so
    * processors stay local to this editor without becoming shared document state.
    */
-  private readonly pipe = new Pipe<BlockInput>();
-  private readonly processors = new Set<BlockProcessorRegistration>();
+  private readonly pipe: Pipe<BlockInput>;
+  private readonly processors: Set<BlockProcessorRegistration>;
+  private readonly registry: Pick<BlockRegistryManager, "getBehaviorRegistrations">;
+  /** Unbounded commands are required for transitions across panel boundaries. */
+  private readonly documentBlocks: BlockManager;
+  private readonly ownsProcessors: boolean;
   private readonly behaviorStrategy: BlockStructuralBehaviorStrategy;
   private readonly subscriptions = new Set<() => void>();
 
   /**
-   * Creates the public block manager and installs its built-in processors.
+   * Creates block operations and binds them to an editor's processing pipeline.
    *
-   * @param editor - Owning editor providing shared runtime capabilities.
-   * @param registry - Registry owning structural behavior registrations.
+   * A registry creates the owning manager and installs its built-in processors.
+   * A manager borrows its live pipeline and registrations without owning them.
+   *
+   * @param editor - Editor providing document and history capabilities.
+   * @param registry - Behavior registry for an owner or manager to borrow from.
    */
   constructor(
-    private readonly editor: DocumentEditorAPI,
-    registry: Pick<BlockRegistryManager, "getBehaviorRegistrations">,
+    protected readonly editor: Editor,
+    registry: Pick<BlockRegistryManager, "getBehaviorRegistrations"> | BlockManager,
   ) {
-    this.behaviorStrategy = new BlockStructuralBehaviorStrategy(this, registry);
-    this.registerRequiredProcessors();
-  }
-
-  /** @returns The explicit document or throws outside a document context. */
-  private get document(): DocumentModel {
-    const document = this.editor.getDocument();
-    return document;
+    const owner = registry instanceof BlockManager ? registry : undefined;
+    this.registry = registry instanceof BlockManager ? registry.registry : registry;
+    this.pipe = owner ? owner.pipe : new Pipe<BlockInput>();
+    this.processors = owner ? owner.processors : new Set<BlockProcessorRegistration>();
+    this.ownsProcessors = !owner;
+    this.documentBlocks = owner ? owner.documentBlocks : this;
+    this.behaviorStrategy = new BlockStructuralBehaviorStrategy(
+      this,
+      this.registry,
+      this.documentBlocks,
+    );
+    if (!owner) {
+      // Panels share these processors with their document manager. Install them once.
+      this.registerProcessor(
+        createBlockPropsProcessor((type, props) => this.editor.blockRegistry.validate(type, props)),
+      );
+    }
   }
 
   /** @returns Monotonic document block revision for derived read caches. */
@@ -103,10 +141,7 @@ export class BlockManager implements BlockManagerApi {
    * @param request - Nonempty detached source roots and the destination location.
    * @returns False for a missing destination, invalid neighbor, or a behavior veto.
    */
-  canMove(request: {
-    sources: readonly Readonly<Omit<EditorBlock, "children">>[];
-    destination: BlockDestination;
-  }): boolean {
+  canMove(request: BlockMoveRequest): boolean {
     return this.behaviorStrategy.canMove(request);
   }
 
@@ -154,7 +189,7 @@ export class BlockManager implements BlockManagerApi {
    *
    * @returns Root identifiers in collaborative order.
    */
-  getRootIds(): string[] {
+  getRootIds(): readonly string[] {
     return this.document.blocks.getRootIds();
   }
 
@@ -265,76 +300,7 @@ export class BlockManager implements BlockManagerApi {
     input: readonly (EditorBlock | EditorBlockInput)[],
     onError?: BlockPrepareErrorHandler,
   ): EditorBlockInput[] {
-    // Validate before recursion so malformed children or a caller-provided cycle
-    // fail deterministically instead of running factories/processors or overflowing
-    // the preparation walk before the postcondition can be checked.
-    validateBlockForest(input);
-    // Use reference identity because creation nodes may not have IDs and cycles
-    // belong to the in-memory object graph. Duplicate persisted IDs are a separate
-    // forest invariant handled by validateBlockForest.
-    const activeNodes = new Set<BlockInput>();
-    /** Applies the complete creation policy recursively to one forest node. */
-    const applyCreationPolicy = (block: EditorBlockInput, canRecover = true): EditorBlockInput => {
-      if (activeNodes.has(block)) {
-        throw new Error("Block forest must be acyclic");
-      }
-      activeNodes.add(block);
-      let processed: BlockInput | undefined;
-      try {
-        try {
-          if (!this.editor.blockRegistry.has(block.type)) {
-            throw new Error(`Block type ${block.type} is not registered`);
-          }
-          processed = this.runProcessors(
-            this.editor.blockRegistry.prepare({
-              ...block,
-              listProps: this.editor.blockListProps.prepare(block.listProps),
-            }),
-          );
-          if (processed !== block) {
-            if (activeNodes.has(processed)) {
-              throw new Error("Block forest must be acyclic");
-            }
-            activeNodes.add(processed);
-          }
-        } catch (error) {
-          if (!onError || !canRecover) {
-            throw error;
-          }
-          const replacement = onError(block, error);
-          // Preserve an assigned import identity and disable recovery so a bad
-          // replacement cannot recurse through the callback indefinitely.
-          return applyCreationPolicy(
-            {
-              ...replacement,
-              id: replacement.id ?? block.id,
-              listProps: replacement.listProps ?? {},
-              props: replacement.props ?? {},
-              pluginData: replacement.pluginData ?? {},
-              content: replacement.content ?? "",
-              children: replacement.children ?? [],
-            },
-            false,
-          );
-        }
-        return {
-          ...processed,
-          children: processed.children?.map((child) => applyCreationPolicy(child, canRecover)),
-        };
-      } finally {
-        if (processed && processed !== block) {
-          activeNodes.delete(processed);
-        }
-        activeNodes.delete(block);
-      }
-    };
-    const prepared = input.map((block) => applyCreationPolicy(block));
-    // Definitions and processors may change IDs, children, or portable values,
-    // so their complete output needs the same forest invariants checked again.
-    // The active-node guard above makes processor-created cycles fail before
-    // recursion; this pass verifies all other complete-forest postconditions.
-    validateBlockForest(prepared);
-    return prepared;
+    return this.prepareBlockInputs(input, onError, false);
   }
 
   /**
@@ -358,6 +324,26 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
+   * Checks whether the document contains the block.
+   *
+   * @param id - Block identifier to inspect.
+   * @returns True when the block exists.
+   */
+  canRemove(id: string): boolean {
+    return this.hasBlock(id);
+  }
+
+  /**
+   * Checks whether the block has a parent in this document.
+   *
+   * @param id - Block identifier to inspect.
+   * @returns True when the block exists and has a parent.
+   */
+  canOutdent(id: string): boolean {
+    return this.getParentId(id) != null;
+  }
+
+  /**
    * Reports whether a block is at the root level.
    *
    * @param id - Block identifier to check.
@@ -376,7 +362,8 @@ export class BlockManager implements BlockManagerApi {
    * @returns Complete persisted block assembled during insertion.
    */
   insertBlock(block: EditorBlockInput, destination?: BlockDestination): EditorBlock {
-    const prepared = this.preparePlacement([block], destination)[0]!;
+    // Validate detached input and apply child-entry rules before starting the undo batch.
+    const prepared = this.preparePlacementForest(this.prepareInput([block]), destination)[0]!;
     // Storage insertion is already transactional; this wrapper creates undo
     // capture breakpoints so the following action does not merge with creation.
     return this.editor.history.batchUpdates(() =>
@@ -420,42 +407,62 @@ export class BlockManager implements BlockManagerApi {
     destination?: BlockDestination,
     options?: BlockImportOptions,
   ): ImportedBlockForest {
-    const { onError, ids } = options ?? {};
-    validateBlockForest(blocks);
-    const expectedIds = options?.preserveIds ? this.collectRequiredBlockIds(blocks) : undefined;
-    if (expectedIds) {
-      this.assertImportIdsAvailable(expectedIds);
-    }
-    const sourceIds: string[] = [];
-    /** Collects stable source identities before destination remapping. */
-    const collectIds = (block: EditorBlock | EditorBlockInput): void => {
-      if (block.id !== undefined) {
-        sourceIds.push(block.id);
+    const { onError, ids, preserveIds = false } = options ?? {};
+    const sourceIds = validateBlockForest(blocks);
+    if (preserveIds) {
+      // Check every descendant before calling extension processors or writing any root.
+      for (const id of sourceIds) {
+        if (this.hasBlock(id)) {
+          throw new Error(`Destination already contains block ${id}`);
+        }
       }
-      block.children?.forEach(collectIds);
-    };
-    blocks.forEach(collectIds);
+    }
     // Map every descendant before insertion so clipboard extensions can use
     // the same destination IDs when rewriting stored references.
     const idMap =
       ids ??
-      (expectedIds
-        ? new Map(sourceIds.map((id) => [id, id]))
-        : this.document.blocks.createImportIdMap(sourceIds));
-    /** Rewrites one complete source subtree with its destination identities. */
+      (preserveIds
+        ? new Map(Array.from(sourceIds, (id) => [id, id]))
+        : this.document.blocks.createImportIdMap([...sourceIds]));
+    /**
+     * Rewrites one complete source subtree with its destination identities.
+     *
+     * @param block - Source node whose descendants share the forest ID map.
+     * @returns A detached creation input with mapped identities.
+     * @throws If the map omits or changes a required identity.
+     */
     const remap = (block: EditorBlock | EditorBlockInput): EditorBlockInput => {
       const id = block.id === undefined ? undefined : idMap.get(block.id);
       if (block.id !== undefined && !id) {
         throw new Error(`Missing imported block ID: ${block.id}`);
       }
+      if (preserveIds && (!block.id || id !== block.id)) {
+        throw new Error("Import must preserve block IDs");
+      }
       return { ...block, id, children: block.children?.map(remap) ?? [] };
     };
     const prepared = this.preparePlacementForest(
-      this.prepareInput(blocks.map(remap), onError),
+      this.prepareBlockInputs(blocks.map(remap), onError, preserveIds),
       destination,
     );
-    if (expectedIds) {
-      this.assertImportIdsPreserved(expectedIds, prepared);
+    if (preserveIds) {
+      // Entry rules can replace descendants. Verify the final forest before the first insertion.
+      const preparedIds = new Set<string>();
+      const pending = [...prepared];
+      while (pending.length) {
+        const block = pending.pop()!;
+        if (!block.id) {
+          throw new Error("Import must preserve block IDs");
+        }
+        preparedIds.add(block.id);
+        pending.push(...(block.children ?? []));
+      }
+      if (
+        sourceIds.size !== preparedIds.size ||
+        [...sourceIds].some((id) => !preparedIds.has(id))
+      ) {
+        throw new Error("Import must preserve block IDs");
+      }
     }
     const roots: EditorBlock[] = [];
     this.editor.history.batchUpdates(() => {
@@ -573,13 +580,12 @@ export class BlockManager implements BlockManagerApi {
    * Removes several block subtrees as one undo item.
    *
    * @param ids - Block identifiers to remove.
-   * @param scope - Panel boundary used by behaviors; defaults to the document.
    * @returns True when generic removal ran, or false when a behavior claimed the group.
    * @throws If a behavior or document mutation fails.
    */
-  removeBlocks(ids: readonly string[], scope: BlockStructuralScope = this): boolean {
+  removeBlocks(ids: readonly string[]): boolean {
     return this.editor.history.batchUpdates(() => {
-      if (this.behaviorStrategy.interceptDeletion(ids, scope)) {
+      if (this.behaviorStrategy.interceptDeletion(ids)) {
         return false;
       }
       this.prepareRemoval(ids);
@@ -614,7 +620,45 @@ export class BlockManager implements BlockManagerApi {
    * @returns Target content offset where source content begins.
    */
   mergeBlocks(targetId: string, sourceId: string): number {
-    return this.editor.history.batchUpdates(() => this.mergeBlockContent(targetId, sourceId));
+    return this.editor.history.batchUpdates(() => {
+      if (targetId === sourceId) {
+        throw new Error("Cannot merge a block into itself");
+      }
+      const target = this.document.blocks.getBlockNode(targetId);
+      const source = this.document.blocks.getBlockNode(sourceId);
+      if (!source) {
+        throw new Error(`Block ${sourceId} not found`);
+      }
+      if (!target) {
+        throw new Error(`Block ${targetId} not found`);
+      }
+      if (this.collectTreeIds(sourceId).includes(targetId)) {
+        throw new Error(`Cannot merge block ${sourceId} into its descendant ${targetId}`);
+      }
+      // Resolve parent transitions before moving children or consuming the source.
+      const updates = this.preparePlacementUpdates(source.childIds, targetId);
+      const sourceParentId = this.getParentId(sourceId);
+      if (this.behaviorStrategy.hasChildTransitionBehaviors() && sourceParentId) {
+        const parent = this.getBlockNode(sourceParentId);
+        if (parent) {
+          this.behaviorStrategy.processChildTransition({
+            child: source,
+            previousParent: parent,
+            nextParent: null,
+          });
+        }
+      }
+      const blocks = this.document.blocks;
+      blocks.moveBlocks(source.childIds.map((id) => ({ id, targetId, position: "inside" })));
+      if (updates.length) {
+        blocks.updateBlocks(updates);
+      }
+      if (source.content) {
+        blocks.insertText(targetId, target.content.length, source.content);
+      }
+      blocks.removeBlock(sourceId);
+      return target.content.length;
+    });
   }
 
   /**
@@ -685,16 +729,40 @@ export class BlockManager implements BlockManagerApi {
    *
    * @param ids - Block identifiers to indent together, including any nested
    *   descendants the caller also listed.
-   * @param scope - Panel boundary used by behaviors; defaults to the document.
    * @returns True if the leading block exists within the scope, including handled no-ops.
    * @throws If a behavior or document operation fails.
    */
-  indentBlocks(ids: string[], scope: BlockStructuralScope = this): boolean {
-    const outcome = this.behaviorStrategy.interceptOutline("indent", ids, scope);
-    if (outcome === "unhandled") {
-      this.applyIndent(ids, scope);
+  indentBlocks(ids: string[]): boolean {
+    const outcome = this.behaviorStrategy.interceptOutline("indent", ids);
+    // A behavior may consume the command before the default outline operation.
+    if (outcome !== "unhandled") {
+      return outcome !== "missing";
     }
-    return outcome !== "missing";
+    if (ids.some((id) => !this.getBlockNode(id))) {
+      return true;
+    }
+    const roots = this.topLevelRoots(ids);
+    if (!this.isConsecutiveRange(roots)) {
+      return true;
+    }
+    const parentId = this.getParentId(roots[0]!) ?? null;
+    const siblings = parentId === null ? this.getRootIds() : this.getChildIds(parentId);
+    const index = siblings.indexOf(roots[0]!);
+    if (index <= 0) {
+      return true;
+    }
+    const targetId = siblings[index - 1]!;
+    if (!this.allowsOutlineMove(roots, { parentId: targetId })) {
+      return true;
+    }
+    const updates = this.preparePlacementUpdates(roots, targetId);
+    this.editor.history.batchUpdates(() => {
+      this.document.blocks.moveBlocks(roots.map((id) => ({ id, targetId, position: "inside" })));
+      if (updates.length) {
+        this.document.blocks.updateBlocks(updates);
+      }
+    });
+    return true;
   }
 
   /**
@@ -711,16 +779,71 @@ export class BlockManager implements BlockManagerApi {
    * Outdents a consecutive outline range and adopts trailing siblings into its
    * last moved root.
    *
+   * Later siblings become children of the last lifted root to preserve reading order.
+   * In a parent containing A, B, C, lifting B places B after the parent and C under B.
+   * The tail moves first so it can still be found in the original sibling list.
+   *
    * @param ids - Block identifiers to outdent together, including any nested
    *   descendants the caller also listed.
-   * @returns No value.
+   * @returns True when the leading block exists in scope, including handled no-ops.
+   * @throws If a behavior or document operation fails.
    */
-  outdentBlocks(ids: string[], scope: BlockStructuralScope = this): boolean {
-    const outcome = this.behaviorStrategy.interceptOutline("outdent", ids, scope);
-    if (outcome === "unhandled") {
-      this.applyOutdent(ids, scope);
+  outdentBlocks(ids: string[]): boolean {
+    const outcome = this.behaviorStrategy.interceptOutline("outdent", ids);
+    // A behavior may consume the command before the default outline operation.
+    if (outcome !== "unhandled") {
+      return outcome !== "missing";
     }
-    return outcome !== "missing";
+    if (ids.some((id) => !this.getBlockNode(id))) {
+      return true;
+    }
+    const roots = this.topLevelRoots(ids);
+    if (!this.isConsecutiveRange(roots)) {
+      return true;
+    }
+    const parentId = this.getParentId(roots[0]!);
+    if (!parentId) {
+      return true;
+    }
+    // Transition hooks and storage use document coordinates, including a panel's hidden root.
+    const destination = this.documentBlocks.getInsertionDestinationAfter(parentId);
+    const destinationParent = destination.parentId;
+    // A range may continue at the destination depth; those blocks stay put.
+    const firstDestinationLevel = roots.findIndex(
+      (id) => this.documentBlocks.getParentId(id) === destinationParent,
+    );
+    const moving = firstDestinationLevel < 0 ? roots : roots.slice(0, firstDestinationLevel);
+    if (!moving.length) {
+      return true;
+    }
+    const lastId = moving.at(-1)!;
+    const siblings = this.getChildIds(parentId);
+    const following = siblings.slice(siblings.indexOf(lastId) + 1);
+    if (
+      !this.allowsOutlineMove(moving, destination) ||
+      (following.length > 0 && !this.allowsOutlineMove(following, { parentId: lastId }))
+    ) {
+      return true;
+    }
+    const updates = [
+      ...this.preparePlacementUpdates(following, lastId),
+      ...this.preparePlacementUpdates(moving, destinationParent),
+    ];
+    // Move the tail before lifting: afterwards lastId no longer shares P's child list,
+    // so the old sibling tail cannot be found from its new location.
+    this.editor.history.batchUpdates(() => {
+      this.document.blocks.moveFollowingSiblingsInside(lastId);
+      this.document.blocks.moveBlocks([
+        // Repeated "after parent" inserts reverse order unless roots go last-first.
+        ...[...moving]
+          .reverse()
+          .map((id) => ({ id, targetId: parentId, position: "after" as const })),
+      ]);
+      if (updates.length) {
+        this.document.blocks.updateBlocks(updates);
+      }
+    });
+    return true;
   }
 
   /**
@@ -756,8 +879,20 @@ export class BlockManager implements BlockManagerApi {
   destroy(): void {
     this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions.clear();
-    this.processors.forEach((registration) => registration.dispose());
-    this.processors.clear();
+    if (this.ownsProcessors) {
+      this.processors.forEach((registration) => registration.dispose());
+      this.processors.clear();
+    }
+  }
+
+  /**
+   * Reads the current shared model used by this manager's operations.
+   *
+   * @returns The document supplied by the editor at the time of the read.
+   * @throws If the editor cannot supply a document.
+   */
+  private get document(): DocumentModel {
+    return this.editor.getDocument();
   }
 
   /**
@@ -774,62 +909,6 @@ export class BlockManager implements BlockManagerApi {
       }
       unsubscribe();
     };
-  }
-
-  /**
-   * Installs the invariant processors required by every editor block mutation.
-   *
-   * @returns No value.
-   */
-  private registerRequiredProcessors(): void {
-    this.registerProcessor(
-      createBlockPropsProcessor((type, props) => this.editor.blockRegistry.validate(type, props)),
-    );
-  }
-
-  /**
-   * Merges text and adopts children while retaining the target's other fields.
-   * @param targetId - Surviving placed block.
-   * @param sourceId - Placed block to consume.
-   * @returns Original target text length for caret restoration.
-   */
-  private mergeBlockContent(targetId: string, sourceId: string): number {
-    if (targetId === sourceId) {
-      throw new Error("Cannot merge a block into itself");
-    }
-    const target = this.document.blocks.getBlockNode(targetId);
-    const source = this.document.blocks.getBlockNode(sourceId);
-    if (!source) {
-      throw new Error(`Block ${sourceId} not found`);
-    }
-    if (!target) {
-      throw new Error(`Block ${targetId} not found`);
-    }
-    if (this.collectTreeIds(sourceId).includes(targetId)) {
-      throw new Error(`Cannot merge block ${sourceId} into its descendant ${targetId}`);
-    }
-    const updates = this.preparePlacementUpdates(source.childIds, targetId);
-    const sourceParentId = this.getParentId(sourceId);
-    if (this.behaviorStrategy.hasChildTransitionBehaviors() && sourceParentId) {
-      const parent = this.getBlockNode(sourceParentId);
-      if (parent) {
-        this.behaviorStrategy.processChildTransition({
-          child: source,
-          previousParent: parent,
-          nextParent: null,
-        });
-      }
-    }
-    const blocks = this.document.blocks;
-    blocks.moveBlocks(source.childIds.map((id) => ({ id, targetId, position: "inside" })));
-    if (updates.length) {
-      blocks.updateBlocks(updates);
-    }
-    if (source.content) {
-      blocks.insertText(targetId, target.content.length, source.content);
-    }
-    blocks.removeBlock(sourceId);
-    return target.content.length;
   }
 
   /**
@@ -891,121 +970,19 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
-   * Nests a consecutive outline range under its first root's previous sibling.
-   * @param ids - Identifiers to indent, including any listed descendants.
-   * @param scope - Hierarchy visible to the invoking operation.
-   * @returns No value; an ineligible or forbidden range is unchanged.
-   */
-  private applyIndent(ids: string[], scope: BlockStructuralScope): void {
-    if (ids.some((id) => !scope.getBlockNode(id))) {
-      return;
-    }
-    const roots = this.topLevelRoots(ids);
-    if (!this.isConsecutiveRange(roots)) {
-      return;
-    }
-    const parentId = scope.getParentId(roots[0]!) ?? null;
-    const siblings = parentId === null ? scope.getRootIds() : scope.getChildIds(parentId);
-    const index = siblings.indexOf(roots[0]!);
-    if (index <= 0) {
-      return;
-    }
-    const targetId = siblings[index - 1]!;
-    if (!this.allowsOutlineMove(scope, roots, { parentId: targetId })) {
-      return;
-    }
-    const updates = this.preparePlacementUpdates(roots, targetId);
-    this.editor.history.batchUpdates(() => {
-      this.document.blocks.moveBlocks(roots.map((id) => ({ id, targetId, position: "inside" })));
-      if (updates.length) {
-        this.document.blocks.updateBlocks(updates);
-      }
-    });
-  }
-
-  /**
-   * Outdents a consecutive range, keeping later outline items below it.
-   *
-   * Lifting a nested range after its parent would otherwise leave later siblings
-   * at the old depth, which visually "breaks out" from under the outdented
-   * outline. For P: [A, B, C], outdenting B makes [P, B] at the outer level,
-   * with C appended to B's existing children. This preserves document order
-   * and leaves C indented beneath B.
-   *
-   * @param ids - Identifiers to outdent, including any listed descendants.
-   * @param scope - Hierarchy visible to the invoking operation.
-   * @returns No value; a root-level, nonconsecutive, or forbidden range is unchanged.
-   */
-  private applyOutdent(ids: string[], scope: BlockStructuralScope): void {
-    if (ids.some((id) => !scope.getBlockNode(id))) {
-      return;
-    }
-    const roots = this.topLevelRoots(ids);
-    if (!this.isConsecutiveRange(roots)) {
-      return;
-    }
-    const parentId = scope.getParentId(roots[0]!);
-    if (!parentId) {
-      return;
-    }
-    const destination = this.getInsertionDestinationAfter(parentId);
-    const destinationParent = destination.parentId;
-    // A range may continue at the destination depth; those blocks stay put.
-    const firstDestinationLevel = roots.findIndex(
-      (id) => this.getParentId(id) === destinationParent,
-    );
-    const moving = firstDestinationLevel < 0 ? roots : roots.slice(0, firstDestinationLevel);
-    if (!moving.length) {
-      return;
-    }
-    const lastId = moving.at(-1)!;
-    const siblings = scope.getChildIds(parentId);
-    const following = siblings.slice(siblings.indexOf(lastId) + 1);
-    if (
-      !this.allowsOutlineMove(scope, moving, destination) ||
-      (following.length > 0 && !this.allowsOutlineMove(scope, following, { parentId: lastId }))
-    ) {
-      return;
-    }
-    const updates = [
-      ...this.preparePlacementUpdates(following, lastId),
-      ...this.preparePlacementUpdates(moving, destinationParent),
-    ];
-    // Move the tail before lifting: afterwards lastId no longer shares P's child list,
-    // so the old sibling tail cannot be found from its new location.
-    this.editor.history.batchUpdates(() => {
-      this.document.blocks.moveFollowingSiblingsInside(lastId);
-      this.document.blocks.moveBlocks([
-        // Repeated "after parent" inserts reverse order unless roots go last-first.
-        ...[...moving]
-          .reverse()
-          .map((id) => ({ id, targetId: parentId, position: "after" as const })),
-      ]);
-      if (updates.length) {
-        this.document.blocks.updateBlocks(updates);
-      }
-    });
-  }
-
-  /**
    * Checks that every scoped root can move to the requested destination.
    *
-   * @param scope - Hierarchy visible to the invoking operation.
    * @param ids - Independently moved root identifiers.
    * @param destination - Receiving parent and optional next sibling.
    * @returns False when a root is unavailable or an installed behavior vetoes the move.
    * @throws If a behavior or hierarchy read fails.
    */
-  private allowsOutlineMove(
-    scope: BlockStructuralScope,
-    ids: readonly string[],
-    destination: BlockDestination,
-  ): boolean {
+  private allowsOutlineMove(ids: readonly string[], destination: BlockDestination): boolean {
     const sources = ids.flatMap((id) => {
-      const block = scope.getBlockNode(id);
+      const block = this.getBlockNode(id);
       return block ? [block] : [];
     });
-    return sources.length === ids.length && this.canMove({ sources, destination });
+    return sources.length === ids.length && this.documentBlocks.canMove({ sources, destination });
   }
 
   /**
@@ -1113,59 +1090,46 @@ export class BlockManager implements BlockManagerApi {
     if (!roots.length) {
       return false;
     }
-    const siblings = new Map<
+    // Reuse sibling indexes for this read only. Each selected subtree must end
+    // immediately before the next root, even when the walk has to ascend several levels.
+    const siblingIndexes = new Map<
       string | null,
       { ids: readonly string[]; positions: Map<string, number> }
     >();
-    return roots
-      .slice(0, -1)
-      .every((id, index) => this.nextAfterSubtree(id, siblings) === roots[index + 1]);
-  }
-
-  /**
-   * Finds the next block in document order after a complete subtree.
-   *
-   * Ascending to a parent's next sibling skips all descendants of the subtree.
-   * An unplaced block or a malformed parent cycle has no next block.
-   *
-   * The sibling index is shared only within this check and discarded before
-   * mutation, so it cannot survive a hierarchy change.
-   *
-   * @param id - Placed subtree root.
-   * @param siblingIndexes - Per-check sibling lists and their indexed positions.
-   * @returns The next block ID, or undefined at the end of the document or for invalid placement.
-   */
-  private nextAfterSubtree(
-    id: string,
-    siblingIndexes: Map<string | null, { ids: readonly string[]; positions: Map<string, number> }>,
-  ): string | undefined {
-    const visited = new Set<string>();
-    let current = id;
-    while (!visited.has(current)) {
-      visited.add(current);
-      const parent = this.getParentId(current);
-      if (parent === undefined) {
-        return undefined;
+    for (let rootIndex = 0; rootIndex + 1 < roots.length; rootIndex++) {
+      let nextId: string | undefined;
+      const visited = new Set<string>();
+      let current = roots[rootIndex]!;
+      while (!visited.has(current)) {
+        visited.add(current);
+        const parent = this.getParentId(current);
+        if (parent === undefined) {
+          break;
+        }
+        let siblings = siblingIndexes.get(parent);
+        if (!siblings) {
+          const ids = parent === null ? this.getRootIds() : this.getChildIds(parent);
+          siblings = { ids, positions: new Map(ids.map((child, index) => [child, index])) };
+          siblingIndexes.set(parent, siblings);
+        }
+        const index = siblings.positions.get(current);
+        if (index === undefined) {
+          break;
+        }
+        if (index + 1 < siblings.ids.length) {
+          nextId = siblings.ids[index + 1];
+          break;
+        }
+        if (parent === null) {
+          break;
+        }
+        current = parent;
       }
-      let siblings = siblingIndexes.get(parent);
-      if (!siblings) {
-        const ids = parent === null ? this.getRootIds() : this.getChildIds(parent);
-        siblings = { ids, positions: new Map(ids.map((child, index) => [child, index])) };
-        siblingIndexes.set(parent, siblings);
+      if (nextId !== roots[rootIndex + 1]) {
+        return false;
       }
-      const index = siblings.positions.get(current);
-      if (index === undefined) {
-        return undefined;
-      }
-      if (index + 1 < siblings.ids.length) {
-        return siblings.ids[index + 1];
-      }
-      if (parent === null) {
-        return undefined;
-      }
-      current = parent;
     }
-    return undefined;
+    return true;
   }
 
   /**
@@ -1275,7 +1239,7 @@ export class BlockManager implements BlockManagerApi {
     if (!this.behaviorStrategy.hasChildTransitionBehaviors() || nextParentId === undefined) {
       return [];
     }
-    const nextParent = nextParentId ? this.getBlockNode(nextParentId) : null;
+    const nextParent = nextParentId ? this.documentBlocks.getBlockNode(nextParentId) : null;
     if (nextParentId && !nextParent) {
       throw new Error(`Parent block ${nextParentId} not found`);
     }
@@ -1285,11 +1249,13 @@ export class BlockManager implements BlockManagerApi {
       if (!child) {
         throw new Error(`Block ${id} not found`);
       }
-      const previousParentId = this.getParentId(id);
+      const previousParentId = this.documentBlocks.getParentId(id);
       if (previousParentId === nextParentId) {
         continue;
       }
-      const previousParent = previousParentId ? this.getBlockNode(previousParentId) : null;
+      const previousParent = previousParentId
+        ? this.documentBlocks.getBlockNode(previousParentId)
+        : null;
       const next = this.behaviorStrategy.processChildTransition({
         child,
         previousParent: previousParent ?? null,
@@ -1331,8 +1297,8 @@ export class BlockManager implements BlockManagerApi {
     }
     const seen = new Set<string>();
     for (const rootId of ids) {
-      const parentId = this.getParentId(rootId);
-      const parent = parentId ? (this.getBlockNode(parentId) ?? null) : null;
+      const parentId = this.documentBlocks.getParentId(rootId);
+      const parent = parentId ? (this.documentBlocks.getBlockNode(parentId) ?? null) : null;
       const pending: Array<{ id: string; parent: BlockInput | null }> = [{ id: rootId, parent }];
       while (pending.length) {
         const current = pending.pop()!;
@@ -1359,73 +1325,117 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
-   * Validates a detached forest and applies child-entry rules for its destination.
+   * Runs creation and recovery for each node before validating the prepared forest.
    *
-   * The returned forest has not been written and can be checked before insertion.
+   * A preserved import checks each processor result against the ID of its input.
+   * The final forest check alone cannot distinguish two processors swapping IDs.
    *
-   * @param input - Forest to prepare without mutating the supplied objects.
-   * @param destination - Receiving parent and optional next sibling.
-   * @returns Prepared roots for the supplied destination.
-   * @throws If validation or a registered behavior fails.
+   * @param input - Detached roots to prepare in order.
+   * @param onError - Optional replacement for a node rejected during preparation.
+   * @param preserveIds - Whether each processed node must retain its source identity.
+   * @returns Prepared roots with validated hierarchy and portable fields.
+   * @throws If preparation, identity preservation, or forest validation fails.
    */
-  private preparePlacement(
-    input: readonly (EditorBlock | EditorBlockInput)[],
-    destination?: BlockDestination,
+  private prepareBlockInputs(
+    input: readonly EditorBlockInput[],
+    onError: BlockPrepareErrorHandler | undefined,
+    preserveIds: boolean,
   ): EditorBlockInput[] {
-    return this.preparePlacementForest(this.prepareInput(input), destination);
+    // Validate before recursion so malformed children or a caller-provided cycle
+    // fail deterministically instead of running factories/processors or overflowing
+    // the preparation walk before the postcondition can be checked.
+    validateBlockForest(input);
+    // Use reference identity because creation nodes may not have IDs and cycles
+    // belong to the in-memory object graph. Duplicate persisted IDs are a separate
+    // forest invariant handled by validateBlockForest.
+    const activeNodes = new Set<BlockInput>();
+    const prepared = input.map((block) =>
+      this.prepareBlockInput(block, activeNodes, onError, preserveIds),
+    );
+    // Definitions and processors may change IDs, children, or portable values,
+    // so their complete output needs the same forest invariants checked again.
+    // The active-node guard above makes processor-created cycles fail before
+    // recursion; this pass verifies all other complete-forest postconditions.
+    validateBlockForest(prepared);
+    return prepared;
   }
 
   /**
-   * Collects all required identities in a detached block forest.
+   * Applies the complete creation policy recursively to a single block.
    *
-   * @param blocks - Roots and descendants to inspect.
-   * @returns Set of all block identities.
-   * @throws If a block has no identity.
+   * Source and processor-returned objects both belong to the active recursion path.
+   * Recovery retries the replacement subtree once with its own recovery disabled.
+   *
+   * @param block - Detached node to prepare.
+   * @param activeNodes - Objects currently being prepared along this ancestor path.
+   * @param onError - Optional replacement factory for a rejected node.
+   * @param preserveIds - Whether processors must retain the input node's identity.
+   * @returns The prepared block and its recursively prepared children.
+   * @throws If input or processor output contains a cycle, or preparation or recovery fails.
    */
-  private collectRequiredBlockIds(blocks: readonly EditorBlockInput[]): Set<string> {
-    const ids = new Set<string>();
-    const pending = [...blocks];
-    while (pending.length) {
-      const block = pending.pop()!;
-      if (!block.id) {
+  private prepareBlockInput(
+    block: EditorBlockInput,
+    activeNodes: Set<BlockInput>,
+    onError: BlockPrepareErrorHandler | undefined,
+    preserveIds: boolean,
+  ): EditorBlockInput {
+    if (activeNodes.has(block)) {
+      throw new Error("Block forest must be acyclic");
+    }
+    const sourceId = block.id;
+    activeNodes.add(block);
+    try {
+      let processed: BlockInput;
+      try {
+        if (!this.editor.blockRegistry.has(block.type)) {
+          throw new Error(`Block type ${block.type} is not registered`);
+        }
+        const listProps = this.editor.blockListProps.prepare(block.listProps);
+        processed = this.runProcessors(this.editor.blockRegistry.prepare({ ...block, listProps }));
+        if (processed !== block && activeNodes.has(processed)) {
+          throw new Error("Block forest must be acyclic");
+        }
+      } catch (error) {
+        if (!onError) {
+          throw error;
+        }
+        const replacement = onError(block, error);
+        if (preserveIds && replacement.id !== undefined && replacement.id !== sourceId) {
+          throw new Error("Import must preserve block IDs");
+        }
+        // Keep the assigned identity and retry once with complete creation defaults.
+        // Disabling recovery here lets failures in the replacement reach the caller.
+        return this.prepareBlockInput(
+          {
+            ...replacement,
+            id: replacement.id ?? sourceId,
+            listProps: replacement.listProps ?? {},
+            props: replacement.props ?? {},
+            pluginData: replacement.pluginData ?? {},
+            content: replacement.content ?? "",
+            children: replacement.children ?? [],
+          },
+          activeNodes,
+          undefined,
+          preserveIds,
+        );
+      }
+      if (preserveIds && processed.id !== sourceId) {
         throw new Error("Import must preserve block IDs");
       }
-      ids.add(block.id);
-      pending.push(...(block.children ?? []));
-    }
-    return ids;
-  }
-
-  /**
-   * Rejects a preserved-ID import when the destination already owns an identity.
-   *
-   * @param ids - Source identities that must remain unchanged.
-   * @returns After confirming that all identities are available.
-   * @throws If any identity already exists in the destination.
-   */
-  private assertImportIdsAvailable(ids: ReadonlySet<string>): void {
-    for (const id of ids) {
-      if (this.hasBlock(id)) {
-        throw new Error(`Destination already contains block ${id}`);
+      activeNodes.add(processed);
+      try {
+        return {
+          ...processed,
+          children: processed.children?.map((child) =>
+            this.prepareBlockInput(child, activeNodes, onError, preserveIds),
+          ),
+        };
+      } finally {
+        activeNodes.delete(processed);
       }
-    }
-  }
-
-  /**
-   * Rejects processor output that changed the requested source identity set.
-   *
-   * @param expected - Original identities that must survive preparation.
-   * @param prepared - Complete forest after processors and entry behaviors.
-   * @returns After confirming that preparation preserved all identities.
-   * @throws If an identity is missing, added, or changed.
-   */
-  private assertImportIdsPreserved(
-    expected: ReadonlySet<string>,
-    prepared: readonly EditorBlockInput[],
-  ): void {
-    const actual = this.collectRequiredBlockIds(prepared);
-    if (expected.size !== actual.size || [...expected].some((id) => !actual.has(id))) {
-      throw new Error("Import must preserve block IDs");
+    } finally {
+      activeNodes.delete(block);
     }
   }
 }

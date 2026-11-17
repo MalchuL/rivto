@@ -106,7 +106,9 @@ Manager-owned registrations then unwind in reverse order. The event manager
 disconnects native listeners through DOMEventListeners after extension teardown.
 ReactPanel cancels local DOM work and releases its local subscriptions on unmount;
 the host retains and releases its storage acquisition separately.
-the public ReactPanelApi has no destroy method and never destroys its core editor.
+The public ReactPanelApi exposes `destroy()` to release the occurrence's resources;
+it never destroys its shared editor. The component creating the core panel owns
+and destroys that panel separately.
 
 ## Prioritized block behaviors
 

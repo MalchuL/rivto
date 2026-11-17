@@ -1,4 +1,3 @@
-import type { PanelElementsAPI } from "@chulane/rivto";
 import type { ElementManagerApi, EditorElementNode } from "@chulane/rivto";
 
 /**
@@ -10,7 +9,7 @@ import type { ElementManagerApi, EditorElementNode } from "@chulane/rivto";
  * @param ids - Complete source-to-destination identity map.
  */
 export function restoreElementChildren(
-  elements: ElementManagerApi | PanelElementsAPI,
+  elements: ElementManagerApi,
   sources: readonly EditorElementNode[],
   ids: ReadonlyMap<string, string>,
 ): void {

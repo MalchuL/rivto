@@ -200,7 +200,14 @@ test("nested panels share a retained editor and leave acquisition release to the
   first.setEnabled(true);
   nested.setEnabled(true);
   expect(f.connections.filter((id) => id === "A")).toHaveLength(1);
+  let selectionChanges = 0;
+  const stopSelection = first.selection.subscribe(() => {
+    selectionChanges++;
+  });
   closeFirst();
+  f.editor.selection.set(createCaretSelection("same-id", 0));
+  expect(selectionChanges).toBe(0);
+  stopSelection();
   expect(f.core.getDocument("A")).toBeDefined();
   expect(f.disconnections).not.toContain("A");
   closeNested();
@@ -1104,12 +1111,12 @@ test("panel behavior resolves against its own document before any DOM root is mo
   const f = await fixture();
   const a = f.a.editor;
   const b = f.b.editor;
-  expect(
-    a.blockBehaviors.resolveAll(a.blocks.getBlockNode("same-id")!)[0],
-  ).toBeInstanceOf(DefaultBlockBehavior);
-  expect(
-    b.blockBehaviors.resolveAll(b.blocks.getBlockNode("same-id")!)[0],
-  ).toBeInstanceOf(DefaultBlockBehavior);
+  expect(a.blockBehaviors.resolveAll(a.blocks.getBlockNode("same-id")!)[0]).toBeInstanceOf(
+    DefaultBlockBehavior,
+  );
+  expect(b.blockBehaviors.resolveAll(b.blocks.getBlockNode("same-id")!)[0]).toBeInstanceOf(
+    DefaultBlockBehavior,
+  );
   expect(a.blockListProps.prepare({})).toEqual({});
   expect(() => a.blockListProps.validate({})).not.toThrow();
   await f.a.release();
@@ -1288,7 +1295,7 @@ test("panel editors share runtime registrations and keep independent DOM manager
   expect("createViewApi" in a.clipboard).toBe(false);
   expect(a.blocks).not.toBe(a.document.blocks);
   expect("registerFormatter" in a.clipboard).toBe(false);
-  expect("register" in a.slashCommands).toBe(false);
+  expect(typeof a.slashCommands.register).toBe("function");
   const close = first.destroy;
   await eventually(() => expect(first.getSnapshot().retained).toBe(true));
   close();

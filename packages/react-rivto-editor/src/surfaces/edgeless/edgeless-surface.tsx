@@ -30,7 +30,7 @@ import { EdgelessToolButton } from "../../components/edgeless/tool-button";
 import { EDGELESS_GRID_SIZE } from "../../elements/visuals/utils/geometry";
 import { EdgelessBlockElement } from "./edgeless-block";
 import type { EdgelessSurfaceOptions } from "./types";
-import { EdgelessSnappingStore } from "@chulane/rivto-edgeless";
+import { EdgelessSnappingStore, type EdgelessSnappingSnapshot } from "@chulane/rivto-edgeless";
 
 const GRID_SPOTLIGHT_CLASS = "edgeless-grid-spotlight";
 /** Bottom-left zoom and snapping cluster; `edgeless-zoom-controls` is a stable hook. */
@@ -95,7 +95,11 @@ function EdgelessSurfaceContent({
   const panel = useReactPanel();
   const canvas = useEdgelessCanvas()!;
   const camera = useCanvasCamera(canvas);
-  const snap = useSurfaceSnapping(snapping);
+  const snap = useSyncExternalStore(
+    (listener) => snapping.subscribe(listener),
+    () => snapping.getSnapshot(),
+    () => snapping.getSnapshot(),
+  );
   const controller = useMemo(
     () => new EdgelessSurfaceController(panel, canvas, blockElementWidth),
     [panel, canvas, blockElementWidth],
@@ -141,20 +145,6 @@ function EdgelessSurfaceContent({
         <EdgelessCards canvas={canvas} />
       </CanvasView>
     </BlockEditorScope>
-  );
-}
-
-/**
- * Observes a surface's borrowed snapping preferences until unmount or store replacement.
- *
- * @param snapping - Read and subscription operations of the surface's settings store.
- * @returns Current stable snapshot, replaced when a preference changes.
- */
-function useSurfaceSnapping(snapping: Pick<EdgelessSnappingStore, "subscribe" | "getSnapshot">) {
-  return useSyncExternalStore(
-    (listener) => snapping.subscribe(listener),
-    () => snapping.getSnapshot(),
-    () => snapping.getSnapshot(),
   );
 }
 
@@ -285,6 +275,6 @@ function EdgelessZoomControls({ canvas, snapping, snap, zoom }: ZoomControlProps
 interface ZoomControlProps {
   readonly canvas: CanvasApi;
   readonly snapping: EdgelessSnappingStore;
-  readonly snap: ReturnType<EdgelessSnappingStore["getSnapshot"]>;
+  readonly snap: EdgelessSnappingSnapshot;
   readonly zoom: number;
 }

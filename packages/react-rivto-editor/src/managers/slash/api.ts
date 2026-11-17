@@ -1,16 +1,22 @@
 import type { SlashCommand } from "./types";
+import type { SlashCommandRegistry } from "./slash-command-registry";
 
 /** Command availability and execution in one bound editor panel. */
-export interface PanelSlashCommandsApi {
+export interface PanelSlashCommandsApi extends Pick<
+  SlashCommandRegistry,
+  "register" | "delete" | "get" | "revision" | "subscribe"
+> {
   /** Shared registry revision; advances when command definitions are registered or removed. */
   readonly revision: number;
   /**
    * Lists commands whose availability predicate accepts this block and panel.
    * @param context - Document-local block ID; the manager supplies its own panel.
-   * @returns Available definitions in registration order without executing them.
+   * Omit to list all shared definitions without evaluating availability.
+   * @returns Available definitions in registration order without executing them,
+   * or all shared definitions when context is omitted.
    * @throws If an availability predicate throws.
    */
-  getAll(context: { blockId: string }): SlashCommand[];
+  getAll(context?: { blockId: string }): SlashCommand[];
   /**
    * Checks availability again and executes the command using this panel's context.
    * @param id - Registered command ID.

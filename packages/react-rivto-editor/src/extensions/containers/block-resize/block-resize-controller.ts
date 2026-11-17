@@ -1,5 +1,5 @@
 import { normalizeResizeWidth } from "./block-resize-size";
-import type { ReactPanelApi } from "../../../panels/types";
+import type { EditorBlockNode, EditorBlockPatch } from "@chulane/rivto";
 import { BLOCK_ID_ATTRIBUTE } from "../../../constants";
 import { isBlockStyle } from "../../../blocks/block-style";
 import { RESIZING_HANDLE_ATTRIBUTE, RESIZING_PLACEMENT_ATTRIBUTE } from "./block-resize-constants";
@@ -58,6 +58,25 @@ interface BlockResizeGesture {
   height: number;
 }
 
+/** Block operations used to read dimensions and commit a completed resize. */
+interface ResizableBlocks {
+  /**
+   * Reads the block's current layout style and plugin data.
+   *
+   * @param id - Persisted identity of the resized block.
+   * @returns Its shallow snapshot, or undefined after removal.
+   */
+  getBlockNode(id: string): EditorBlockNode | undefined;
+  /**
+   * Applies the new dimension and any saved layout defaults together.
+   *
+   * @param id - Persisted identity of the resized block.
+   * @param patch - Changed style and layout plugin fields.
+   * @returns The updated shallow snapshot.
+   */
+  updateBlock(id: string, patch: EditorBlockPatch): EditorBlockNode;
+}
+
 /** Owns one placement's preview, pointer capture and cancellation resources. */
 export class BlockResizeController {
   private gesture: BlockResizeGesture | undefined;
@@ -78,7 +97,7 @@ export class BlockResizeController {
    * @param heightTarget - Block shell receiving height previews; defaults to the placement.
    */
   constructor(
-    private readonly blocks: Pick<ReactPanelApi["blocks"], "getBlockNode" | "updateBlock">,
+    private readonly blocks: ResizableBlocks,
     private readonly blockId: string,
     private readonly placement: HTMLElement,
     private readonly pluginId?: string,
@@ -139,25 +158,34 @@ export class BlockResizeController {
     this.cancel();
     event.preventDefault();
     event.stopPropagation();
-    const horizontal = edge.includes("left") || edge.includes("right");
-    const frozen = horizontal
-      ? this.measurePlacements(lane)
-      : [
-          {
-            element: this.placement,
-            width: 0,
-            styles: ["margin-top", "margin-bottom"].map((name) => ({
-              name,
-              value: this.placement.style.getPropertyValue(name),
-              priority: this.placement.style.getPropertyPriority(name),
-            })),
-          },
-        ];
+    const horizontal = this.resizesWidth(edge);
+    // Measure all flex slots before writing any widths. A vertical drag owns only
+    // the active placement's margins and must not measure its siblings.
+    const frozen: FrozenPlacement[] = [];
     let startWidth = 0;
     if (horizontal) {
+      for (const child of lane.children) {
+        if (
+          !(child instanceof this.placement.ownerDocument.defaultView!.HTMLElement) ||
+          (!child.hasAttribute(BLOCK_ID_ATTRIBUTE) && !child.hasAttribute("data-block-item-id"))
+        ) {
+          continue;
+        }
+        frozen.push({
+          element: child,
+          width: child.offsetWidth,
+          styles: this.captureInlineStyles(child, RESIZE_PROPERTIES),
+        });
+      }
       startWidth =
         frozen.find(({ element }) => element === this.placement)?.width ??
         this.placement.offsetWidth;
+    } else {
+      frozen.push({
+        element: this.placement,
+        width: 0,
+        styles: this.captureInlineStyles(this.placement, ["margin-top", "margin-bottom"]),
+      });
     }
     const heightTarget = this.heightTarget ?? this.placement;
     const startHeight = heightTarget.offsetHeight;
@@ -170,18 +198,20 @@ export class BlockResizeController {
       startY: event.clientY,
       startHeight,
       heightTarget,
-      heightStyles: HEIGHT_PROPERTIES.map((name) => ({
-        name,
-        value: heightTarget.style.getPropertyValue(name),
-        priority: heightTarget.style.getPropertyPriority(name),
-      })),
+      heightStyles: this.captureInlineStyles(heightTarget, HEIGHT_PROPERTIES),
       frozen,
       width: startWidth,
       height: startHeight,
     };
     try {
       if (horizontal) {
-        this.freezePlacements(frozen);
+        // Freeze the measured widths before the first pointer preview can change wrapping.
+        for (const { element, width } of frozen) {
+          element.style.flex = "0 0 auto";
+          element.style.width = `${width}px`;
+          element.style.minWidth = `${width}px`;
+          element.style.maxWidth = `${width}px`;
+        }
       }
       handle.setPointerCapture(event.pointerId);
       handle.setAttribute(RESIZING_HANDLE_ATTRIBUTE, "true");
@@ -210,13 +240,13 @@ export class BlockResizeController {
     if (!active || active.pointerId !== event.pointerId) {
       return;
     }
-    if (active.edge.includes("left") || active.edge.includes("right")) {
+    if (this.resizesWidth(active.edge)) {
       const delta = event.clientX - active.startX;
       active.width = normalizeResizeWidth(
         active.startWidth + (active.edge.includes("right") ? delta : -delta),
       );
     }
-    if (active.edge.includes("top") || active.edge.includes("bottom")) {
+    if (this.resizesHeight(active.edge)) {
       const delta = event.clientY - active.startY;
       active.height = Math.max(
         MIN_RESIZE_HEIGHT,
@@ -247,14 +277,12 @@ export class BlockResizeController {
     }
     // The preview width can change wrapping, so measure its content before restoring styles.
     const contentHeight =
-      commit && (active.edge.includes("top") || active.edge.includes("bottom"))
-        ? active.heightTarget.scrollHeight
-        : 0;
+      commit && this.resizesHeight(active.edge) ? active.heightTarget.scrollHeight : 0;
     this.cancel();
     if (commit && (active.width !== active.startWidth || active.height !== active.startHeight)) {
       this.commitDimensions(
-        active.edge.includes("left") || active.edge.includes("right") ? active.width : undefined,
-        active.edge.includes("top") || active.edge.includes("bottom") ? active.height : undefined,
+        this.resizesWidth(active.edge) ? active.width : undefined,
+        this.resizesHeight(active.edge) ? active.height : undefined,
         contentHeight,
       );
     }
@@ -273,10 +301,7 @@ export class BlockResizeController {
   resizeWithKeyboard(edge: BlockResizeEdge, event: KeyboardEvent): void {
     const horizontal = event.key === "ArrowLeft" || event.key === "ArrowRight";
     const vertical = event.key === "ArrowUp" || event.key === "ArrowDown";
-    if (
-      (!horizontal || !(edge.includes("left") || edge.includes("right"))) &&
-      (!vertical || !(edge.includes("top") || edge.includes("bottom")))
-    ) {
+    if ((!horizontal || !this.resizesWidth(edge)) && (!vertical || !this.resizesHeight(edge))) {
       return;
     }
     event.preventDefault();
@@ -297,7 +322,19 @@ export class BlockResizeController {
     }
     const heightTarget = this.heightTarget ?? this.placement;
     const height = heightTarget.offsetHeight + direction * step;
-    this.commitDimensions(undefined, height, this.measureContentHeight(heightTarget));
+    // Temporarily remove the current height constraints so scrollHeight measures content alone.
+    let contentHeight: number;
+    const saved = this.captureInlineStyles(heightTarget, HEIGHT_PROPERTIES);
+    try {
+      heightTarget.style.height = "0px";
+      heightTarget.style.minHeight = "0px";
+      heightTarget.style.maxHeight = "none";
+      heightTarget.style.overflowY = "auto";
+      contentHeight = heightTarget.scrollHeight;
+    } finally {
+      this.restoreInlineStyles(heightTarget, saved);
+    }
+    this.commitDimensions(undefined, height, contentHeight);
   }
 
   /**
@@ -321,17 +358,13 @@ export class BlockResizeController {
     active.handle.removeAttribute(RESIZING_HANDLE_ATTRIBUTE);
     const errors: unknown[] = [];
     try {
-      for (const { name, value, priority } of active.heightStyles) {
-        active.heightTarget.style.setProperty(name, value, priority);
-      }
+      this.restoreInlineStyles(active.heightTarget, active.heightStyles);
     } catch (error) {
       errors.push(error);
     }
     for (const frozen of active.frozen) {
       try {
-        for (const { name, value, priority } of frozen.styles) {
-          frozen.element.style.setProperty(name, value, priority);
-        }
+        this.restoreInlineStyles(frozen.element, frozen.styles);
         frozen.element.removeAttribute(RESIZING_PLACEMENT_ATTRIBUTE);
       } catch (error) {
         errors.push(error);
@@ -350,88 +383,27 @@ export class BlockResizeController {
   };
 
   /**
-   * Locks every direct placement to its current rendered width so wrap and grow stay
-   * still for one resize gesture.
-   *
-   * @param lane - Children container owning the measured block placements.
-   * @returns Measured placements and saved declarations; no styles have been written yet.
-   */
-  private measurePlacements(lane: HTMLElement): FrozenPlacement[] {
-    const placements: FrozenPlacement[] = [];
-    for (const child of lane.children) {
-      if (
-        !(child instanceof this.placement.ownerDocument.defaultView!.HTMLElement) ||
-        (!child.hasAttribute(BLOCK_ID_ATTRIBUTE) && !child.hasAttribute("data-block-item-id"))
-      ) {
-        continue;
-      }
-      placements.push({
-        element: child,
-        width: child.offsetWidth,
-        styles: RESIZE_PROPERTIES.map((name) => ({
-          name,
-          value: child.style.getPropertyValue(name),
-          priority: child.style.getPropertyPriority(name),
-        })),
-      });
-    }
-    return placements;
-  }
-
-  /**
-   * Applies previously measured flex slots without alternating geometry reads and writes.
-   *
-   * @param placements - All direct placement measurements captured before freezing begins.
-   * @returns Every placement retains its original slot width until the gesture ends.
-   */
-  private freezePlacements(placements: readonly FrozenPlacement[]): void {
-    for (const { element, width } of placements) {
-      element.style.flex = "0 0 auto";
-      element.style.width = `${width}px`;
-      element.style.minWidth = `${width}px`;
-      element.style.maxWidth = `${width}px`;
-    }
-  }
-
-  /**
-   * Paints a preview width on top of the frozen slot without changing siblings.
-   *
-   * Compensating margin keeps width plus margin equal to the origin so the flex
-   * line does not wrap. Overflow paints over neighbors while z-index lifts
-   * the active placement.
-   *
-   * @param origin - In-flow width captured at pointer down.
-   * @param preview - Clamped visual width following the pointer.
-   * @param edge - Side the user is dragging.
-   * @returns Styles are written directly to the owned placement, without document mutation.
-   */
-  private previewPlacement(origin: number, preview: number, edge: BlockResizeEdge): void {
-    const placement = this.placement;
-    const compensation = origin - preview;
-    placement.style.flex = "0 0 auto";
-    placement.style.width = `${preview}px`;
-    placement.style.minWidth = `${preview}px`;
-    placement.style.maxWidth = "none";
-    placement.style.marginLeft = edge.includes("left") ? `${compensation}px` : "0px";
-    placement.style.marginRight = edge.includes("right") ? `${compensation}px` : "0px";
-    placement.style.position = "relative";
-    placement.style.zIndex = "8";
-    placement.setAttribute(RESIZING_PLACEMENT_ATTRIBUTE, edge);
-  }
-
-  /**
    * Paints the active axes without writing persisted block data.
    *
    * @param active - Gesture with its measured origins and latest dimensions.
    * @returns The resized placement and block shell display the current preview.
    */
   private preview(active: BlockResizeGesture): void {
-    if (active.edge.includes("left") || active.edge.includes("right")) {
-      this.previewPlacement(active.startWidth, active.width, active.edge);
-    } else {
-      this.placement.setAttribute(RESIZING_PLACEMENT_ATTRIBUTE, active.edge);
+    if (this.resizesWidth(active.edge)) {
+      // Compensating margins hold the flex slot in place while the active edge follows the pointer.
+      const placement = this.placement;
+      const compensation = active.startWidth - active.width;
+      placement.style.flex = "0 0 auto";
+      placement.style.width = `${active.width}px`;
+      placement.style.minWidth = `${active.width}px`;
+      placement.style.maxWidth = "none";
+      placement.style.marginLeft = active.edge.includes("left") ? `${compensation}px` : "0px";
+      placement.style.marginRight = active.edge.includes("right") ? `${compensation}px` : "0px";
+      placement.style.position = "relative";
+      placement.style.zIndex = "8";
     }
-    if (active.edge.includes("top") || active.edge.includes("bottom")) {
+    this.placement.setAttribute(RESIZING_PLACEMENT_ATTRIBUTE, active.edge);
+    if (this.resizesHeight(active.edge)) {
       active.heightTarget.style.height = `${active.height}px`;
       active.heightTarget.style.minHeight = "0";
       active.heightTarget.style.maxHeight = "none";
@@ -440,31 +412,6 @@ export class BlockResizeController {
         const offset = active.startHeight - active.height;
         this.placement.style.marginTop = `${offset}px`;
         this.placement.style.marginBottom = `${-offset}px`;
-      }
-    }
-  }
-
-  /**
-   * Measures content without letting the current minimum height inflate scroll height.
-   *
-   * @param target - Block shell whose current inline declarations must be restored.
-   * @returns Content height in CSS pixels after restoring all temporary styles.
-   */
-  private measureContentHeight(target: HTMLElement): number {
-    const saved = HEIGHT_PROPERTIES.map((name) => ({
-      name,
-      value: target.style.getPropertyValue(name),
-      priority: target.style.getPropertyPriority(name),
-    }));
-    try {
-      target.style.height = "0px";
-      target.style.minHeight = "0px";
-      target.style.maxHeight = "none";
-      target.style.overflowY = "auto";
-      return target.scrollHeight;
-    } finally {
-      for (const { name, value, priority } of saved) {
-        target.style.setProperty(name, value, priority);
       }
     }
   }
@@ -495,21 +442,24 @@ export class BlockResizeController {
     if (size !== undefined && (typeof size !== "object" || size === null || Array.isArray(size))) {
       throw new Error("Cannot resize a block with a non-object size style");
     }
-    const next = width === undefined ? undefined : normalizeResizeWidth(width);
+    const nextWidth = width === undefined ? undefined : normalizeResizeWidth(width);
     const nextHeight =
       height === undefined
         ? undefined
         : Math.max(MIN_RESIZE_HEIGHT, Math.min(MAX_RESIZE_HEIGHT, height));
     const nextSize = { ...size };
-    const pluginData: Record<string, unknown> = {};
-    if (next !== undefined) {
-      nextSize.width = `${next}px`;
+    if (nextWidth !== undefined) {
+      nextSize.width = `${nextWidth}px`;
     }
     if (nextHeight !== undefined) {
       nextSize.height = `${nextHeight}px`;
       if ((!size?.heightPolicy || size.heightPolicy === "grow") && nextHeight < contentHeight) {
         nextSize.heightPolicy = "scroll";
       }
+    }
+    // Save the original dimensions once so leaving the layout restores even previously absent properties.
+    const pluginData: Record<string, unknown> = {};
+    if (nextHeight !== undefined) {
       if (this.heightPluginId) {
         pluginData[this.heightPluginId] = {
           height: nextSize.height,
@@ -523,8 +473,8 @@ export class BlockResizeController {
         };
       }
     }
-    if (this.pluginId && next !== undefined) {
-      pluginData[this.pluginId] = next;
+    if (this.pluginId && nextWidth !== undefined) {
+      pluginData[this.pluginId] = nextWidth;
       if (this.originalWidthPluginId && !block.pluginData[this.originalWidthPluginId]) {
         pluginData[this.originalWidthPluginId] =
           size && Object.hasOwn(size, "width")
@@ -532,6 +482,7 @@ export class BlockResizeController {
             : { present: false };
       }
     }
+
     if (
       nextSize.width === size?.width &&
       nextSize.height === size?.height &&
@@ -560,4 +511,55 @@ export class BlockResizeController {
       this.cancel();
     }
   };
+
+  /**
+   * Identifies handles that change the placement width during pointer or keyboard resizing.
+   *
+   * @param edge - Active side or corner of the placement.
+   * @returns True for left and right edges and their corners.
+   */
+  private resizesWidth(edge: BlockResizeEdge): boolean {
+    return edge.includes("left") || edge.includes("right");
+  }
+
+  /**
+   * Identifies handles that change the block shell height during pointer or keyboard resizing.
+   *
+   * @param edge - Active side or corner of the placement.
+   * @returns True for top and bottom edges and their corners.
+   */
+  private resizesHeight(edge: BlockResizeEdge): boolean {
+    return edge.includes("top") || edge.includes("bottom");
+  }
+
+  /**
+   * Saves the inline declarations a preview or content measurement may overwrite.
+   *
+   * @param element - Placement or block shell about to receive temporary styles.
+   * @param names - CSS properties owned by this operation.
+   * @returns Current inline values and priorities, including absent declarations.
+   */
+  private captureInlineStyles(
+    element: HTMLElement,
+    names: readonly string[],
+  ): PlacementInlineStyle[] {
+    return names.map((name) => ({
+      name,
+      value: element.style.getPropertyValue(name),
+      priority: element.style.getPropertyPriority(name),
+    }));
+  }
+
+  /**
+   * Reinstates the saved declarations while keeping unrelated live style changes.
+   *
+   * @param element - Placement or block shell whose declarations were captured.
+   * @param styles - Values and priorities saved before the preview or measurement.
+   * @returns After restoring each property, including removing previously absent values.
+   */
+  private restoreInlineStyles(element: HTMLElement, styles: readonly PlacementInlineStyle[]): void {
+    for (const { name, value, priority } of styles) {
+      element.style.setProperty(name, value, priority);
+    }
+  }
 }

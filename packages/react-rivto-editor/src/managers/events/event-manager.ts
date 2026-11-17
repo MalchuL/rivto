@@ -10,7 +10,7 @@ import type { EditorEvent } from "./editor-event";
 import { PanelEventFactory } from "./panel-event-factory";
 import type { PanelRegistry } from "../../panels/panel-registry";
 import type { EditorEventHandler } from "./types";
-import type { PanelRegistration } from "../../panels/types";
+import type { PanelEventScope } from "../../panels/types";
 
 /**
  * Registers and dispatches browser events for all panels of one document.
@@ -81,7 +81,7 @@ export class EventManager {
   >(
     definition: DOMEventDefinition<Target, Type>,
     listener: EditorEventHandler<EditorEvent<Target, Type>>,
-    owner?: Pick<PanelRegistration, "id" | "getRoot">,
+    owner?: PanelEventScope,
   ): () => void;
 
   /**
@@ -97,7 +97,7 @@ export class EventManager {
   register(
     definition: DOMEventDefinition,
     listener: EditorEventHandler<AnyEditorEvent>,
-    owner?: Pick<PanelRegistration, "id" | "getRoot">,
+    owner?: PanelEventScope,
   ): () => void {
     this.assertActive();
     const id = owner ? `${owner.id}:${definition.id.trim()}` : definition.id.trim();

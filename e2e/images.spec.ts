@@ -281,42 +281,6 @@ async function dispatchFileDrag(
   );
 }
 
-/**
- * Finds a visible block-body point that resolves to the block's inside region.
- *
- * @param block - Rendered block to inspect.
- * @param blockId - Stable identity expected from the Page placement resolver.
- * @returns A viewport point outside editable text and inside the block body.
- * @throws If no matching visible registered region is found.
- */
-async function insideBlockPoint(block: Locator, blockId: string): Promise<FileDropPoint> {
-  return block.evaluate((element, id) => {
-    const host = window as unknown as {
-      __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
-    };
-    const panel = host.__rivtoDemo.reactEditor.panels.getDefault();
-    const row = element.querySelector<HTMLElement>(":scope > .rivto-block-row")!;
-    const box = row.getBoundingClientRect();
-    for (let y = box.top + 1; y < box.bottom; y += 3) {
-      for (let x = box.left + 1; x < box.right; x += 5) {
-        const hit = document.elementFromPoint(x, y);
-        if (!hit || hit.closest("[data-block-content]")) {
-          continue;
-        }
-        const target = panel?.page.dropTargets.resolve(x, y);
-        if (
-          target?.destination.kind === "inside" &&
-          target.destination.parentId === id &&
-          !target.indicator
-        ) {
-          return { x, y };
-        }
-      }
-    }
-    throw new Error("No visible block-body target found");
-  }, blockId);
-}
-
 test("shows the block insertion line while dragging a file over a page gap", async ({ page }) => {
   const [, second] = await createGapBlocks(page, false);
   const following = page.locator(`[data-block-id="${second}"]`);
@@ -494,7 +458,32 @@ for (const filename of ["inside.txt", "inside.png"]) {
 test("outlines a block-body destination and inserts the file inside it", async ({ page }) => {
   const [first] = await createGapBlocks(page, false);
   const block = page.locator(`[data-block-id="${first}"]`);
-  const point = await insideBlockPoint(block, first!);
+  // Find a visible body hit outside editable text so the drop exercises structural insertion.
+  const point = await block.evaluate((element, id) => {
+    const host = window as unknown as {
+      __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+    };
+    const panel = host.__rivtoDemo.reactEditor.panels.getDefault();
+    const row = element.querySelector<HTMLElement>(":scope > .rivto-block-row")!;
+    const box = row.getBoundingClientRect();
+    for (let y = box.top + 1; y < box.bottom; y += 3) {
+      for (let x = box.left + 1; x < box.right; x += 5) {
+        const hit = document.elementFromPoint(x, y);
+        if (!hit || hit.closest("[data-block-content]")) {
+          continue;
+        }
+        const target = panel?.page.dropTargets.resolve(x, y);
+        if (
+          target?.destination.kind === "inside" &&
+          target.destination.parentId === id &&
+          !target.indicator
+        ) {
+          return { x, y };
+        }
+      }
+    }
+    throw new Error("No visible block-body target found");
+  }, first!);
   await dispatchFileDrag(page, point, "dragover", "inside.txt");
   await expect(block).toHaveAttribute("data-block-drop-active", "true");
   await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
