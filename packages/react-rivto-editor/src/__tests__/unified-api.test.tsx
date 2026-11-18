@@ -8,7 +8,7 @@ import {
   type DocumentEditorAPI,
   type PanelAPI,
 } from "@chulane/rivto";
-import { EditorPanel } from "../components/editor-panel/editor-panel";
+import { EditorPanel } from "../panels/editor-panel/editor-panel";
 import { createReactEditor } from "../editor/react-editor";
 import type { ReactEditorApi } from "../editor/types";
 import { usePanel } from "../hooks/editor/use-panel";

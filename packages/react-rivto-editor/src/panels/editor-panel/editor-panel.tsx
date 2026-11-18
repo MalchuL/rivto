@@ -1,4 +1,4 @@
-import { ReactPanelProvider } from "./react-panel-provider";
+import { ReactPanelProvider } from "../react-panel-provider";
 import type { EditorPanelProps } from "./types";
 import { ChildrenPanel, type PanelOptions } from "@chulane/rivto";
 import type { ReactEditorApi } from "../../editor/types";

@@ -1,7 +1,7 @@
-import type { BlockTransferBlocks } from "../../../block-transfer/types";
+import type { BlockTransferBlocks } from "../../block-transfer/types";
 import type { BlockManagerApi } from "@chulane/rivto";
-import type { ReactPanelApi } from "../../../panels/types";
-import type { BlockBehaviorsApi } from "../../../managers/blocks/block-behaviors-api";
+import type { ReactPanelApi } from "../../types";
+import type { BlockBehaviorsApi } from "../../managers/blocks/block-behaviors-api";
 
 /** Stable model identity used by drag operations. */
 interface BlockDragModel {
@@ -31,8 +31,8 @@ interface BlockDragEditor {
   readonly blocks: Pick<BlockManagerApi, "canMove">;
 }
 
-/** Addressed source and receiving commands; excludes panel registration and destruction. */
-export interface CrossDocumentBlockPanel {
+/** Reads and commands borrowed from the source or destination for local moves and cross-document transfers. Panel registration and destruction belong to the host. */
+export interface BlockDragOperations {
   readonly rootBlockId?: string;
   readonly blocks: Pick<
     ReactPanelApi["blocks"],

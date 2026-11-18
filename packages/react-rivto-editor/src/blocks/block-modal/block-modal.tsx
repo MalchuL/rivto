@@ -14,7 +14,7 @@ import { createContext, useContext, useRef, useState, type ReactNode } from "rea
 import { Maximize2Icon, Minimize2Icon } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
-import { EditorEmbed } from "../../components/editor-embed/editor-embed";
+import { EditorEmbed } from "../../panels/editor-embed/editor-embed";
 import { PageSurface } from "../../surfaces/page/page-surface";
 import { useReactPanel } from "../../hooks/editor/use-react-panel";
 const DIALOG_CLASS = "rivto-block-modal";

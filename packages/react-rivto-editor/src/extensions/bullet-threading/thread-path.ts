@@ -66,6 +66,7 @@ export function buildThreadPath({
     const type = block.getAttribute("data-block-type") ?? "";
     return !excluded.has(type) && (!continued || continued.has(type));
   };
+  // Stop the ancestor walk at this panel so an embedded thread cannot reach its host row.
   const dom = new PanelDOM(root);
   const active = root.ownerDocument.activeElement;
   const focused = active && root.contains(active) ? dom.getBlock(active) : null;

@@ -2,7 +2,7 @@ import type { BlockFactory } from "../block-factories";
 import { Listeners } from "@chulane/rivto-utils";
 import { PAGE_SELECTION_BINDINGS } from "../surfaces/page/page-selection-extension";
 import { PageNavigationController } from "../surfaces/page/page-navigation-controller";
-import { PanelBlockContextMenuManager } from "../managers/block-context-menu/panel-manager";
+import { PanelBlockContextMenuManager } from "./managers/block-context-menu/panel-block-context-menu-manager";
 import { BlockEditorController, BlockSelectionExtensions } from "@chulane/rivto-page";
 import { PageBlocks } from "../surfaces/page/page-blocks";
 import { PageSelection } from "../surfaces/page/page-selection";
@@ -18,14 +18,14 @@ import {
   type EditorMode,
 } from "@chulane/rivto";
 import type { ReactEditorApi } from "../editor/types";
-import { PanelClipboardManager } from "../managers/clipboard/panel-clipboard-manager";
+import { PanelClipboardManager } from "./managers/clipboard/panel-clipboard-manager";
 import { PANEL_ATTRIBUTE } from "./panel-dom";
-import { PanelEventManager } from "../managers/events/panel-event-manager";
-import { PanelKeyboardManager } from "../managers/keyboard/panel-keyboard-manager";
-import { PanelSelectionManager } from "../managers/selection/panel-selection-manager";
-import { PanelSlashCommandManager } from "../managers/slash/panel-slash-command-manager";
+import { PanelEventManager } from "./managers/events/panel-event-manager";
+import { PanelKeyboardManager } from "./managers/keyboard/panel-keyboard-manager";
+import { PanelSelectionManager } from "./managers/selection/panel-selection-manager";
+import { PanelSlashCommandManager } from "./managers/slash/panel-slash-command-manager";
 import type { PanelOptions, PanelSnapshot, ReactPanelApi } from "./types";
-import { isReactPanelApi } from "../utils";
+import { isReactPanelApi } from "./is-react-panel-api";
 
 /**
  * Connects one EditorPanel or EditorEmbed component to its document, DOM root, and local managers.
@@ -462,6 +462,7 @@ export class ReactPanel implements ReactPanelApi {
     this.pageNavigation.setRoot(nextRoot);
     if (this.root) {
       this.root.inert = !this.enabled;
+      // Event routing and DOM queries use this marker to recognize a nested panel.
       this.root.setAttribute(PANEL_ATTRIBUTE, "");
       if (this.corePanel.rootBlockId) {
         this.root.setAttribute("role", "region");

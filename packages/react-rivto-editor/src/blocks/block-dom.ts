@@ -40,6 +40,7 @@ export function findBlockFromEvent(event: Event): EventBlock | null {
 
 /** Finds a rendered block shell by ID without interpolating that ID into CSS. */
 export function findRenderedBlock(root: HTMLElement, blockId: string): HTMLElement | null {
+  // A nested embed can render the same block ID as the surrounding page.
   for (const block of findPanelElements(root, BLOCK_ID_SELECTOR)) {
     if (block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId) {
       return block;

@@ -1,6 +1,6 @@
-import type { ReactPanelApi } from "../../panels/types";
-import type { PanelSlashCommandsApi } from "./api";
-import type { SlashCommandRegistry } from "./slash-command-registry";
+import type { ReactPanelApi } from "../../types";
+import type { PanelSlashCommandsApi } from "./panel-slash-commands-api";
+import type { SlashCommandRegistry } from "../../../managers/slash/slash-command-registry";
 
 /** Executes commands in one occurrence while sharing the document command registry. */
 export class PanelSlashCommandManager implements PanelSlashCommandsApi {

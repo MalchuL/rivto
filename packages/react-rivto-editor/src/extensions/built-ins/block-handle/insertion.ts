@@ -35,6 +35,7 @@ export function siblingInsertion(
   factory: BlockFactory,
   position: "above" | "below",
 ) {
+  // A sibling of a protected embed root would fall outside the panel.
   if (!panel.blocks.canRemove(anchor)) {
     return;
   }

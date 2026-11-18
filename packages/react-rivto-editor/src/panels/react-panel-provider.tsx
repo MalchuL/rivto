@@ -1,4 +1,4 @@
-import { ReactPanel } from "../../panels/react-panel";
+import { ReactPanel } from "./react-panel";
 import {
   useCallback,
   useContext,
@@ -10,18 +10,19 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { PanelAPI, PanelOptions } from "@chulane/rivto";
-import type { ReactEditorApi } from "../../editor/types";
+import type { ReactEditorApi } from "../editor/types";
 import {
   DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN,
   PageVirtualizationContext,
-} from "../../surfaces/page/page-virtualization-context";
+} from "../surfaces/page/page-virtualization-context";
 import { ReactPanelContext } from "./react-panel-context";
 import { EditorRootContext } from "./editor-root-context";
-import type { PanelSnapshot } from "../../panels/types";
-import type { EditorPanelProps } from "./types";
+import type { PanelSnapshot, ReactPanelProps } from "./types";
 
 /** Internal provider properties with the core panel factory supplied by its owning component. */
-interface ReactPanelProviderProps extends EditorPanelProps {
+interface ReactPanelProviderProps extends ReactPanelProps {
+  /** Block root passed to the owning component’s core panel factory. */
+  readonly rootBlockId?: string;
   /** Creates core panel boundaries after commit; keep this factory stable across renders. */
   readonly createPanel: (editor: ReactEditorApi, options: PanelOptions) => PanelAPI;
 }

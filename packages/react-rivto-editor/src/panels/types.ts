@@ -1,14 +1,35 @@
-import type { PanelBlockContextMenuManager } from "../managers/block-context-menu/panel-manager";
+import type { PanelBlockContextMenuManager } from "./managers/block-context-menu/panel-block-context-menu-manager";
 import type { ReactPanel } from "./react-panel";
 import type { DocumentModel } from "@chulane/document-model";
 import type { PanelAPI, ModeManagerApi, EditorMode } from "@chulane/rivto";
 import type { ReactEditorApi } from "../editor/types";
-import type { PanelClipboardApi } from "../managers/clipboard/api";
+import type { PanelClipboardApi } from "./managers/clipboard/panel-clipboard-api";
 import type { PanelEventsApi } from "../managers/events/api";
 import type { KeyboardApi } from "../managers/keyboard/keyboard-api";
 import type { PanelSelectionApi } from "../managers/selection/api";
-import type { PanelSlashCommandsApi } from "../managers/slash/api";
+import type { PanelSlashCommandsApi } from "./managers/slash/panel-slash-commands-api";
 import type { BlockDropTargetsApi, BlockEditorNodeApi } from "@chulane/rivto-page";
+import type { ReactNode } from "react";
+
+/** Properties shared by document, subtree and embedding panels. */
+export interface ReactPanelProps {
+  /** React runtime owned by useReactEditor or managed EditorStorage; React components must not create instances manually. */
+  readonly editor: ReactEditorApi;
+  /** Independent element container; null or omitted selects document element roots. */
+  readonly rootElementId?: string | null;
+  /** Optional Panel-local presentation mode retained by the host. */
+  readonly mode?: ModeManagerApi;
+  /** False suspends hidden-tab interaction while retaining local bindings; defaults to true. */
+  readonly active?: boolean;
+  /** Notifies the host after this panel mounts with its borrowed model; ownership stays with the editor owner. */
+  readonly onReady?: (document: DocumentModel) => void;
+  /** Explicit PageSurface or EdgelessSurface, plus optional application chrome; extensions are registered at runtime creation. */
+  readonly children?: ReactNode;
+  /** False disables page virtualization, true always enables it, and a number sets the minimum root count; defaults to false. */
+  readonly virtualizePageThreshold?: boolean | number;
+  /** Extra mounted roots on each side of the viewport; defaults to 8. */
+  readonly virtualizePageOverscan?: number;
+}
 
 /** Page placement lookup borrowed by panel interaction handlers. */
 export interface PanelPageApi {
@@ -120,27 +141,3 @@ export type PanelSnapshot =
       readonly api: ReactPanel;
       readonly retained: boolean;
     };
-
-/** Local registration identity and DOM root belonging to one mounted EditorPanel. */
-export interface PanelEventScope {
-  /** Stable occurrence identity; shared shortcut settings continue to use semantic action IDs. */
-  readonly id: string;
-  /**
-   * Reads the root currently available to this occurrence's handlers.
-   *
-   * @returns Mounted root, or null before mounting, when disabled, or after cleanup.
-   */
-  getRoot(): HTMLElement | null;
-}
-
-/** A panel event scope that also retains the disposers of its local registrations. */
-export interface PanelRegistration extends PanelEventScope {
-  /**
-   * Retains local registration cleanup until this occurrence is destroyed.
-   *
-   * @param dispose - Callback releasing the occurrence's registration.
-   * @returns Idempotent disposer, also invoked during occurrence cleanup.
-   * @throws If cleanup registration is attempted during or after panel destruction.
-   */
-  registerCleanup(dispose: () => void): () => void;
-}

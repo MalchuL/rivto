@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { ReactPanelContext } from "../../packages/react-rivto-editor/src/components/editor-panel/react-panel-context";
+import { ReactPanelContext } from "../../packages/react-rivto-editor/src/panels/react-panel-context";
 import {
   useBlockNode,
   useBlockOperations,
@@ -62,8 +62,8 @@ export async function run(): Promise<void> {
       for (const id of ["a", "b"]) {
         editor.editor.blocks.insertBlock({ id, type: "paragraph", content: `${index}-${id}` });
       }
-      const subscribe = editor.editor.blocks.subscribeBlockNode.bind(editor.editor.blocks);
-      editor.editor.blocks.subscribeBlockNode = (id, listener) => {
+      const subscribe = editor.blocks.subscribeBlockNode.bind(editor.blocks);
+      editor.blocks.subscribeBlockNode = (id, listener) => {
         const counts = subscriptions[index]!;
         counts.set(id, (counts.get(id) ?? 0) + 1);
         const dispose = subscribe(id, listener);

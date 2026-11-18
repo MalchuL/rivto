@@ -61,6 +61,7 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditorApi): void {
     ) {
       return true;
     }
+    // Apply the move through the invoking panel so its root protection applies to the selection.
     reactPanel.blocks.moveBlocks(roots.ids, placement.targetId, placement.position);
     if (roots.grouped && roots.selection) {
       reactPanel.selection.set(roots.selection);

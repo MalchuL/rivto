@@ -81,5 +81,6 @@ export function registerSelectionDeletion(reactEditor: ReactEditorApi): void {
  * @throws If context resolution, a behavior handler or delegated selection deletion fails.
  */
 export function deletePanelSelection(reactPanel: ReactPanelApi): void {
+  // Deletion must respect the root protected by the panel that received the command.
   reactPanel.batchUpdates(() => reactPanel.selection.delete());
 }

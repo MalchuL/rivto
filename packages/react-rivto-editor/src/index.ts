@@ -117,13 +117,15 @@ export type {
 } from "./extensions/todo-item/todo-item";
 export * from "./hooks";
 export {
+  readEditorDOMSelection,
+  restoreEditorDOMSelection,
+} from "./panels/managers/selection/panel-dom-selection";
+export {
   BLOCK_FLOW_SLOT_POSITIONS,
   BUILTIN_KEYMAP,
   KEYBOARD_BINDING_IDS,
   SLOT_POSITIONS,
   parseShortcut,
-  readEditorDOMSelection,
-  restoreEditorDOMSelection,
   shortcutFromKeyboardEvent,
 } from "./managers";
 export type {
@@ -173,7 +175,8 @@ export type {
   PanelPasteStrategy,
 } from "./managers";
 export type { CreateReactEditorOptions, MarkdownLinkClick } from "./types";
-export { isReactPanelApi, isRivtoEditor } from "./utils";
+export { isRivtoEditor } from "./utils";
+export { isReactPanelApi } from "./panels/is-react-panel-api";
 
 export {
   KANBAN_BLOCK_TYPE,
@@ -233,8 +236,8 @@ export { SurfaceContext } from "./surfaces/surface";
 
 export * from "./editor/editor-storage";
 
-export { EditorPanel } from "./components/editor-panel/editor-panel";
-export type { EditorPanelProps } from "./components/editor-panel/types";
+export { EditorPanel } from "./panels/editor-panel/editor-panel";
+export type { EditorPanelProps } from "./panels/editor-panel/types";
 export type { AttachmentApi } from "./attachments/api";
 export type { ClipboardApi } from "./managers/clipboard/api";
 export type { PanelDestination } from "@chulane/rivto";
@@ -243,8 +246,8 @@ export { useReactEditor } from "./hooks/editor/use-react-editor";
 export type { ReactEditorState, UseReactEditorOptions } from "./hooks/editor/types";
 export type { ReactPanelApi } from "./types";
 
-export { EditorEmbed } from "./components/editor-embed/editor-embed";
-export type { EditorEmbedProps } from "./components/editor-embed/types";
+export { EditorEmbed } from "./panels/editor-embed/editor-embed";
+export type { EditorEmbedProps } from "./panels/editor-embed/types";
 
 export type {
   CreateElementInput,

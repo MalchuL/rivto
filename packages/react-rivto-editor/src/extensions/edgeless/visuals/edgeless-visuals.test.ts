@@ -1,26 +1,26 @@
+import type { ReactPanelApi } from "../../../types";
 import { EdgelessToolContext } from "../../../managers/edgeless-tools/edgeless-tool-context";
-import { TestPanel } from "../../../test-utils";
-import { ReactPanel } from "../../../panels/react-panel";
 import {
-  ChildrenPanel,
+  TestPanel,
+  createTestPanel,
+  createTestReactEditor as createReactEditor,
+  createTestCoreEditor as createDocumentEditor,
+  createTestMultiEditor,
+} from "../../../test-utils";
+import {
   createCaretSelection,
   type EditorElementNode as EditorElementMutationResult,
 } from "@chulane/rivto";
-import {
-  createTestReactEditor as createReactEditor,
-  createTestCoreEditor as createDocumentEditor,
-} from "../../../test-utils";
 
 import { edgelessSelectionExtension } from "..";
 import { PageSurface } from "../../../surfaces/page/page-surface";
-import { createTestMultiEditor } from "../../../test-utils";
 import { separatorBlockExtension } from "../../built-ins/separator/separator-block";
 import { EdgelessSurface } from "../../../surfaces/edgeless/edgeless-surface";
 import { edgelessVisualsExtension } from ".";
 import { EdgelessOperations } from "../../../managers/elements/edgeless-operations";
 
 const observedOperations: EdgelessOperations[] = [];
-function observeOperations(panel: ReactPanel): EdgelessOperations {
+function observeOperations(panel: ReactPanelApi): EdgelessOperations {
   const operations = new EdgelessOperations(panel.editor, panel);
   operations.observeChanges();
   observedOperations.push(operations);
@@ -830,9 +830,9 @@ test.each(["block", "edgeless"] as const)(
     }));
     const runtime = core.getEditor(a.id)!;
     await Promise.resolve(); // Allow the loaded models to receive their native block elements.
-    const firstPanel = new ReactPanel(runtime, new ChildrenPanel(runtime));
+    const firstPanel = createTestPanel(runtime);
     const secondRuntime = core.getEditor(b.id)!;
-    const secondPanel = new ReactPanel(secondRuntime, new ChildrenPanel(secondRuntime));
+    const secondPanel = createTestPanel(secondRuntime);
     const markup = renderToStaticMarkup(
       createElement(
         "div",
@@ -906,11 +906,7 @@ test("groups Panel roots in sibling order and keeps grouping in one undo step", 
       { id: "b", type: "rectangle", zIndex: 0, frame },
     ],
   });
-  const reactPanel = new ReactPanel(
-    fullPanel.editor,
-    new ChildrenPanel(fullPanel.document, { rootElementId: parent.id }),
-    {},
-  );
+  const reactPanel = createTestPanel(fullPanel.editor, { rootElementId: parent.id });
   const reactPanelOperations = observeOperations(reactPanel);
   const edgelessOperation = reactPanelOperations;
   expect(edgelessOperation.getParentId("a")).toBeUndefined();

@@ -308,7 +308,7 @@ Marked: 56 changed, 24 guard-only.
 - saveDOMSelection:147 (3 returns, guards only)
 - restoreDOMSelection:171 (2 returns, guards only)
 
-## [ X ] packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts
+## [ X ] packages/react-rivto-editor/src/panels/managers/selection/panel-dom-selection.ts
 
 - createBlockSelection:188 (2 returns, guards only)
 - readPosition:242 (2 returns, guards only)

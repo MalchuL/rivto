@@ -614,6 +614,7 @@ export class ClipboardManager {
       } else if (strategy instanceof BlockPasteStrategy) {
         bound = this.blockPasteStrategy;
       } else if (isPanelPasteStrategy(strategy) && "editor" in reactPanel) {
+        // The strategy is registered editor-wide, but this paste must use the receiving panel's bounds.
         bound = strategy.createPanelStrategy(reactPanel);
       }
       return bound;

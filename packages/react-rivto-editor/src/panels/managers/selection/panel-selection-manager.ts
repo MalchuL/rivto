@@ -1,4 +1,4 @@
-import type { PendingSelectionCallback } from "./types";
+import type { PendingSelectionCallback } from "./pending-selection-callback";
 /**
  * Bridges core selection state to browser DOM selection.
  *
@@ -8,11 +8,12 @@ import type { PendingSelectionCallback } from "./types";
  * including transitions from an empty selection back to an empty selection.
  */
 import type { Selection, SelectionManagerApi } from "@chulane/rivto";
-import type { ReactPanelApi } from "../../panels/types";
-import type { RestoreDOMSelectionOptions, PanelSelectionApi } from "./api";
-import { readEditorDOMSelection, restoreEditorDOMSelection } from "./editor-dom-selection";
-
-export { createCaretSelection, createTextSelection } from "@chulane/rivto";
+import type { ReactPanelApi } from "../../types";
+import type {
+  RestoreDOMSelectionOptions,
+  PanelSelectionApi,
+} from "../../../managers/selection/api";
+import { readEditorDOMSelection, restoreEditorDOMSelection } from "./panel-dom-selection";
 
 /** DOM adapter over the core selection manager. */
 export class PanelSelectionManager implements PanelSelectionApi {

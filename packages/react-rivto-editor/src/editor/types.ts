@@ -18,7 +18,7 @@ import type { BlockBehaviorsApi } from "../managers/blocks/block-behaviors-api";
 import type { BlockListPropsApi } from "../managers/blocks/block-list-props-api";
 import type { BlockTypesApi } from "../managers/blocks/block-types-api";
 import type { RenderersApi } from "../managers/blocks/renderers-api";
-import type { PanelRegistry } from "../panels/panel-registry";
+import type { PanelRegistryApi } from "./panel-registry-api";
 import type { DocumentEventsApi } from "../managers/events/api";
 import type { DocumentKeyboardApi } from "../managers/keyboard/keyboard-api";
 import type { ExtensionsApi } from "../managers/extensions/api";
@@ -155,15 +155,7 @@ export interface ReactEditorApi extends DocumentEditorAPI {
   /** Delegated surface/document/window DOM event runtime. */
   readonly events: DocumentEventsApi;
   /** Mounted occurrences and explicit active/default view lookup. */
-  readonly panels: Pick<
-    PanelRegistry,
-    | "getActive"
-    | "getDefault"
-    | "registerPanel"
-    | "getSurfaceType"
-    | "getActiveRoot"
-    | "getDefaultRoot"
-  >;
+  readonly panels: PanelRegistryApi;
   /** Semantic keyboard bindings and runtime keymap overrides. */
   readonly keyboard: DocumentKeyboardApi;
   /** Dedicated extension-owned block menu contributions. */

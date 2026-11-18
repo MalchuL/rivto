@@ -7,7 +7,7 @@ import {
 import {
   createTestCoreEditor as createEditor,
   createTestReactEditor as createReactEditor,
-} from "../../test-utils";
+} from "../../../test-utils";
 
 describe("PanelSelectionManager", () => {
   test("reports pending restoration only for the current DOM root", async () => {

@@ -27,7 +27,7 @@
 
 ## 2. DOM-выделение
 
-Место: `packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts`,
+Место: `packages/react-rivto-editor/src/panels/managers/selection/panel-dom-selection.ts`,
 `createDOMSelection`, чтение и восстановление native selection.
 Даже каретка вызывает сбор всех блоков и поиск content внутри каждого:
 около 9172 вызовов поиска `[data-block-content]` за действие.

@@ -1,4 +1,4 @@
-import type { ReactPanelApi } from "../../panels/types";
+import type { ReactPanelApi } from "../../types";
 
 /**
  * State owned by one deferred selection request. Cancellation handles retain

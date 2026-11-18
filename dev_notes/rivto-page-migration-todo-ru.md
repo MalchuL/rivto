@@ -1272,7 +1272,7 @@ Architecture review отдельно от tests: проверены boundary eff
 PageDragOccurrence → shared registry → source controller → command → teardown.
 Boundary создаёт adapter/attachment после commit и освобождает registration и attachment;
 панель продолжает владеть Page controller. Geometry и model/panel заимствуются.
-CrossDocumentBlockPanel не раскрывает panel lifecycle; getDocument ограничен стабильной
+BlockDragOperations не раскрывает panel lifecycle; getDocument ограничен стабильной
 identity, id и model insertBlock. Selection остаётся существующим panel/core state:
 панели одного документа разделяют core selection, focus определяет active occurrence.
 Дубликаты manager fields, новый cache и зависимости не добавлены.

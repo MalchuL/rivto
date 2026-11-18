@@ -8,7 +8,7 @@ import {
   type BlockDropTargetsApi,
   type ResolvedBlockDropTarget,
 } from "@chulane/rivto-page";
-import type { CrossDocumentBlockPanel } from "../../extensions/block-drag/cross-document/panel";
+import type { BlockDragOperations } from "../../extensions/block-drag/block-drag-operations";
 import { transferBlocksBetweenDocuments } from "../../block-transfer/cross-document-block-transfer";
 import { crossDocumentPageRootControllers } from "../../extensions/block-drag/cross-document/target";
 import type { CrossDocumentPageRootController } from "../../extensions/block-drag/types";
@@ -25,7 +25,7 @@ interface PagePreviewCursor {
 /** Validated translation into the existing grouped command's anchor syntax. */
 interface PageBlockMove {
   readonly targetId: string | null;
-  readonly receiver: CrossDocumentBlockPanel;
+  readonly receiver: BlockDragOperations;
   readonly position: "before" | "after" | "inside";
 }
 
@@ -38,7 +38,7 @@ export class PageBlockDrag implements BlockDragAdapter {
    *
    * @param panel - Source occurrence and bounded grouped commands.
    */
-  constructor(private readonly panel: CrossDocumentBlockPanel) {}
+  constructor(private readonly panel: BlockDragOperations) {}
 
   /**
    * Offers an unclaimed release to a surface in this occurrence and reports acceptance.

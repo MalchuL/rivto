@@ -184,6 +184,7 @@ export function insertBlockElementSeparator(
   }
   const blockElementSeparator = createBlockFactory(type);
   if ("editor" in editor) {
+    // A separator beside a protected root would be outside the embed. Insert it as a child there.
     const destination = editor.blocks.canRemove(afterId)
       ? editor.blocks.getInsertionDestinationAfter(afterId)
       : { parentId: afterId };

@@ -1,8 +1,9 @@
-import type { ReactPanelApi } from "../../panels/types";
-import type { BlockContextMenuEntry, BlockContextMenuTargets } from "./types";
-import { executeBlockMenuEntry } from "./targets";
-/** Captured menu target IDs without an application-supplied panel. */
-export type { BlockContextMenuTargets } from "./types";
+import type { ReactPanelApi } from "../../types";
+import type {
+  BlockContextMenuEntry,
+  BlockContextMenuTargets,
+} from "../../../managers/block-context-menu/types";
+import { executeBlockMenuEntry } from "../../../managers/block-context-menu/targets";
 /** Binds shared menu contributions to the invoking editor occurrence. */
 export class PanelBlockContextMenuManager {
   /**

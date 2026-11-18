@@ -1,5 +1,8 @@
-import type { DocumentEventsApi, PanelEventsApi } from "./api";
-import type { PanelRegistration } from "../../panels/types";
+import type {
+  DocumentEventsApi,
+  PanelEventsApi,
+  PanelRegistration,
+} from "../../../managers/events/api";
 
 /** Local operations over the document's shared registrations. */
 export class PanelEventManager implements PanelEventsApi {

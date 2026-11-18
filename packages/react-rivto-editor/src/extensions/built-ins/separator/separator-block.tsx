@@ -130,6 +130,7 @@ function insertSeparator(
           ...separatorBlockFactory.createEmptyBlock(),
           listProps: { type: "list", checked: false },
         },
+        // A protected embed root can accept children but cannot be given a sibling here.
         reactPanel.blocks.canRemove(block.id)
           ? reactPanel.blocks.getInsertionDestinationAfter(block.id)
           : { parentId: block.id },

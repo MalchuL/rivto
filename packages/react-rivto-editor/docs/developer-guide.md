@@ -370,7 +370,7 @@ src/
     blocks/               internal block/renderer registries
     events/               delegated browser event runtime
     extensions/           setup ownership and mounted UI
-    selection/            DOM selection bridge
+    selection/            native DOM selection snapshots for editable text
     slash/                React-owned slash-command registry
     surfaces/             surface/wrapper registry
   surfaces/
@@ -378,18 +378,26 @@ src/
     edgeless/
   capabilities.ts         public contract re-exports
   editor/                 shared runtime, storage and creation options
-  panels/                 concrete panels, bounded block/element operations and contracts
-  components/editor-panel/ document/subtree component, props and shared contexts
-  components/editor-embed/ protected embedding component and its props
+  panels/                 concrete panels, shared provider and contexts, bounded operations and contracts
+    managers/             per-panel selection, clipboard, events, keyboard, slash commands and block menus
+    editor-panel/         document/subtree component and its props
+    editor-embed/         protected embedding component and its props
   hooks/editor/           public editor hooks and internal context readers
 ```
+
+Extensions borrow the receiving view through the public `ReactPanelApi` contract
+(available internally from `panels/types`), editor hooks or the event context.
+Shared block-menu operations belong in `managers/block-context-menu/` and DOM
+queries scoped to a rendered occurrence belong in `panels/panel-dom.ts`.
+An extension that mounts a view can import the `EditorPanel` or `EditorEmbed`
+component directly. Panel managers and React contexts are internal to the integration.
 
 Recommended reading order:
 
 1. `demo/src/App.tsx`
 2. `src/editor/react-editor.ts` and `src/panels/types.ts`
 3. `src/extensions/built-ins/built-ins.ts`
-4. `src/components/editor-panel/editor-panel.tsx`
+4. `src/panels/editor-panel/editor-panel.tsx`
 5. `src/hooks/blocks/use-block.ts`
 6. `src/surfaces/page/page-block.tsx`
 7. `src/managers/events/event-manager.ts`

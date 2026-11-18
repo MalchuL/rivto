@@ -212,7 +212,7 @@ fixture/assertion search matches, not a count of production defects.
 - `packages/react-rivto-editor/src/managers/blocks/block-manager.test.ts`
 - `packages/react-rivto-editor/src/managers/clipboard/clipboard-converters.test.ts`
 - `packages/react-rivto-editor/src/managers/clipboard/clipboard-format-registry.test.ts`
-- `packages/react-rivto-editor/src/managers/selection/panel-selection-manager.test.ts`
+- `packages/react-rivto-editor/src/panels/managers/selection/panel-selection-manager.test.ts`
 - `packages/react-rivto-editor/src/managers/slash/slash-command-registry.test.ts`
 - `packages/react-rivto-editor/src/managers/surfaces/surface-manager.test.ts`
 - `packages/react-rivto-editor/src/panels/panel-boundaries.test.ts`

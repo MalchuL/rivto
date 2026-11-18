@@ -7,6 +7,12 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 import noBuiltInExtensionImports from "./eslint-rules/no-built-in-extension-imports.js";
 
+const relativeReactImports = {
+  group: ["@/*"],
+  message:
+    "Use relative imports inside @chulane/rivto-react; run `pnpm ui:add` so shadcn output is rewritten.",
+};
+
 const methodDocumentation = {
   enableFixer: false,
   exemptEmptyConstructors: false,
@@ -114,11 +120,29 @@ export default tseslint.config(
       "no-restricted-imports": [
         "error",
         {
+          patterns: [relativeReactImports],
+        },
+      ],
+    },
+  },
+  {
+    files: ["packages/react-rivto-editor/src/extensions/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
           patterns: [
+            relativeReactImports,
             {
-              group: ["@/*"],
+              regex: "(?:^|/)panels/types$",
+              allowImportNames: ["ReactPanelApi"],
+              message: "Use only the public ReactPanelApi contract from panels/types.",
+            },
+            {
+              regex:
+                "(?:^|/)panels(?:$|/(?!types$|panel-dom$|editor-panel/editor-panel$|editor-embed/editor-embed$))",
               message:
-                "Use relative imports inside @chulane/rivto-react; run `pnpm ui:add` so shadcn output is rewritten.",
+                "Use the public ReactPanelApi, editor hooks, or scoped panel DOM queries. Import EditorPanel or EditorEmbed when mounting a view.",
             },
           ],
         },

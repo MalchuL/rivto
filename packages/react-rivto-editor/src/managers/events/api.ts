@@ -1,7 +1,30 @@
-import type { PanelEventScope } from "../../panels/types";
 import type { DOMEventDefinition, DOMEventName, DOMEventTarget } from "./dom-types";
 import type { EditorEvent } from "./editor-event";
 import type { EditorEventHandler } from "./types";
+
+/** Local registration identity and DOM root belonging to one mounted EditorPanel. */
+export interface PanelEventScope {
+  /** Stable occurrence identity; shared shortcut settings continue to use semantic action IDs. */
+  readonly id: string;
+  /**
+   * Reads the root currently available to this occurrence's handlers.
+   *
+   * @returns Mounted root, or null before mounting, when disabled, or after cleanup.
+   */
+  getRoot(): HTMLElement | null;
+}
+
+/** A panel event scope that also retains the disposers of its local registrations. */
+export interface PanelRegistration extends PanelEventScope {
+  /**
+   * Retains local registration cleanup until this occurrence is destroyed.
+   *
+   * @param dispose - Callback releasing the occurrence's registration.
+   * @returns Idempotent disposer, also invoked during occurrence cleanup.
+   * @throws If cleanup registration is attempted during or after panel destruction.
+   */
+  registerCleanup(dispose: () => void): () => void;
+}
 
 /** Event registrations for one EditorPanel. */
 export interface PanelEventsApi {

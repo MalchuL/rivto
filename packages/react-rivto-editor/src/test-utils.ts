@@ -1,4 +1,4 @@
-import type { ReactEditorConfiguration } from "./editor/types";
+import type { ReactEditorApi, ReactEditorConfiguration } from "./editor/types";
 import type { ReactPanelApi } from "./panels/types";
 import { ReactPanel } from "./panels/react-panel";
 import { YjsDoc } from "@chulane/crdt-doc";
@@ -14,13 +14,13 @@ import {
   ModeManager,
   type EditorMode,
 } from "@chulane/rivto";
-import { ChildrenPanel } from "@chulane/rivto";
+import { ChildrenPanel, type PanelOptions } from "@chulane/rivto";
 import { createReactEditor, type CreateReactEditorOptions } from "./editor/react-editor";
 import { EditorStorage } from "./editor/editor-storage";
 import { DEFAULT_WRITING_BLOCK_TYPE } from "./extensions/built-ins/page/default-writing-block";
 import { createElement, type ReactNode } from "react";
-import { ReactPanelContext } from "./components/editor-panel/react-panel-context";
-import { EditorRootContext } from "./components/editor-panel/editor-root-context";
+import { ReactPanelContext } from "./panels/react-panel-context";
+import { EditorRootContext } from "./panels/editor-root-context";
 
 /**
  * Supplies an already constructed test panel to synchronous renderer and hook tests.
@@ -100,6 +100,22 @@ export async function createTestCoreEditor(
   });
   modes.set(proxy, options.mode ?? "block");
   return proxy;
+}
+
+/**
+ * Creates a headless subtree view on an existing test runtime.
+ *
+ * @param editor - Runtime that owns cleanup of the returned view.
+ * @param options - Optional block and element boundaries for this occurrence.
+ * @returns A mounted test panel sharing the supplied runtime's document.
+ * @throws If the runtime has been destroyed or the panel cannot be initialized.
+ */
+export function createTestPanel(editor: ReactEditorApi, options?: PanelOptions): ReactPanel {
+  const core = new ChildrenPanel(editor, options);
+  editor.registerCleanup(() => void core.destroy());
+  const panel = new ReactPanel(editor, core);
+  editor.registerCleanup(panel.destroy);
+  return panel;
 }
 
 /**

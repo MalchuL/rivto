@@ -1,7 +1,7 @@
 import { BlockDOMSelection } from "@chulane/rivto-page";
 import { isStructuralSelection, type Selection } from "@chulane/rivto";
-import { PageNavigationController } from "../../surfaces/page/page-navigation-controller";
-import type { RestoreDOMSelectionOptions } from "./api";
+import { PageNavigationController } from "../../../surfaces/page/page-navigation-controller";
+import type { RestoreDOMSelectionOptions } from "../../../managers/selection/api";
 
 /**
  * DOM ↔ editor selection bridge for Rivto's multi-contenteditable surfaces.

@@ -386,6 +386,7 @@ export class EdgelessTransformController {
    * @param eventDetail - Click count used to preserve double-click text editing.
    */
   finishControls(reactPanel: ReactPanelApi, commit: boolean, eventDetail = 1): void {
+    // Controls in another view of the same document cannot finish this gesture.
     if (this.reactPanel === reactPanel && this.start) {
       this.finish(commit, eventDetail);
     }

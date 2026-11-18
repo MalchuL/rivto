@@ -1,5 +1,5 @@
-import type { SlashCommand } from "./types";
-import type { SlashCommandRegistry } from "./slash-command-registry";
+import type { SlashCommand } from "../../../managers/slash/types";
+import type { SlashCommandRegistry } from "../../../managers/slash/slash-command-registry";
 
 /** Command availability and execution in one bound editor panel. */
 export interface PanelSlashCommandsApi extends Pick<

@@ -41,6 +41,7 @@ function NestingLines() {
     if (!view) {
       return;
     }
+    // Rows inside an embed belong to its own outline, even when both panels show the same block.
     const dom = new PanelDOM(root);
     const observed = new Set<Element>();
     const observer = new ResizeObserver(scheduleOutlineRefresh);

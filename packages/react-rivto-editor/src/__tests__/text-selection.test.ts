@@ -1,5 +1,5 @@
 import { BlockDOMSelection, BlockSelectionEndpoints } from "@chulane/rivto-page";
-import { createTextSelection } from "../managers";
+import { createTextSelection } from "@chulane/rivto";
 
 const blocks = [
   { id: "first", length: 10 },

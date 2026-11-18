@@ -12,7 +12,7 @@ import { DocumentModelImpl, DocumentStorage } from "@chulane/document-model";
 import { createElement, useContext, type ComponentType, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { type BlockWrapperProps } from "../blocks";
-import { EditorPanel } from "../components/editor-panel/editor-panel";
+import { EditorPanel } from "../panels/editor-panel/editor-panel";
 import { ChildrenPanel } from "@chulane/rivto";
 import { EmbeddingPanel } from "@chulane/rivto";
 import { EditorStorage } from "../editor/editor-storage";
@@ -35,7 +35,8 @@ import {
   createTestReactEditor as createReactEditor,
   createTestMultiEditor,
 } from "../test-utils";
-import { isReactPanelApi, isRivtoEditor } from "../utils";
+import { isRivtoEditor } from "../utils";
+import { isReactPanelApi } from "../panels/is-react-panel-api";
 
 const Empty: ComponentType<{ blockId: string }> = () => null;
 const EmptyComponent: ComponentType = () => null;

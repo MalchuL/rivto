@@ -10,7 +10,6 @@
 import { getSelectedBlockIds, isStructuralSelection } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../../../panels/types";
 import { firstKeyboardTarget, isEditableKeyboardEvent } from "../../../../managers";
-import type { PanelSelectionApi } from "../../../../managers/selection/api";
 import { PageNavigationController } from "../../../../surfaces/page/page-navigation-controller";
 
 /** Active viewport settlement for one page surface. */
@@ -83,7 +82,10 @@ function restoreBlockViewportTop(
  * @returns `true` when the shortcut was claimed.
  */
 export function applyIndentShortcut(
-  selectionManager: PanelSelectionApi,
+  selectionManager: Pick<
+    ReactPanelApi["selection"],
+    "readDOM" | "get" | "set" | "restoreDOM" | "scheduleIfSelectionUnchanged"
+  >,
   root: HTMLElement,
   event: KeyboardEvent,
   outdent: boolean,
@@ -108,6 +110,7 @@ export function applyIndentShortcut(
     return false;
   }
   const targetIds = getSelectedBlockIds(target.item);
+  // Check the entire selection because outdenting a top-level child can cross the panel boundary.
   if (outdent && targetIds.some((id) => !reactPanel.blocks.canOutdent(id))) {
     return true;
   }

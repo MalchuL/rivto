@@ -2,7 +2,7 @@ import { KeyboardRuntime } from "@chulane/rivto-keyboard";
 import type { RegistrationOwner } from "../extensions/types";
 import type { EventManager } from "../events/event-manager";
 import type { EditorEventHandler } from "../events/types";
-import type { PanelEventScope } from "../../panels/types";
+import type { PanelEventScope } from "../events/api";
 import type { KeyboardEditorEvent } from "./keyboard-editor-event";
 import type {
   KeyboardBindingSnapshot,

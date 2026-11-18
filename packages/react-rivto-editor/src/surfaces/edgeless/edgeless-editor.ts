@@ -13,6 +13,7 @@ export class EdgelessEditor extends CanvasEditor<EdgelessToolContext> {
    */
   constructor(panel: ReactPanelApi) {
     super({
+      // The canvas and its tools must operate on the same mounted view of the document.
       source: new EdgelessCanvasAdapter(panel),
       tools: new EdgelessToolContext(panel),
       canvas: {

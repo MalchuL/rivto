@@ -1,7 +1,7 @@
 import type { ComponentType, ReactNode, SVGProps } from "react";
 import type { ReactPanelApi } from "../../panels/types";
 
-/** Stable targets captured when a block context menu opens. IDs belong to the invoking panel. */
+/** Stable targets captured when a block context menu opens. IDs belong to the invoking panel. Callers supply these captured IDs without supplying a panel. */
 export interface BlockContextMenuTargets {
   /** Clicked block, whose presence in selection determines group targeting. */
   readonly blockId: string;

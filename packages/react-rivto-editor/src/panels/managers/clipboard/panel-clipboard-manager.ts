@@ -1,5 +1,6 @@
-import type { ReactPanelApi } from "../../panels/types";
-import type { ClipboardApi, PanelClipboardApi, SharedClipboardOperations } from "./api";
+import type { ReactPanelApi } from "../../types";
+import type { ClipboardApi, SharedClipboardOperations } from "../../../managers/clipboard/api";
+import type { PanelClipboardApi } from "./panel-clipboard-api";
 import type { Selection } from "@chulane/rivto";
 
 /** Clipboard operations use this panel; parsers, formatters, and strategies stay document-owned. */

@@ -1,6 +1,12 @@
 import type { RegistrationOwner } from "../extensions/types";
 import { DOMEventListeners } from "./dom-event-listeners";
-import type { AnyEditorEvent, DOMRegistration, NativeListenerGroup } from "./types";
+import type {
+  AnyEditorEvent,
+  DOMRegistration,
+  NativeListenerGroup,
+  EditorEventRoots,
+  EditorEventHandler,
+} from "./types";
 /**
  * Browser event registration and dispatch. Event payloads identify the receiving
  * panel and its selection; document mutations still go through core managers.
@@ -8,9 +14,7 @@ import type { AnyEditorEvent, DOMRegistration, NativeListenerGroup } from "./typ
 import type { DOMEventDefinition, DOMEventName, DOMEventTarget } from "./dom-types";
 import type { EditorEvent } from "./editor-event";
 import { PanelEventFactory } from "./panel-event-factory";
-import type { PanelRegistry } from "../../panels/panel-registry";
-import type { EditorEventHandler } from "./types";
-import type { PanelEventScope } from "../../panels/types";
+import type { PanelEventScope } from "./api";
 
 /**
  * Registers and dispatches browser events for all panels of one document.
@@ -33,7 +37,7 @@ export class EventManager {
     this.dispatch(group, event, root),
   );
   private readonly eventFactory: PanelEventFactory;
-  private readonly panels: Pick<PanelRegistry, "subscribeRoots" | "getRoots">;
+  private readonly panels: Pick<EditorEventRoots, "subscribeRoots" | "getRoots">;
   private readonly unsubscribeRoots: () => void;
   private readonly claimedEvents = new WeakSet<globalThis.Event>();
   private destroyed = false;
@@ -45,10 +49,7 @@ export class EventManager {
    * @param extensions - Internal registration ownership and destruction guard.
    */
   constructor(
-    panels: Pick<
-      PanelRegistry,
-      "subscribeRoots" | "getRoots" | "resolveEventRoot" | "getApi" | "getSurfaceType"
-    >,
+    panels: EditorEventRoots,
     private readonly extensions: RegistrationOwner,
   ) {
     this.panels = panels;

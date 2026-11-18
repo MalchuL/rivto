@@ -1,4 +1,4 @@
-import type { PanelEventScope } from "../../panels/types";
+import type { PanelEventScope } from "../events/api";
 import type { EditorEventHandler } from "../events/types";
 import type {
   KeyboardBindingSnapshot,

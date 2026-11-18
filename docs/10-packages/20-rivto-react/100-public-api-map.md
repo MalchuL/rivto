@@ -56,10 +56,13 @@ src/editor/
   runtime, storage, creation options
 
 src/panels/
-  ReactPanel lifecycle and ReactPanelApi (bounded PanelAPI lives in core)
+  ReactPanel lifecycle, shared provider, contexts and ReactPanelApi (bounded PanelAPI lives in core)
 
-src/components/editor-panel/ + src/components/editor-embed/
-  React components, contexts and component props
+src/panels/managers/
+  per-panel managers and selection DOM operations
+
+src/panels/editor-panel/ + src/panels/editor-embed/
+  React components and their props
 
 src/hooks/editor/
   usePanel, useReactPanel, useReactEditor and internal context readers

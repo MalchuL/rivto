@@ -238,6 +238,7 @@ export function findEdgelessRuntime(
   if (!adapters) {
     return undefined;
   }
+  // Two canvases can share an extension registry while projecting different selections.
   let runtime = adapters.get(editor);
   if (!runtime) {
     runtime = new EdgelessSelectionRuntime(editor);

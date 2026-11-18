@@ -1,5 +1,5 @@
-import type { PanelRegistration } from "../../panels/types";
-import type { DocumentKeyboardApi, KeyboardApi } from "./keyboard-api";
+import type { PanelRegistration } from "../../../managers/events/api";
+import type { DocumentKeyboardApi, KeyboardApi } from "../../../managers/keyboard/keyboard-api";
 
 /** Local operations over the document's shared registrations. */
 export class PanelKeyboardManager implements KeyboardApi {

@@ -241,6 +241,7 @@ export class PanelRegistry {
     const ElementConstructor = fallback.ownerDocument.defaultView!.Element;
     const element =
       target instanceof ElementConstructor ? target : (target as Node | null)?.parentElement;
+    // An event from an embed also bubbles through its host, so start with the innermost panel.
     const boundary = element?.closest<HTMLElement>(PANEL_SELECTOR);
     const activatesPanel =
       raw.type === "focusin" ||

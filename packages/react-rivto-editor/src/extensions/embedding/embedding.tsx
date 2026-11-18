@@ -7,7 +7,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { editorControlProps } from "../../constants";
-import { EditorEmbed } from "../../components/editor-embed/editor-embed";
+import { EditorEmbed } from "../../panels/editor-embed/editor-embed";
 import type { BlockResolution } from "../../editor/editor-storage";
 import { EditorStorageContext } from "../../editor/editor-storage-context";
 import { useBlockNode, useBlockSelectionAnchor, usePanel } from "../../hooks";

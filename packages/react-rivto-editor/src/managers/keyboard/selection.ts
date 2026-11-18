@@ -66,7 +66,7 @@ export function shouldDeleteSelection(selection: Selection | undefined): boolean
  * @returns Current selection suitable for a keyboard command.
  */
 export function readKeyboardSelection(
-  selectionManager: PanelSelectionApi,
+  selectionManager: Pick<PanelSelectionApi, "get" | "set" | "readDOM">,
   blocks: Pick<BlocksApi, "getBlockNode">,
   emptyBlockId?: string,
 ): Selection | undefined {
@@ -90,7 +90,7 @@ export function isEditableKeyboardEvent(event: Event): boolean {
 /** Restores the native caret represented by current editor selection state. */
 export function focusSelectionCaret(
   root: HTMLElement,
-  selectionManager: PanelSelectionApi,
+  selectionManager: Pick<PanelSelectionApi, "get">,
 ): boolean {
   const target = firstKeyboardTarget(selectionManager.get());
   return Boolean(target?.collapsed && focusBlock(root, target.blockId, target.offset ?? 0));

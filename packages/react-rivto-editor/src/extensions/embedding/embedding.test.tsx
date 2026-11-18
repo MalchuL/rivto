@@ -2,12 +2,9 @@ import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage } from "@chulane/document-model";
 import { createStructuralSelection } from "@chulane/rivto";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TestPanel } from "../../test-utils";
-import { ReactPanel } from "../../panels/react-panel";
-import { ChildrenPanel } from "@chulane/rivto";
+import { createTestPanel, TestPanel, createTestMultiEditor } from "../../test-utils";
 import { EditorStorageContext } from "../../editor/editor-storage-context";
 import { PageSurface } from "../../surfaces/page/page-surface";
-import { createTestMultiEditor } from "../../test-utils";
 import { standardPreset } from "../built-ins/built-ins";
 import { transferBlocksBetweenDocuments } from "../../block-transfer/cross-document-block-transfer";
 import { EMBEDDING_BLOCK_TYPE, embeddingExtension } from "./embedding";
@@ -39,7 +36,7 @@ test("embedding props validate, snapshots and structured clipboard retain refere
   });
   const formats = reactEditor.clipboardFormats.format([reference]);
   expect(formats.plain).toBe("Embedded block: source/target");
-  const panel = new ReactPanel(reactEditor, new ChildrenPanel(reactEditor));
+  const panel = createTestPanel(reactEditor);
   const standalone = renderToStaticMarkup(
     <TestPanel panel={panel}>
       <PageSurface />

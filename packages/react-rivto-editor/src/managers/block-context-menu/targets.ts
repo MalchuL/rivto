@@ -19,6 +19,7 @@ export function blockMenuTargets(
   reactPanel: ReactPanelApi,
   blockId: string,
 ): BlockContextMenuContext {
+  // Resolve menu targets against the selection in the view where the menu opened.
   const selection = reactPanel.selection.get();
   const blockIds = reactPanel.blocks.getOrderedIds(
     selection && reactPanel.selection.isBlockSelected(blockId)
