@@ -26,7 +26,7 @@ interface ViewportEdges {
 /**
  * Draws lines beside visible child blocks without participating in page layout.
  *
- * @returns A body-hosted overlay for the attached surface, or null before attachment.
+ * @returns An overlay above the canvas plane or in the page body for the attached surface, or null before attachment.
  */
 function NestingLines() {
   const { element: root } = useEditorRoot();
@@ -53,7 +53,7 @@ function NestingLines() {
      * Each ordinary child outline connects its owning row to the next sibling or subtree end.
      * Custom layouts can suppress their own lines independently of nested outlines.
      * Coordinates account for scrollports, canvas zoom and RTL direction. Gaps in each
-     * stroke keep drop feedback and visible controls legible underneath the body portal.
+     * stroke keep drop feedback and visible controls legible underneath the overlay.
      *
      * @returns The overlay reflects the latest rendered outline.
      */
@@ -186,7 +186,7 @@ function NestingLines() {
         const x = anchorX - origin.left;
         const card = block.closest<HTMLElement>(CARD_CONTENT_SELECTOR);
         if (card) {
-          // The body overlay is outside the card's scrollport, so clip each line here.
+          // The overlay is outside the card's scrollport, so clip each line here.
           const bounds = card.getBoundingClientRect();
           if (x + origin.left < bounds.left || x + origin.left > bounds.right) {
             continue;
@@ -197,7 +197,7 @@ function NestingLines() {
         if (end <= start) {
           continue;
         }
-        // The body overlay also sits above in-flow controls, so preserve their paint.
+        // The overlay also sits above in-flow controls, so preserve their paint.
         // Read the controls only once and only when at least one outline is visible.
         if (!controls) {
           const byTopEdge = findPanelElements(
@@ -278,8 +278,7 @@ function NestingLines() {
       observed.clear();
       nextObserved.forEach((element) => observed.add(element));
       const rootStyle = view!.getComputedStyle(root);
-      // The portal does not inherit clipping from an embedded surface's ancestors.
-      const bounds = overlay.getBoundingClientRect();
+      // The portal inherits its host's clip. Only the skipped ancestors need explicit clipping.
       let top = -Infinity;
       let right = Infinity;
       let bottom = Infinity;
@@ -287,7 +286,7 @@ function NestingLines() {
       let clipped = false;
       for (
         let element: HTMLElement | null = root;
-        element && element !== root.ownerDocument.body;
+        element && element !== overlay.parentElement;
         element = element.parentElement
       ) {
         const overflow = view!.getComputedStyle(element);
@@ -309,11 +308,11 @@ function NestingLines() {
       // Unclipped axes must remain visible beyond the SVG's viewport-sized box.
       const extent = Math.max(
         root.ownerDocument.documentElement.scrollHeight,
-        bounds.width,
-        bounds.height,
+        origin.width,
+        origin.height,
       );
       overlay.style.clipPath = clipped
-        ? `inset(${Number.isFinite(top) ? top - bounds.top : -extent}px ${Number.isFinite(right) ? bounds.right - right : -extent}px ${Number.isFinite(bottom) ? bounds.bottom - bottom : -extent}px ${Number.isFinite(left) ? left - bounds.left : -extent}px)`
+        ? `inset(${Number.isFinite(top) ? top - origin.top : -extent}px ${Number.isFinite(right) ? origin.right - right : -extent}px ${Number.isFinite(bottom) ? origin.bottom - bottom : -extent}px ${Number.isFinite(left) ? left - origin.left : -extent}px)`
         : "";
       overlay.style.setProperty("--rivto-muted", rootStyle.getPropertyValue("--rivto-muted"));
       overlay.style.setProperty(
@@ -380,7 +379,8 @@ function NestingLines() {
     <svg ref={overlayRef} className="rivto-nesting-lines" aria-hidden="true" data-nesting-lines>
       <path ref={pathRef} />
     </svg>,
-    root.ownerDocument.body,
+    // The viewport clips both surface and embed overlays as the camera moves underneath them.
+    root.closest('[data-rivto-surface="edgeless"]') ?? root.ownerDocument.body,
   );
 }
 

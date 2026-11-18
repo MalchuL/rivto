@@ -207,6 +207,9 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
       | [action: BlockStructuralAction, context: BlockStructuralContext, ids: readonly string[]]
   ): boolean {
     const [action, context, target] = args;
+    // These actions report whether a handler claimed them. Core's processChildTransition
+    // calls onChildExit for the previous parent, then onChildEnter for the next parent,
+    // passing the updated child from each applicable handler to the next.
     switch (action) {
       case "onIndent":
       case "onOutdent":

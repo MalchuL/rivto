@@ -116,7 +116,8 @@ test("selects the default name by dragging the visible text", async ({ page }) =
   const block = page.locator('[data-block-type="bento"]').first();
   await block.locator(":scope > .rivto-block-row [data-collapse-toggle]").click();
   const name = block.locator(".rivto-container-summary-title");
-  await name.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  // Wait for the collapsed row to settle before taking coordinates for the drag.
+  await name.hover();
   const rect = (await name.boundingBox())!;
   await page.mouse.move(rect.x + 1, rect.y + rect.height / 2);
   await page.mouse.down();

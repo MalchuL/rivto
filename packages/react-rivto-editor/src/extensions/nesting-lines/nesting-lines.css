@@ -8,6 +8,11 @@
   pointer-events: none;
 }
 
+[data-rivto-surface="edgeless"] > .rivto-nesting-lines {
+  width: 100%;
+  height: 100%;
+}
+
 .rivto-nesting-lines path {
   fill: none;
   stroke: color-mix(in srgb, var(--rivto-muted) 65%, var(--rivto-background));

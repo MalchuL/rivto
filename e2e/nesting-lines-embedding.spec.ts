@@ -40,11 +40,16 @@ test("embedded nesting lines follow the Edgeless camera and are removed with the
       embedded.evaluate((root) => {
         const overlay = document.querySelectorAll<SVGSVGElement>("[data-nesting-lines]")[1]!;
         const viewport = root.closest<HTMLElement>(".edgeless-viewport")!;
-        const inset = overlay.style.clipPath.match(/inset\(([-\d.]+)px ([-\d.]+)px ([-\d.]+)px/)!;
+        // The canvas clips its overlay natively, including after the document scrolls.
+        if (
+          overlay.parentElement !== viewport ||
+          getComputedStyle(viewport).overflowY !== "hidden"
+        ) {
+          return Infinity;
+        }
         return Math.abs(
           overlay.getBoundingClientRect().bottom -
-            Number(inset[3]) -
-            viewport.getBoundingClientRect().bottom,
+            (viewport.getBoundingClientRect().top + viewport.clientTop + viewport.clientHeight),
         );
       }),
     )

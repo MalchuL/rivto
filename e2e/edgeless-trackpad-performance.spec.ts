@@ -124,6 +124,34 @@ async function recordEmptyControlScans(page: Page): Promise<void> {
 }
 
 /**
+ * Places two unmounted demo cards at the same horizontal entry point.
+ *
+ * Both short frames need a height correction on mount. The ordinary demo arranges
+ * cards to avoid overlap, so a horizontal sweep can otherwise mount them one at a time.
+ *
+ * @param canvas - Canvas at its initial camera position, before input recording starts.
+ * @param mounted - Card IDs already rendered at that position.
+ * @returns IDs of the two cards that the native wheel sweep must bring into view.
+ */
+async function placeCardsForBatch(canvas: Locator, mounted: (string | null)[]): Promise<string[]> {
+  return canvas.evaluate((viewport, mounted) => {
+    const { editor } = (window as TrackpadInspection).__rivtoDemo;
+    const cards = editor.elements
+      .getElementNodes()
+      .filter((element) => element.type === "block" && !mounted.includes(element.id))
+      .slice(0, 2);
+    const x = viewport.clientWidth + 600;
+    editor.elements.updateElements(
+      cards.map(({ id }, index) => ({
+        id,
+        patch: { frame: { x, y: index * 300, height: 1 } },
+      })),
+    );
+    return cards.map(({ id }) => id);
+  }, mounted);
+}
+
+/**
  * Pans horizontally with 25 native trackpad samples delivered across animation frames.
  *
  * @param page - Demo browser receiving native wheel input.
@@ -221,6 +249,7 @@ for (const repeat of [0, 200]) {
     const initial = await canvas
       .locator("[data-edgeless-root]")
       .evaluateAll((cards) => cards.map((card) => card.getAttribute("data-edgeless-root")));
+    const batchCards = repeat > 0 ? await placeCardsForBatch(canvas, initial) : [];
     await recordTrackpadLoading(page);
     await recordEmptyControlScans(page);
     await panWithTrackpad(page, 72);
@@ -244,7 +273,8 @@ for (const repeat of [0, 200]) {
     expect(stats.targetScans).toBe(0);
     await assertCameraSkipsViewportLayout(page, canvas);
     if (repeat > 0) {
-      expect(advanced.some((id) => !initial.includes(id))).toBe(true);
+      expect(batchCards).toHaveLength(2);
+      expect(advanced).toEqual(expect.arrayContaining(batchCards));
       expect(stats.heightWrites).toBeGreaterThan(1);
       expect(stats.heightBatches.some((count) => count > 1)).toBe(true);
     }
