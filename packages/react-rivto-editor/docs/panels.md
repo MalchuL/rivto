@@ -55,8 +55,8 @@ clipboard strategies and history. Destroying a core panel
 releases its own manager subscriptions without destroying the borrowed editor or
 its registrations. Constructing one requires the standard core block and element
 managers on the supplied editor. Clipboard paste strategies receive
-the destination through `PasteContext.editor`; stateful strategies can implement
-`forEditor` to bind their operations to that destination.
+the receiving editor through `PasteContext.editor` in both `matches` and `paste`.
+Use that editor for selection reads and document mutations on each invocation.
 When a panel is used as the editor for another panel, the inner panel cannot
 access block or element subtrees hidden by its source panel. An omitted inner
 root uses the source panel's roots; choosing the same hidden root preserves that

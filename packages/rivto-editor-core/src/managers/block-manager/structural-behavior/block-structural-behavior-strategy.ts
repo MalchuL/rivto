@@ -1,3 +1,4 @@
+import type { BlockRegistryManager } from "../../block-registry-manager/block-registry-manager";
 import {
   validateBlockForest,
   type BlockDestination,
@@ -9,10 +10,15 @@ import type {
   BlockChildTransition,
   BlockMoveRequest,
   BlockRelocationCommands,
-  BlockStructuralAction,
   BlockStructuralBehavior,
   BlockStructuralContext,
 } from "../../../block-behaviors/types";
+
+/** Structural operations borrowed by document and panel block managers. */
+export type StructuralBehaviorRegistry = Pick<
+  BlockRegistryManager,
+  "getBehaviorRegistrations" | "dispatchBehavior"
+>;
 
 /** Ordered editor-local strategies for structural block operations. */
 export class BlockStructuralBehaviorStrategy {
@@ -35,14 +41,7 @@ export class BlockStructuralBehaviorStrategy {
       | "getRootIds"
       | "updateBlock"
     >,
-    private readonly registry: {
-      /**
-       * Reads behavior entries in priority order.
-       *
-       * @returns The registry-owned, read-only ordered entries.
-       */
-      getBehaviorRegistrations(): readonly { readonly behavior: BlockStructuralBehavior }[];
-    },
+    private readonly registry: StructuralBehaviorRegistry,
     private readonly documentBlocks: BlockRelocationCommands,
   ) {}
 
@@ -109,8 +108,8 @@ export class BlockStructuralBehaviorStrategy {
     const parentAction = action === "indent" ? "onChildIndent" : "onChildOutdent";
     const blockAction = action === "indent" ? "onIndent" : "onOutdent";
     if (
-      (parentContext && this.dispatch(parentAction, parentContext, ids)) ||
-      this.dispatch(blockAction, context, ids)
+      (parentContext && this.registry.dispatchBehavior(parentAction, parentContext, ids)) ||
+      this.registry.dispatchBehavior(blockAction, context, ids)
     ) {
       return "handled";
     }
@@ -142,7 +141,7 @@ export class BlockStructuralBehaviorStrategy {
         block,
         parentId: this.blocks.getParentId(id) ?? null,
       };
-      if (this.dispatch("onStructuralDelete", context, ids, consulted)) {
+      if (this.registry.dispatchBehavior("onStructuralDelete", context, ids, consulted)) {
         return true;
       }
     }
@@ -238,38 +237,5 @@ export class BlockStructuralBehaviorStrategy {
       destination = this.blocks.getInsertionDestinationAfter(targetId);
     }
     return this.canMove({ sources: groups.get(null) ?? [], destination });
-  }
-
-  /**
-   * Invokes applicable handlers for one block until one claims the action.
-   *
-   * Availability is checked immediately before each handler, in priority order.
-   * Group callers may pass a set to skip behaviors consulted for earlier blocks.
-   * The caller owns the transaction and any selection or focus restoration.
-   *
-   * @param action - Structural action whose handler is requested.
-   * @param context - Current shallow block and panel-scoped operations.
-   * @param ids - Complete requested block group.
-   * @param consulted - Optional set updated with behaviors called for this group.
-   * @returns True when a handler accepts or rejects the action, otherwise false.
-   * @throws If an availability predicate, handler, or delegated operation fails.
-   */
-  private dispatch(
-    action: BlockStructuralAction,
-    context: BlockStructuralContext,
-    ids: readonly string[],
-    consulted?: Set<BlockStructuralBehavior>,
-  ): boolean {
-    for (const { behavior } of this.registry.getBehaviorRegistrations()) {
-      const handler = behavior[action];
-      if (!handler || consulted?.has(behavior) || !behavior.isAvailable(context.block)) {
-        continue;
-      }
-      consulted?.add(behavior);
-      if (handler.call(behavior, context, ids) !== "unhandled") {
-        return true;
-      }
-    }
-    return false;
   }
 }

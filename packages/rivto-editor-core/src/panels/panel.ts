@@ -1,3 +1,5 @@
+import type { BlockManager } from "../managers/block-manager";
+import type { ElementManager } from "../managers/element-manager";
 import type { DocumentModel } from "@chulane/document-model";
 import type { DocumentEditorAPI } from "../editor/types";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "../editor/model";
@@ -16,17 +18,34 @@ import type { PanelAPI, PanelOptions } from "./types";
  * retains ownership of the document editor; this panel never destroys it.
  */
 export abstract class Panel implements PanelAPI {
-  readonly blocks: PanelBlocks;
+  /**
+   * Reads and mutations constrained to the panel block tree.
+   *
+   * The selected root may be hidden or included and protected. Reads of an
+   * absent or outside block return the manager's missing value, while mutations
+   * reject outside targets before writing. `parentId: null` selects this panel's
+   * root list. Existing document caches and processor registrations remain shared;
+   * subscriptions created through this manager are released with the panel.
+   */
+  readonly blocks: BlockManager;
   /** Fixed block boundary, or undefined to expose the document's block roots. */
   readonly rootBlockId: string | undefined;
   /** Fixed element container, excluded from element operations; null selects document roots. */
   readonly rootElementId: string | null;
-  /** Reads and mutations limited to descendants of the fixed element container. */
-  readonly elements: PanelElements;
+  /**
+   * Reads and mutations constrained to the independent element tree.
+   *
+   * The selected element container is excluded from the tree. A missing container
+   * reads as empty and rejects writes. `parentId: null` selects its child list;
+   * a null container selects document roots. Reads use the document's caches and
+   * mutations use its processors and history. Subscriptions created through this
+   * manager are released with the panel.
+   */
+  readonly elements: ElementManager;
   /** Selection commands constrained to this panel. */
   readonly selection: PanelSelection;
   /** Clipboard commands constrained to this panel and using shared strategies. */
-  readonly clipboard: ClipboardManager;
+  readonly clipboard: DocumentEditorAPI["clipboard"];
   private readonly subscriptions = new Set<() => void>();
   /**
    * Creates element operations and records the selected subtree boundaries.
@@ -100,6 +119,10 @@ export abstract class Panel implements PanelAPI {
   /**
    * Observes the source editor's document-wide revision stream.
    *
+   * Changes outside this panel and block-definition changes can notify the listener.
+   * Selection has a separate subscription. Registration does not invoke the listener;
+   * read the initial state separately.
+   *
    * @param listener - Callback invoked after a shared runtime revision changes.
    * @returns Disposer also released when this panel is destroyed.
    */
@@ -168,11 +191,27 @@ export abstract class Panel implements PanelAPI {
       throw new AggregateError(errors, "Panel manager cleanup failed");
     }
   }
-  /** @inheritdoc PanelAPI.batchUpdates */
+  /**
+   * Groups synchronous edits into one document transaction and undo step.
+   * Nested batches share the outer transaction; history remains shared by every
+   * panel of this document. Use blocks/elements for boundary-checked mutations.
+   * This is not a rollback boundary: writes made before an error remain applied.
+   * @param operation - Synchronous work; edits after an await are outside this batch.
+   * @returns The callback's result.
+   * @throws Propagates errors from the callback.
+   */
   batchUpdates<Result>(operation: () => Result): Result {
     return this.document.history.batchUpdates(operation);
   }
-  /** @inheritdoc PanelAPI.batchUpdatesWithoutHistory */
+  /**
+   * Groups synchronous edits into a document transaction excluded from undo history.
+   * When nested in an existing transaction, its outer origin determines history
+   * capture. Panel boundaries still come from blocks/elements, not this callback.
+   * Writes made before an error remain applied; no separate panel history is created.
+   * @param operation - Synchronous work; edits after an await are outside this batch.
+   * @returns The callback's result.
+   * @throws Propagates errors from the callback.
+   */
   batchUpdatesWithoutHistory<Result>(operation: () => Result): Result {
     return this.document.history.batchUpdatesWithoutHistory(operation);
   }

@@ -28,8 +28,10 @@ import type { DocumentCommandsEditor } from "../../editor/types";
 import type { BlockManagerApi, BlockPreparationRegistry, ImportedBlockForest } from "../types";
 import type { BlockImportOptions, BlockPrepareErrorHandler } from "./types";
 import { Pipe } from "../../utils/pipe";
-import type { BlockRegistryManager } from "../block-registry-manager/block-registry-manager";
-import { BlockStructuralBehaviorStrategy } from "./structural-behavior/block-structural-behavior-strategy";
+import {
+  BlockStructuralBehaviorStrategy,
+  type StructuralBehaviorRegistry,
+} from "./structural-behavior/block-structural-behavior-strategy";
 
 interface BlockProcessorRegistration {
   readonly processor: BlockProcessor;
@@ -74,7 +76,7 @@ export class BlockManager<
    */
   private readonly pipe: Pipe<BlockInput>;
   private readonly processors: Set<BlockProcessorRegistration>;
-  private readonly registry: Pick<BlockRegistryManager, "getBehaviorRegistrations">;
+  private readonly registry: StructuralBehaviorRegistry;
   /** Unbounded commands are required for transitions across panel boundaries. */
   private readonly documentBlocks: BlockManager;
   private readonly ownsProcessors: boolean;
@@ -92,7 +94,7 @@ export class BlockManager<
    */
   constructor(
     protected readonly editor: Editor,
-    registry: Pick<BlockRegistryManager, "getBehaviorRegistrations"> | BlockManager,
+    registry: StructuralBehaviorRegistry | BlockManager,
   ) {
     const owner = registry instanceof BlockManager ? registry : undefined;
     this.registry = registry instanceof BlockManager ? registry.registry : registry;

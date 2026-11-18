@@ -1,6 +1,10 @@
 import type { KeyboardSelectionTarget } from "../keyboard";
 import type { BlockInput } from "@chulane/document-model";
-import type { BlockRegistryManagerApi } from "@chulane/rivto";
+import type {
+  BlockRegistryManagerApi,
+  BlockStructuralAction,
+  BlockStructuralContext,
+} from "@chulane/rivto";
 import { RevisionStore } from "../../internal-store";
 import { DefaultBlockBehavior } from "../../block-behaviors/default-block-behavior";
 import type {
@@ -23,7 +27,8 @@ import type { BlockBehaviorsApi } from "./block-behaviors-api";
  *
  * resolveAll() evaluates applicability using the same detached block data for every method.
  * No applicability is cached by type; the called method determines the operation.
- * The registry dispatches DOM-dependent keyboard actions, but does
+ * The registry dispatches DOM-dependent keyboard actions locally and routes structural
+ * hooks through the same core registry as document commands. It does
  * not render blocks or keep per-block interaction state on behavior instances.
  */
 export class BlockBehaviorRegistry implements BlockBehaviorsApi {
@@ -41,7 +46,10 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
    */
   constructor(
     private readonly extensions: RegistrationOwner,
-    private readonly blockRegistry: Pick<BlockRegistryManagerApi, "registerBehavior">,
+    private readonly blockRegistry: Pick<
+      BlockRegistryManagerApi,
+      "registerBehavior" | "dispatchBehavior"
+    >,
   ) {
     extensions.registerCleanup(() => this.store.clear());
     this.register(new DefaultBlockBehavior(), -1000);
@@ -162,7 +170,51 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
     action: BlockBehaviorAction,
     context: BlockBehaviorContext,
     target: KeyboardSelectionTarget,
+  ): boolean;
+  /**
+   * Invokes one structural hook for the supplied block and group in registration priority order.
+   *
+   * The caller chooses the parent or leading block context and owns the transaction.
+   * A direct dispatch runs only the named hook; a full block command also selects
+   * parent hooks, checks panel boundaries and applies the default operation.
+   *
+   * @param action - Structural hook selected for this block.
+   * @param context - Scoped block operations and the block selecting applicable behaviors.
+   * @param ids - Ordered IDs of the complete group being acted upon.
+   * @returns True when a handler claims or rejects the action, false when all defer.
+   * @throws If an availability check or handler fails.
+   */
+  dispatch(
+    action: BlockStructuralAction,
+    context: BlockStructuralContext,
+    ids: readonly string[],
+  ): boolean;
+  /**
+   * Routes the selected hook to the registry that owns the corresponding behavior chain.
+   *
+   * @param args - Keyboard action, DOM context and caret target, or structural action,
+   * scoped context and ordered group IDs.
+   * @returns Whether an applicable handler claimed or rejected the named action.
+   * @throws If a predicate or handler fails.
+   */
+  dispatch(
+    ...args:
+      | [
+          action: BlockBehaviorAction,
+          context: BlockBehaviorContext,
+          target: KeyboardSelectionTarget,
+        ]
+      | [action: BlockStructuralAction, context: BlockStructuralContext, ids: readonly string[]]
   ): boolean {
+    const [action, context, target] = args;
+    switch (action) {
+      case "onIndent":
+      case "onOutdent":
+      case "onChildIndent":
+      case "onChildOutdent":
+      case "onStructuralDelete":
+        return this.blockRegistry.dispatchBehavior(action, context, target);
+    }
     // An explicit rejection claims the key just like a handled action; only deferral continues.
     for (const behavior of this.behaviors) {
       const handler = behavior[action];

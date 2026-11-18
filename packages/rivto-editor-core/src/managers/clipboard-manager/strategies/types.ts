@@ -51,16 +51,11 @@ export interface TextPasteTarget {
   readonly endOffset: number;
 }
 
-/** Clipboard paste algorithm that accepts or ignores a shared context. */
+/**
+ * Clipboard paste algorithm shared by a document and its panels.
+ * Read the receiving editor from the context in both matching and insertion.
+ */
 export interface PasteStrategy {
-  /**
-   * Binds a stateful strategy to the receiving editor or panel.
-   *
-   * Stateless strategies may instead use `context.editor` directly.
-   * @param editor - Receiving editor with the appropriate operation boundaries.
-   * @returns A strategy bound to that editor for this paste.
-   */
-  forEditor?(editor: DocumentEditorAPI): PasteStrategy;
   /**
    * Reports whether this algorithm should run for the clipboard and destination.
    * @param context - Shared clipboard payload.

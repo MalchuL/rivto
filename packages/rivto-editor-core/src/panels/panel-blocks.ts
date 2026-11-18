@@ -10,7 +10,6 @@ import type {
   EditorBlockPatch,
   EditorBlockUpdate,
 } from "..";
-import type { PanelDestination } from "./types";
 
 type PanelBlocksEditor = BlockManagerEditor & {
   readonly blocks: Pick<
@@ -336,7 +335,7 @@ export class PanelBlocks extends BlockManager<PanelBlocksEditor> {
    * @returns Explicit panel destination.
    * @throws If insertion would escape the panel.
    */
-  getInsertionDestinationAfter(afterId?: string | null): PanelDestination {
+  getInsertionDestinationAfter(afterId?: string | null): BlockDestination {
     if (afterId === undefined) {
       return { parentId: null };
     }
@@ -373,7 +372,7 @@ export class PanelBlocks extends BlockManager<PanelBlocksEditor> {
    */
   insertBlock(
     input: EditorBlockInput,
-    destination: PanelDestination = { parentId: null },
+    destination: BlockDestination = { parentId: null },
   ): EditorBlock {
     return this.editor.blocks.insertBlock(input, this.destination(destination));
   }
@@ -394,7 +393,7 @@ export class PanelBlocks extends BlockManager<PanelBlocksEditor> {
    */
   importForest(
     input: readonly (EditorBlock | EditorBlockInput)[],
-    destination: PanelDestination = { parentId: null },
+    destination: BlockDestination = { parentId: null },
     options?: BlockImportOptions,
   ) {
     return this.editor.blocks.importForest(input, this.destination(destination), options);
@@ -690,7 +689,7 @@ export class PanelBlocks extends BlockManager<PanelBlocksEditor> {
    * @returns Validated document insertion destination.
    * @throws If the destination is malformed, its parent is missing or outside the panel, or its anchor belongs to another parent.
    */
-  private destination(destination: PanelDestination): BlockDestination {
+  private destination(destination: BlockDestination): BlockDestination {
     const resolved = this.resolveDestination(destination);
     if (typeof resolved === "string") {
       throw new Error(resolved);
@@ -706,7 +705,7 @@ export class PanelBlocks extends BlockManager<PanelBlocksEditor> {
    * @param destination - The local parent and optional sibling insertion anchor.
    * @returns The source editor's placement, or the reason the placement is inaccessible.
    */
-  private resolveDestination(destination: PanelDestination): BlockDestination | string {
+  private resolveDestination(destination: BlockDestination): BlockDestination | string {
     if (destination.parentId !== null && typeof destination.parentId !== "string") {
       return "Panel destination requires parentId: null or a parent ID";
     }

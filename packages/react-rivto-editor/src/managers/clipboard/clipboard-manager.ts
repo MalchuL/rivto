@@ -16,8 +16,6 @@ import {
   BlockPasteStrategy,
   hasBlockRanges,
   isStructuralSelection,
-  PreserveNewlinesPasteStrategy,
-  TextPasteStrategy,
   validateClipboardBundle,
 } from "@chulane/rivto";
 import type { ReactEditorApi } from "../../editor/types";
@@ -50,6 +48,10 @@ import type { ReactPanelApi } from "../../panels/types";
 export class ClipboardManager {
   /** Runtime-owned type registrations used by structured and portable clipboard operations. */
   readonly converters: ClipboardConverters;
+  /** Applies the runtime's empty-writing-block policy to blocks in the receiving panel. */
+  private readonly blockPasteStrategy = new BlockPasteStrategy((block) =>
+    this.editor.defaultWritingBlockFactory.isEmptyBlock(block),
+  );
   /** File handlers in registration order. */
   private readonly fileHandlers: FileHandler[] = [];
   /** Revision published when file handler registrations change. */
@@ -600,8 +602,7 @@ export class ClipboardManager {
       }
     }
     // A local pipeline retains the destination even if a strategy invokes another paste.
-    const pasteDocument = reactPanel;
-    const clipboard = new CoreClipboardManager(pasteDocument, this.pasteStrategies);
+    const clipboard = new CoreClipboardManager(reactPanel, this.pasteStrategies);
     const strategies = this.pasteStrategies.getPasteStrategies();
     if (!strategies.some((strategy) => strategy instanceof ElementPasteStrategy)) {
       strategies.push(new ElementPasteStrategy(this.editor));
@@ -611,13 +612,7 @@ export class ClipboardManager {
       if (strategy instanceof ElementPasteStrategy) {
         bound = new ElementPasteStrategy(reactPanel, convertedElements, created);
       } else if (strategy instanceof BlockPasteStrategy) {
-        bound = new BlockPasteStrategy(pasteDocument, (block) =>
-          this.editor.defaultWritingBlockFactory.isEmptyBlock(block),
-        );
-      } else if (strategy instanceof TextPasteStrategy) {
-        bound = new TextPasteStrategy(pasteDocument);
-      } else if (strategy instanceof PreserveNewlinesPasteStrategy) {
-        bound = new PreserveNewlinesPasteStrategy(pasteDocument);
+        bound = this.blockPasteStrategy;
       } else if (isPanelPasteStrategy(strategy) && "editor" in reactPanel) {
         bound = strategy.createPanelStrategy(reactPanel);
       }

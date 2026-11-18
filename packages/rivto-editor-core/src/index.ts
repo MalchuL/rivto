@@ -4,6 +4,7 @@ export * from "./panels";
 export type {
   BlockChildBehaviorContext,
   BlockMoveRequest,
+  BlockStructuralAction,
   BlockStructuralBehavior,
   BlockStructuralScope,
   BlockRelocationCommands,

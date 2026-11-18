@@ -6,7 +6,6 @@ import type { BlockDestination } from "@chulane/document-model";
  * object. Each strategy decides whether it applies via {@link PasteStrategy.matches}
  * and owns insertion for that case. Ranges come from {@link PasteContext.selection}.
  */
-import type { DocumentEditorAPI } from "../../../editor/types";
 import {
   createCaretSelection,
   createStructuralSelection,
@@ -28,22 +27,6 @@ import {
 /** Replaces selected text with partial structured data or newline-split plain text. */
 export class TextPasteStrategy implements PasteStrategy {
   /**
-   * Creates the text strategy.
-   * @param editor - Editor providing block and selection operations.
-   */
-  constructor(private readonly editor: DocumentEditorAPI) {}
-
-  /**
-   * Rebinds text paste to the receiving editor while reusing this instance for its original owner.
-   *
-   * @param editor - Editor or panel providing the paste destination.
-   * @returns Strategy using that editor's block and selection operations.
-   */
-  forEditor(editor: DocumentEditorAPI): TextPasteStrategy {
-    return editor === this.editor ? this : new TextPasteStrategy(editor);
-  }
-
-  /**
    * Accepts split plain text or a mergeable partial bundle.
    * @param context - Shared clipboard payload.
    * @param placement - Host destination, including merge behavior.
@@ -53,7 +36,7 @@ export class TextPasteStrategy implements PasteStrategy {
     return isTextPasteContext(
       context,
       placement,
-      textRangeFromSelection(this.editor, context.selection),
+      textRangeFromSelection(context.editor, context.selection),
     );
   }
 
@@ -70,7 +53,7 @@ export class TextPasteStrategy implements PasteStrategy {
    * @throws If plain text has no default block type or delegated import fails.
    */
   paste(context: PasteContext, placement: PastePlacement): PasteResult | undefined {
-    const range = textRangeFromSelection(this.editor, context.selection);
+    const range = textRangeFromSelection(context.editor, context.selection);
     if (
       context.bundle?.blocks.length &&
       range &&
@@ -87,23 +70,22 @@ export class TextPasteStrategy implements PasteStrategy {
       const [first, ...rest] = bundle.blocks;
       const idMap = new Map<string, string>([[source.id, destination.id]]);
       let caret = { blockId: destination.id, offset: prefix.length + source.content.length };
-      this.editor.blocks.updateBlock(destination.id, {
+      context.editor.blocks.updateBlock(destination.id, {
         content: prefix + source.content + (rest.length ? "" : suffix),
       });
-      range.blocks.slice(1).forEach((block) => this.editor.blocks.removeBlock(block.id));
+      range.blocks.slice(1).forEach((block) => context.editor.blocks.removeBlock(block.id));
       // Import children under the surviving first block and the remaining roots as siblings.
-      const children = importClipboardBlocks(this.editor, context, first?.children ?? [], {
+      const children = importClipboardBlocks(context, first?.children ?? [], {
         parentId: destination.id,
       });
       children.idMap.forEach((id, sourceId) => idMap.set(sourceId, id));
       const imported = importClipboardBlocks(
-        this.editor,
         context,
         rest.map((block, index) => ({
           ...block,
           content: block.content + (index === rest.length - 1 ? suffix : ""),
         })),
-        this.editor.blocks.getInsertionDestinationAfter(caret.blockId),
+        context.editor.blocks.getInsertionDestinationAfter(caret.blockId),
       );
       imported.idMap.forEach((id, sourceId) => idMap.set(sourceId, id));
       imported.roots.forEach(({ id }, index) => {
@@ -121,7 +103,7 @@ export class TextPasteStrategy implements PasteStrategy {
       throw new Error("clipboard.paste requires defaultBlockType for plain-text paste");
     }
     const caret = insertPlainText(
-      this.editor,
+      context.editor,
       context.text,
       context.defaultBlockType,
       true,
@@ -137,22 +119,6 @@ export class TextPasteStrategy implements PasteStrategy {
 
 /** Inserts plain text as a single block, keeping newline characters. */
 export class PreserveNewlinesPasteStrategy implements PasteStrategy {
-  /**
-   * Creates the preserve-newlines text strategy.
-   * @param editor - Editor providing block and selection operations.
-   */
-  constructor(private readonly editor: DocumentEditorAPI) {}
-
-  /**
-   * Rebinds newline-preserving paste to the receiving editor.
-   *
-   * @param editor - Editor or panel providing the paste destination.
-   * @returns This strategy for its original owner, otherwise a strategy bound to the supplied editor.
-   */
-  forEditor(editor: DocumentEditorAPI): PreserveNewlinesPasteStrategy {
-    return editor === this.editor ? this : new PreserveNewlinesPasteStrategy(editor);
-  }
-
   /**
    * Accepts plain text when the host asked to keep newlines in one block.
    * @param context - Shared clipboard payload.
@@ -176,9 +142,9 @@ export class PreserveNewlinesPasteStrategy implements PasteStrategy {
     if (!context.defaultBlockType) {
       throw new Error("clipboard.paste requires defaultBlockType for plain-text paste");
     }
-    const range = textRangeFromSelection(this.editor, context.selection);
+    const range = textRangeFromSelection(context.editor, context.selection);
     const caret = insertPlainText(
-      this.editor,
+      context.editor,
       context.text,
       context.defaultBlockType,
       false,
@@ -197,24 +163,10 @@ export class BlockPasteStrategy implements PasteStrategy {
   /**
    * Creates the block strategy.
    *
-   * @param editor - Editor providing block and selection operations.
    * @param isEmptyBlock - Host policy receiving a current flat block snapshot and returning
    * whether it is an empty writing block. Omission disables empty-block replacement.
    */
-  constructor(
-    private readonly editor: DocumentEditorAPI,
-    private readonly isEmptyBlock?: (block: EditorBlockNode) => boolean,
-  ) {}
-
-  /**
-   * Rebinds structured block paste while preserving the host's empty-block policy.
-   *
-   * @param editor - Editor or panel providing the paste destination.
-   * @returns This strategy for its original owner, otherwise a strategy bound to the supplied editor.
-   */
-  forEditor(editor: DocumentEditorAPI): BlockPasteStrategy {
-    return editor === this.editor ? this : new BlockPasteStrategy(editor, this.isEmptyBlock);
-  }
+  constructor(private readonly isEmptyBlock?: (block: EditorBlockNode) => boolean) {}
 
   /**
    * Accepts a block forest that should remain structural.
@@ -226,7 +178,7 @@ export class BlockPasteStrategy implements PasteStrategy {
     return isBlockPasteContext(
       context,
       placement,
-      textRangeFromSelection(this.editor, context.selection),
+      textRangeFromSelection(context.editor, context.selection),
     );
   }
 
@@ -249,31 +201,33 @@ export class BlockPasteStrategy implements PasteStrategy {
       return undefined;
     }
     // A multi-block selection anchors the paste after its last selected subtree.
-    const range = this.editor.selection.resolveBlockSelection(context.selection);
+    const range = context.editor.selection.resolveBlockSelection(context.selection);
     const multiAfterId =
       range && range.blocks.length > 1
-        ? cloneSelectedTopLevelSubtrees(this.editor.blocks.getBlocks(), range).at(-1)?.id
+        ? cloneSelectedTopLevelSubtrees(context.editor.blocks.getBlocks(), range).at(-1)?.id
         : undefined;
     const active = context.selection;
     const afterId =
       multiAfterId ??
       active?.focusBlockId ??
-      textRangeFromSelection(this.editor, context.selection)?.blocks[0]?.id;
+      textRangeFromSelection(context.editor, context.selection)?.blocks[0]?.id;
     let resolved: PastePlacement = { afterId };
     if (placement.parentId !== undefined || placement.afterId !== undefined) {
       resolved = multiAfterId ? { afterId: multiAfterId } : placement;
     }
     const beforeChildId =
       resolved.parentId && resolved.afterId === null
-        ? this.editor.blocks.getBlockNode(resolved.parentId)?.childIds[0]
+        ? context.editor.blocks.getBlockNode(resolved.parentId)?.childIds[0]
         : undefined;
     const destination =
       resolved.parentId !== undefined && !resolved.afterId
         ? { parentId: resolved.parentId, beforeId: beforeChildId }
-        : this.editor.blocks.getInsertionDestinationAfter(resolved.afterId);
-    const imported = importClipboardBlocks(this.editor, context, bundle.blocks, destination);
+        : context.editor.blocks.getInsertionDestinationAfter(resolved.afterId);
+    const imported = importClipboardBlocks(context, bundle.blocks, destination);
     const insertedIds = imported.roots.map(({ id }) => id);
-    const target = resolved.afterId ? this.editor.blocks.getBlockNode(resolved.afterId) : undefined;
+    const target = resolved.afterId
+      ? context.editor.blocks.getBlockNode(resolved.afterId)
+      : undefined;
     // After a successful import, replace only the empty writing block at the caret.
     // The host's emptiness policy excludes meaningful blocks such as TODOs even when their text is empty.
     // Keep structural selections and descendants; an explicit destination elsewhere or insertion
@@ -285,9 +239,9 @@ export class BlockPasteStrategy implements PasteStrategy {
       target?.id === active.blocks[0]?.id &&
       this.isEmptyBlock?.(target) &&
       target.childIds.length === 0 &&
-      destination.parentId === this.editor.blocks.getParentId(target.id)
+      destination.parentId === context.editor.blocks.getParentId(target.id)
     ) {
-      this.editor.blocks.removeBlock(target.id);
+      context.editor.blocks.removeBlock(target.id);
     }
     return insertedIds.length
       ? { proposedSelection: createStructuralSelection(insertedIds), blockIdMap: imported.idMap }
@@ -301,20 +255,18 @@ export class BlockPasteStrategy implements PasteStrategy {
  * Paste strategies can import different parts of the same bundle. Passing the shared
  * identity map keeps references consistent when descendants and siblings arrive separately.
  *
- * @param editor - Receiving document or panel.
- * @param context - Paste-time identity mappings and optional preparation recovery.
+ * @param context - Receiving editor or panel, paste-time identity mappings and optional preparation recovery.
  * @param blocks - Ordered source subtrees to insert.
  * @param destination - Receiving parent and optional next sibling, omitted to append at the root.
  * @returns Inserted roots and their source-to-destination identities.
  * @throws If the editor rejects the destination or fails to prepare or insert the blocks.
  */
 function importClipboardBlocks(
-  editor: DocumentEditorAPI,
   context: PasteContext,
   blocks: readonly EditorBlockInput[],
   destination?: BlockDestination,
 ) {
-  return editor.blocks.importForest(blocks, destination, {
+  return context.editor.blocks.importForest(blocks, destination, {
     onError: context.onPrepareError,
     ids: context.blockIdMap,
   });

@@ -335,8 +335,8 @@ export class ReactPanel implements ReactPanelApi {
    *
    * @returns The current value owned by the source editor.
    */
-  get blockListProps(): PanelAPI["blockListProps"] {
-    return this.corePanel.blockListProps;
+  get blockListProps(): ReactEditorApi["blockListProps"] {
+    return this.editor.blockListProps;
   }
   /**
    * Reads the shared block definitions.

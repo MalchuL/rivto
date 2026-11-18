@@ -1,4 +1,8 @@
-import type { BlockStructuralBehavior } from "../../block-behaviors/types";
+import type {
+  BlockStructuralAction,
+  BlockStructuralBehavior,
+  BlockStructuralContext,
+} from "../../block-behaviors/types";
 import type { BlockDefinition } from "./types";
 import type { BlockRegistryManagerApi } from "../types";
 import type { EditorBlockInput } from "../../editor/model";
@@ -217,6 +221,39 @@ export class BlockRegistryManager implements BlockRegistryManagerApi {
    */
   getBehaviorRegistrations(): readonly { readonly behavior: BlockStructuralBehavior }[] {
     return this.behaviorRegistrations;
+  }
+
+  /**
+   * Invokes applicable handlers for one block until one claims the action.
+   *
+   * Availability is checked immediately before each handler, in priority order.
+   * Group callers may pass a set to skip behaviors consulted for earlier blocks.
+   * The caller owns the transaction and any selection or focus restoration.
+   *
+   * @param action - Structural action whose handler is requested.
+   * @param context - Current shallow block and panel-scoped operations.
+   * @param ids - Complete requested block group.
+   * @param consulted - Optional set updated with behaviors called for this group.
+   * @returns True when a handler accepts or rejects the action, otherwise false.
+   * @throws If an availability predicate, handler, or delegated operation fails.
+   */
+  dispatchBehavior(
+    action: BlockStructuralAction,
+    context: BlockStructuralContext,
+    ids: readonly string[],
+    consulted?: Set<BlockStructuralBehavior>,
+  ): boolean {
+    for (const { behavior } of this.behaviorRegistrations) {
+      const handler = behavior[action];
+      if (!handler || consulted?.has(behavior) || !behavior.isAvailable(context.block)) {
+        continue;
+      }
+      consulted?.add(behavior);
+      if (handler.call(behavior, context, ids) !== "unhandled") {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

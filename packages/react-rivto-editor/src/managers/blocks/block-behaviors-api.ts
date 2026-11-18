@@ -1,3 +1,4 @@
+import type { BlockStructuralAction, BlockStructuralContext } from "@chulane/rivto";
 import type { KeyboardSelectionTarget } from "../keyboard";
 import type { BlockInput } from "@chulane/document-model";
 import type {
@@ -45,6 +46,24 @@ export interface BlockBehaviorsApi {
     action: BlockBehaviorAction,
     context: BlockBehaviorContext,
     target: KeyboardSelectionTarget,
+  ): boolean;
+  /**
+   * Invokes one structural hook for the supplied block and group in registration priority order.
+   *
+   * The caller chooses the parent or leading block context and owns the transaction.
+   * A direct dispatch runs only the named hook; a full block command also selects
+   * parent hooks, checks panel boundaries and applies the default operation.
+   *
+   * @param action - Structural hook selected for this block.
+   * @param context - Scoped block operations and the block selecting applicable behaviors.
+   * @param ids - Ordered IDs of the complete group being acted upon.
+   * @returns True when a handler claims or rejects the action, false when all defer.
+   * @throws If an availability check or handler fails.
+   */
+  dispatch(
+    action: BlockStructuralAction,
+    context: BlockStructuralContext,
+    ids: readonly string[],
   ): boolean;
   /**
    * Registers an instance whose isAvailable predicate determines applicability.

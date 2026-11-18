@@ -52,10 +52,10 @@ export class ClipboardManager implements ClipboardManagerApi {
     }
     this.pasteStrategies.register(
       PRESERVE_NEWLINES_PASTE_STRATEGY_ID,
-      new PreserveNewlinesPasteStrategy(editor),
+      new PreserveNewlinesPasteStrategy(),
     );
-    this.pasteStrategies.register(TEXT_PASTE_STRATEGY_ID, new TextPasteStrategy(editor));
-    this.pasteStrategies.register(BLOCK_PASTE_STRATEGY_ID, new BlockPasteStrategy(editor));
+    this.pasteStrategies.register(TEXT_PASTE_STRATEGY_ID, new TextPasteStrategy());
+    this.pasteStrategies.register(BLOCK_PASTE_STRATEGY_ID, new BlockPasteStrategy());
   }
 
   /**
@@ -167,8 +167,7 @@ export class ClipboardManager implements ClipboardManagerApi {
     const placement: PastePlacement = input.placement ?? {};
     let caret: EditorPosition | undefined;
     this.editor.history.batchUpdates(() => {
-      strategies.forEach((registered) => {
-        const strategy = registered.forEditor?.(this.editor) ?? registered;
+      strategies.forEach((strategy) => {
         if (!strategy.matches(context, placement)) {
           return;
         }

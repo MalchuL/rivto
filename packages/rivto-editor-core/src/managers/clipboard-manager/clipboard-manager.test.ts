@@ -215,10 +215,7 @@ describe("core ClipboardManager", () => {
       const editor = await createDocumentEditor();
       editor.clipboard.pasteStrategies.register(
         "paste.blocks",
-        new BlockPasteStrategy(
-          editor,
-          (block) => block.type === "paragraph" && block.content === "",
-        ),
+        new BlockPasteStrategy((block) => block.type === "paragraph" && block.content === ""),
       );
       const source = editor.blocks.insertBlock({ type: "paragraph", content: "Copied" });
       const bundle = editor.clipboard.copy(createStructuralSelection([source.id]))!;

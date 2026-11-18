@@ -76,6 +76,49 @@ test.each(["handled", "rejected"] as const)(
   },
 );
 
+test("direct structural dispatch shares the core chain and invokes only the named hook", async () => {
+  const { core, panel, block, registry } = await fixture();
+  const context = {
+    blocks: panel.blocks,
+    documentBlocks: core.blocks,
+    block: panel.blocks.getBlockNode(block.id)!,
+    parentId: null,
+  };
+  const ids = [block.id];
+  const calls: string[] = [];
+  const release = core.blockRegistry.registerBehavior(
+    behavior({
+      onIndent: (receivedContext, receivedIds) => {
+        expect(receivedContext).toBe(context);
+        expect(receivedIds).toBe(ids);
+        calls.push("core");
+        return "unhandled";
+      },
+    }),
+    10,
+  );
+  registry.register(
+    behavior({
+      onChildIndent: () => {
+        throw new Error("Dispatching onIndent must not run the parent hook");
+      },
+      onIndent: () => {
+        calls.push("react");
+        return "rejected";
+      },
+    }),
+  );
+  expect(registry.dispatch("onIndent", context, ids)).toBe(true);
+  expect(calls).toEqual(["core", "react"]);
+  expect(registry.dispatch("onOutdent", context, ids)).toBe(false);
+  release();
+  calls.length = 0;
+  expect(registry.dispatch("onIndent", context, ids)).toBe(true);
+  expect(calls).toEqual(["react"]);
+  panel.editor.destroy();
+  core.destroy();
+});
+
 test("omitted methods defer and inherited handlers are invoked normally without fallback exceptions", async () => {
   const { core, panel, block, context, registry } = await fixture();
   const calls: string[] = [];

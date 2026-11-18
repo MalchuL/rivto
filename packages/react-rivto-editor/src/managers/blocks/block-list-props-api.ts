@@ -1,13 +1,12 @@
-import type { BlockListPropsManagerApi } from "@chulane/rivto";
+import type { BlockListPropsManagerApi, ListPropsRegistration } from "@chulane/rivto";
 
 /** Core list-property policy whose registrations are owned by the active React extension. */
-export type BlockListPropsRegistration = Parameters<BlockListPropsManagerApi["register"]>[0];
+export type BlockListPropsRegistration = ListPropsRegistration;
 
-/** Core property defaults and validation owned by the active React extension. */
-export interface BlockListPropsApi extends Omit<BlockListPropsManagerApi, "register"> {
-  /** Registers property defaults and validation; returns their owned cleanup. */
-  register(registration: BlockListPropsRegistration): () => void;
-  /** Releases this React manager's registrations; caller-owned core policies remain installed.
-   * @returns No value after removing owned property defaults and validation. */
-  destroy(): void;
-}
+/**
+ * Exposes core property defaults and validation through the React extension lifecycle.
+ *
+ * Registration returns a disposer owned by the active extension. Destroying the
+ * React manager releases its registrations while caller-owned core policies remain installed.
+ */
+export type BlockListPropsApi = BlockListPropsManagerApi;

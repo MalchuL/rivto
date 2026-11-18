@@ -18,7 +18,12 @@ import type {
 import type { ElementDestination, BlockDestination } from "@chulane/document-model";
 import type { EditorMode } from "../editor/types";
 import type { BlockProcessor } from "./block-manager/block-pipe";
-import type { BlockMoveRequest, BlockStructuralBehavior } from "../block-behaviors/types";
+import type {
+  BlockMoveRequest,
+  BlockStructuralAction,
+  BlockStructuralContext,
+  BlockStructuralBehavior,
+} from "../block-behaviors/types";
 import type { BlockImportOptions, BlockPrepareErrorHandler } from "./block-manager/types";
 import type { BlockListPropsManagerApi } from "./block-list-props-manager";
 import type { BlockDefinition } from "./block-registry-manager/types";
@@ -397,6 +402,24 @@ export interface BlockRegistryManagerApi extends BlockPreparationRegistry {
    * @throws If priority is not finite.
    */
   registerBehavior(behavior: BlockStructuralBehavior, priority?: number): () => void;
+  /**
+   * Invokes one structural hook for the supplied block and group in registration priority order.
+   *
+   * The caller chooses the parent or leading block context and owns the transaction.
+   * A direct dispatch runs only the named hook; a full block command also selects
+   * parent hooks, checks panel boundaries and applies the default operation.
+   *
+   * @param action - Structural hook selected for this block.
+   * @param context - Scoped block operations and the block selecting applicable behaviors.
+   * @param ids - Ordered IDs of the complete group being acted upon.
+   * @returns True when a handler claims or rejects the action, false when all defer.
+   * @throws If an availability check or handler fails.
+   */
+  dispatchBehavior(
+    action: BlockStructuralAction,
+    context: BlockStructuralContext,
+    ids: readonly string[],
+  ): boolean;
   /**
    * Registers the exact complete native definition until its disposer runs.
    *
@@ -811,8 +834,8 @@ export interface HistoryBatch {
   batchUpdates<Result>(operation: () => Result): Result;
 }
 
-/** Public document-history and transaction contract. */
-export interface HistoryManagerApi extends HistoryBatch {
+/** Synchronous transaction modes shared by document history and panel commands. */
+export interface HistoryTransactions extends HistoryBatch {
   /**
    * Groups synchronous mutations into one transaction excluded from undo history.
    *
@@ -820,6 +843,10 @@ export interface HistoryManagerApi extends HistoryBatch {
    * @returns Value returned by the operation.
    */
   batchUpdatesWithoutHistory<Result>(operation: () => Result): Result;
+}
+
+/** Public document-history and transaction contract. */
+export interface HistoryManagerApi extends HistoryTransactions {
   /** @returns No value after undoing. */
   undo(): void;
   /** @returns No value after redoing. */

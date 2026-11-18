@@ -10,7 +10,7 @@ import type {
   EditorElementPatch,
   EditorElementUpdate,
 } from "..";
-import type { PanelDestination } from "./types";
+import type { ElementDestination } from "@chulane/document-model";
 
 type PanelElementsEditor = ElementManagerEditor & {
   readonly elements: Pick<
@@ -99,7 +99,7 @@ export class PanelElements extends ElementManager<PanelElementsEditor> {
    * @throws Before writing if any target is missing or outside this element subtree, the
    * destination or anchor is invalid, or the move would create a cycle.
    */
-  moveElements(ids: readonly string[], destination: PanelDestination = { parentId: null }): void {
+  moveElements(ids: readonly string[], destination: ElementDestination = { parentId: null }): void {
     ids.forEach((id) => this.requireElement(id));
     if (destination.parentId !== null && typeof destination.parentId !== "string") {
       throw new Error("Panel destination requires parentId: null or a parent ID");
@@ -307,7 +307,7 @@ export class PanelElements extends ElementManager<PanelElementsEditor> {
    * @throws If the root is absent, IDs collide, children are invalid or outside,
    * input is cyclic or malformed, or processing or application preparation fails.
    */
-  insertElement(input: EditorElementInput, destination: PanelDestination = { parentId: null }) {
+  insertElement(input: EditorElementInput, destination: ElementDestination = { parentId: null }) {
     this.requireRoot();
     const visiting = new Set<EditorElementInput>();
     const checkChildren = (value: EditorElementInput) => {
