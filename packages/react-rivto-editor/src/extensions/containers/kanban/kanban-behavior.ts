@@ -1,6 +1,3 @@
-import type { BlockStructuralContext, BlockStructuralOutcome } from "@chulane/rivto";
-import { createBlockTypeMoveBehavior } from "../block-move-behavior";
-import type { BlockInput } from "@chulane/document-model";
 /**
  * Kanban board and column views.
  *
@@ -12,29 +9,13 @@ import type { BlockInput } from "@chulane/document-model";
  *
  * @module
  */
-import { ContainerBlockBehavior } from "../../../block-behaviors/container-block-behavior";
+import { ContainerHierarchyBehavior } from "../container-hierarchy-behavior";
 
 export const KANBAN_BLOCK_TYPE = "kanban";
 export const KANBAN_COLUMN_BLOCK_TYPE = "kanban-column";
 
-/**
- * Behavior registered for the `kanban` board type.
- */
-export class KanbanBehavior extends ContainerBlockBehavior {
-  /**
-   * Selects this native container independently of the registration's owner.
-   * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.
-   * @returns True only for the KANBAN_BLOCK_TYPE native type.
-   */
-  override isAvailable(context: BlockInput): boolean {
-    return context.type === KANBAN_BLOCK_TYPE;
-  }
-}
-
-/**
- * Behavior registered for the `kanban-column` type.
- */
-export class KanbanColumnBehavior extends ContainerBlockBehavior {
+/** Kanban columns keep card edge drops at their direct-child level. */
+class KanbanColumnBehavior extends ContainerHierarchyBehavior {
   /**
    * Keeps card boundary drops at the column's direct-child level.
    *
@@ -43,82 +24,16 @@ export class KanbanColumnBehavior extends ContainerBlockBehavior {
   childDropPlacement(): "siblings" {
     return "siblings";
   }
-
-  /**
-   * Selects this native container independently of the registration's owner.
-   * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.
-   * @returns True only for the KANBAN_COLUMN_BLOCK_TYPE native type.
-   */
-  override isAvailable(context: BlockInput): boolean {
-    return context.type === KANBAN_COLUMN_BLOCK_TYPE;
-  }
 }
 
-/**
- * Shared board instance registered by {@link kanbanExtension}.
- *
- * Structural movement restrictions for the KANBAN_BLOCK_TYPE native type.
- */
-export const kanbanBehavior = Object.assign(
-  new KanbanBehavior(),
-  createBlockTypeMoveBehavior(KANBAN_BLOCK_TYPE, undefined, [KANBAN_COLUMN_BLOCK_TYPE]),
-  {
-    /**
-     * Preserves the fixed depth of direct structural children.
-     *
-     * This outline restriction does not prevent independently permitted dragging.
-     * The handler rejects the complete requested group before child behavior runs.
-     *
-     * @param context - Current container fields and the live invoking panel.
-     * @param ids - Complete child group requested by the outline operation.
-     * @returns Rejected without mutating the document.
-     */
-    onChildIndent(context: BlockStructuralContext, ids: readonly string[]): BlockStructuralOutcome {
-      return "rejected";
-    },
+/** Shared board instance registered by {@link kanbanExtension}; boards accept only Kanban columns. */
+export const kanbanBehavior = new ContainerHierarchyBehavior({
+  blockType: KANBAN_BLOCK_TYPE,
+  childType: KANBAN_COLUMN_BLOCK_TYPE,
+});
 
-    /**
-     * Keeps direct children within this container during outline outdent.
-     *
-     * This outline restriction does not prevent independently permitted dragging.
-     * The handler rejects the complete requested group before child behavior runs.
-     *
-     * @param context - Current container fields and the live invoking panel.
-     * @param ids - Complete child group requested by the outline operation.
-     * @returns Rejected without mutating the document.
-     */
-    onChildOutdent(
-      context: BlockStructuralContext,
-      ids: readonly string[],
-    ): BlockStructuralOutcome {
-      return "rejected";
-    },
-  },
-);
-/**
- * Shared column instance registered by {@link kanbanExtension}.
- *
- * Structural movement restrictions for the KANBAN_COLUMN_BLOCK_TYPE native type.
- */
-export const kanbanColumnBehavior = Object.assign(
-  new KanbanColumnBehavior(),
-  createBlockTypeMoveBehavior(KANBAN_COLUMN_BLOCK_TYPE, [KANBAN_BLOCK_TYPE]),
-  {
-    /**
-     * Keeps direct children within this container during outline outdent.
-     *
-     * This outline restriction does not prevent independently permitted dragging.
-     * The handler rejects the complete requested group before child behavior runs.
-     *
-     * @param context - Current container fields and the live invoking panel.
-     * @param ids - Complete child group requested by the outline operation.
-     * @returns Rejected without mutating the document.
-     */
-    onChildOutdent(
-      context: BlockStructuralContext,
-      ids: readonly string[],
-    ): BlockStructuralOutcome {
-      return "rejected";
-    },
-  },
-);
+/** Shared column instance registered by {@link kanbanExtension}; columns stay directly below the board. */
+export const kanbanColumnBehavior = new KanbanColumnBehavior({
+  blockType: KANBAN_COLUMN_BLOCK_TYPE,
+  parentType: KANBAN_BLOCK_TYPE,
+});

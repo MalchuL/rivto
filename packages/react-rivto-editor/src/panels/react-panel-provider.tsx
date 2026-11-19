@@ -23,7 +23,13 @@ import type { PanelSnapshot, ReactPanelProps } from "./types";
 interface ReactPanelProviderProps extends ReactPanelProps {
   /** Block root passed to the owning component’s core panel factory. */
   readonly rootBlockId?: string;
-  /** Creates core panel boundaries after commit; keep this factory stable across renders. */
+  /**
+   * Creates core panel boundaries after commit. Keep the factory stable across renders.
+   *
+   * @param editor - Shared editor or parent panel supplying bounded document operations.
+   * @param options - Block and element roots requested for the new occurrence.
+   * @returns The new core panel that this provider destroys on cleanup.
+   */
   readonly createPanel: (editor: ReactEditorApi, options: PanelOptions) => PanelAPI;
 }
 
@@ -83,7 +89,6 @@ export function ReactPanelProvider({
   virtualizePageThreshold = false,
   virtualizePageOverscan = DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN,
 }: ReactPanelProviderProps) {
-  const documentId = hostEditor.getDocument().id;
   const parent = useContext(ReactPanelContext);
   const enabled = active && parent?.enabled !== false;
   const configuration = useMemo(
@@ -119,6 +124,7 @@ export function ReactPanelProvider({
   const subscribeAvailability = useCallback(
     (listener: () => void) => {
       if (!instance) {
+        // The creation effect has not supplied a panel to observe yet.
         return () => {};
       }
       return instance.subscribeAvailability(listener);
@@ -138,30 +144,9 @@ export function ReactPanelProvider({
   const reactPanel = snapshot.api;
   const [root, setRoot] = useState<HTMLElement | null>(null);
 
-  const subscribeSurfaces = useCallback(
-    (listener: () => void) => hostEditor.surfaces.subscribe(listener),
-    [hostEditor],
-  );
-  useSyncExternalStore(
-    subscribeSurfaces,
-    () => hostEditor.surfaces.revision,
-    () => hostEditor.surfaces.revision,
-  );
-  const subscribeExtensions = useCallback(
-    (listener: () => void) => hostEditor.extensions.subscribe(listener),
-    [hostEditor],
-  );
-  useSyncExternalStore(
-    subscribeExtensions,
-    () => hostEditor.extensions.revision,
-    () => hostEditor.extensions.revision,
-  );
   const panelContextValue = useMemo(
-    () =>
-      reactPanel
-        ? { reactPanel, documentId, document: snapshot.document, rootBlockId, enabled }
-        : null,
-    [reactPanel, documentId, snapshot.document, rootBlockId, instance, enabled],
+    () => (reactPanel ? { reactPanel, enabled } : null),
+    [reactPanel, enabled],
   );
   const virtualization = useMemo(() => {
     let threshold = virtualizePageThreshold;
@@ -201,6 +186,7 @@ export function ReactPanelProvider({
   const rootContext = useMemo(() => ({ element: root, ref: rootRef }), [root, rootRef]);
 
   if (!panelContextValue) {
+    // The first commit and a change of source both await their own panel.
     return <div role="status">Loading document…</div>;
   }
 

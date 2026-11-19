@@ -602,15 +602,6 @@ export class BlockDOMSelection {
   }
 
   /**
-   * Returns every rendered BlockView ID in visible depth-first DOM order.
-   *
-   * @param root - EditorPanel root Element that scopes the query.
-   */
-  private orderedBlockIds(_root: HTMLElement): readonly string[] {
-    return this.selection.getSelectableBlockIds();
-  }
-
-  /**
    * Maps one browser selection endpoint to a portable `{ blockId, offset }`.
    *
    * Core DOM → editor conversion. The browser gives a live caret as

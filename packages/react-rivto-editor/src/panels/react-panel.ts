@@ -164,11 +164,12 @@ export class ReactPanel implements ReactPanelApi {
       this.registrations.add(
         editor.blockElements.maintainBlockCards(blockCardParentId, corePanel.rootElementId),
       );
-      this.updateSnapshot(this.corePanel.document.getDocument(), true);
+      this.updateSnapshot();
       // A subtree root can disappear and return through undo while its document remains retained.
       if (this.corePanel.rootBlockId) {
-        this.unsubscribeBlock = editor.blocks.subscribeBlockNode(this.corePanel.rootBlockId, () =>
-          this.updateSnapshot(this.corePanel.document.getDocument(), true),
+        this.unsubscribeBlock = editor.blocks.subscribeBlockNode(
+          this.corePanel.rootBlockId,
+          this.updateSnapshot,
         );
       }
       // Keep edits made in different presentation modes out of the same undo capture.
@@ -522,6 +523,7 @@ export class ReactPanel implements ReactPanelApi {
    */
   readonly destroy = (): Promise<void> => {
     if (this.destroyed) {
+      // The first destruction already released this panel’s resources.
       return Promise.resolve();
     }
     this.destroyed = true;
@@ -642,12 +644,13 @@ export class ReactPanel implements ReactPanelApi {
    * once its document is supplied. Subscribers are notified only when the document,
    * status, or retention flag changes; ordinary content edits use block subscriptions.
    *
-   * @param document - The document already supplied by the runtime or its acquisition.
-   * @param retained - Whether this mount has installed its local bindings; defaults to false.
+   * The bound core supplies the same document throughout this panel's lifetime.
+   * This callback runs after installing the panel's local bindings and on root changes.
+   *
    * @returns Nothing; publishes this panel as the panel API when state changes.
    */
-  private readonly updateSnapshot = (document: DocumentModel, retained = false): void => {
-    const sameDocument = this.snapshot.document === document;
+  private readonly updateSnapshot = (): void => {
+    const document = this.corePanel.document.getDocument();
     let status: PanelSnapshot["status"] = "available";
     if (this.corePanel.rootBlockId) {
       if (document.blocks.hasBlock(this.corePanel.rootBlockId)) {
@@ -656,10 +659,11 @@ export class ReactPanel implements ReactPanelApi {
         status = this.hasSeenRootBlock ? "missing" : "loading";
       }
     }
-    if (sameDocument && this.snapshot.status === status && this.snapshot.retained === retained) {
+    if (this.snapshot.retained && this.snapshot.status === status) {
+      // Keep the snapshot identity stable for edits that leave root availability unchanged.
       return;
     }
-    this.publishSnapshot({ status, document, api: this, retained });
+    this.publishSnapshot({ status, document, api: this, retained: true });
   };
 
   /**

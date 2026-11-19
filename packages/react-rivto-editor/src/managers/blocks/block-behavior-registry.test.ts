@@ -354,6 +354,7 @@ test("move contexts retain foreign source data and resolve only the destination 
     isAvailable: (candidate) => {
       if (candidate.type === "foreign") {
         expect(candidate).toBe(source);
+        // The original foreign snapshot selects this test behavior.
         return true;
       }
       return false;

@@ -123,7 +123,7 @@ test.each([2, 200])(
         size: { width: "280px" },
       });
       tile.style.backgroundColor = "red";
-      controller.finish(fixture.pointer(140), true);
+      controller.finish(fixture.pointer(140), "commit");
       expect(fixture.core.blocks.getBlockNode(fixture.id)?.listProps.style).toEqual({
         size: { width: "320px" },
       });
@@ -154,11 +154,11 @@ test.each(["Escape", "blur", "pointercancel", "detach"])(
       } else if (reason === "blur") {
         window.dispatchEvent(new Event("blur"));
       } else if (reason === "pointercancel") {
-        controller.finish(fixture.pointer(50), false);
+        controller.finish(fixture.pointer(50), "cancel");
       } else {
         controller.cancel();
       }
-      controller.finish(fixture.pointer(10), true);
+      controller.finish(fixture.pointer(10), "commit");
       expect(fixture.core.blocks.getBlockNode(fixture.id)?.listProps.style).toEqual({
         size: { width: "280px" },
       });
@@ -249,12 +249,9 @@ test("stores a Bento placement width in plugin data and block style", async () =
       pluginData: { bentoWidth: 300, other: { retained: true } },
       listProps: { style: { size: { width: "150px" } } },
     });
-    const controller = new BlockResizeController(
-      fixture.core.blocks,
-      fixture.id,
-      fixture.tile,
-      "bentoWidth",
-    );
+    const controller = new BlockResizeController(fixture.core.blocks, fixture.id, fixture.tile, {
+      pluginId: "bentoWidth",
+    });
     controller.resizeWithKeyboard("right", new KeyboardEvent("keydown", { key: "ArrowRight" }));
     const block = fixture.core.blocks.getBlockNode(fixture.id)!;
     expect(block.pluginData).toEqual({ bentoWidth: 310, other: { retained: true } });
@@ -287,7 +284,7 @@ test("corner resize previews both axes and commits one undoable change", async (
     expect(fixture.core.blocks.getBlockNode(fixture.id)?.listProps.style).toEqual({
       size: { width: "280px" },
     });
-    fixture.controller.finish(pointer(140, 120), true);
+    fixture.controller.finish(pointer(140, 120), "commit");
     expect(fixture.core.blocks.getBlockNode(fixture.id)?.listProps.style).toEqual({
       size: { width: "320px", height: "160px", heightPolicy: "scroll" },
     });

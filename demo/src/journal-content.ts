@@ -254,7 +254,25 @@ export function seedJournalDemo(editor: JournalSeedEditor, repeatCount: number):
       });
     }
   });
-  // Create the weekend stages first so the arrows attach to editable shapes.
+  const morning = seedWeekendPlan(editor);
+  seedRainPlan(editor, morning);
+  seedPicnicPlan(editor);
+  seedCanvasNotes(editor);
+  seedAnimalDrawings(editor);
+  editor.commands.execute("edgeless.selection.clear");
+}
+
+/**
+ * Creates a connected weekend plan above the notebook's canvas cards.
+ *
+ * The shapes are independent editable elements and their connectors attach to
+ * their edges so the links follow the stages when moved.
+ *
+ * @param editor - Editor whose registered visual commands create the plan.
+ * @returns The morning stage after inserting the plan's title, stages, connectors, and note.
+ * @throws If a registered canvas command fails.
+ */
+function seedWeekendPlan(editor: JournalSeedEditor): EditorElementNode {
   editor.commands.execute("edgeless.visual.create", {
     kind: "text",
     text: "A little plan for the weekend",
@@ -262,7 +280,7 @@ export function seedJournalDemo(editor: JournalSeedEditor, repeatCount: number):
     fontSize: 22,
     color: "#151522",
   });
-  const weekendStages = [
+  const stages = [
     { x: 60, text: "Morning\nBirdwatching", fill: "#eeeafa" },
     { x: 360, text: "Midday\nPicnic by the lake", fill: "#edf3e9" },
     { x: 660, text: "Evening\nGames & tea", fill: "#fbf0df" },
@@ -276,17 +294,17 @@ export function seedJournalDemo(editor: JournalSeedEditor, repeatCount: number):
         stroke: "#b8b2d3",
       }) as EditorElementNode,
   );
-  for (let index = 0; index < weekendStages.length - 1; index += 1) {
+  for (let index = 0; index < stages.length - 1; index += 1) {
     const x = 60 + index * 300;
     editor.commands.execute("edgeless.visual.create", {
       kind: "connector",
       source: {
-        elementId: weekendStages[index].id,
+        elementId: stages[index].id,
         anchor: { x: 1, y: 0.5 },
         position: { x: x + 220, y: 160 },
       },
       target: {
-        elementId: weekendStages[index + 1].id,
+        elementId: stages[index + 1].id,
         anchor: { x: 0, y: 0.5 },
         position: { x: x + 300, y: 160 },
       },
@@ -302,8 +320,18 @@ export function seedJournalDemo(editor: JournalSeedEditor, repeatCount: number):
     fill: "#eeeafa",
     color: "#42308e",
   });
-  const morning = weekendStages[0];
-  // Branch from the morning stage to the indoor alternative.
+  return stages[0];
+}
+
+/**
+ * Adds an indoor alternative to the morning walk.
+ *
+ * @param editor - Editor whose visual commands create the branch.
+ * @param morning - The morning stage to which the weather branch attaches.
+ * @returns The weather and indoor stages and their connectors have been inserted.
+ * @throws If a registered canvas command fails.
+ */
+function seedRainPlan(editor: JournalSeedEditor, morning: EditorElementNode): void {
   const weather = editor.commands.execute("edgeless.visual.create", {
     kind: "ellipse",
     frame: { x: 60, y: 250, width: 220, height: 80 },
@@ -320,7 +348,16 @@ export function seedJournalDemo(editor: JournalSeedEditor, repeatCount: number):
   }) as EditorElementNode;
   connectPlanStages(editor, morning, weather, "down");
   connectPlanStages(editor, weather, indoors, "right");
-  // Connect the picnic stages independently of the weekend diagram.
+}
+
+/**
+ * Creates a separate diagram for preparing and sharing picnic food.
+ *
+ * @param editor - Editor whose visual commands create the diagram.
+ * @returns The picnic stages, title, and connectors have been inserted.
+ * @throws If a registered canvas command fails.
+ */
+function seedPicnicPlan(editor: JournalSeedEditor): void {
   editor.commands.execute("edgeless.visual.create", {
     kind: "text",
     text: "Picnic preparation",
@@ -328,7 +365,7 @@ export function seedJournalDemo(editor: JournalSeedEditor, repeatCount: number):
     fontSize: 22,
     color: "#151522",
   });
-  const picnicStages = [
+  const stages = [
     { x: 1320, text: "The night before\nRoast vegetables", fill: "#edf3e9" },
     { x: 1600, text: "In the morning\nPack the basket", fill: "#fbf0df" },
     { x: 1880, text: "At the lake\nShare lunch", fill: "#eeeafa" },
@@ -342,8 +379,8 @@ export function seedJournalDemo(editor: JournalSeedEditor, repeatCount: number):
         stroke: "#b8b2d3",
       }) as EditorElementNode,
   );
-  connectPlanStages(editor, picnicStages[0], picnicStages[1], "right");
-  connectPlanStages(editor, picnicStages[1], picnicStages[2], "right");
+  connectPlanStages(editor, stages[0], stages[1], "right");
+  connectPlanStages(editor, stages[1], stages[2], "right");
   const dessert = editor.commands.execute("edgeless.visual.create", {
     kind: "ellipse",
     frame: { x: 1600, y: 250, width: 210, height: 80 },
@@ -351,53 +388,7 @@ export function seedJournalDemo(editor: JournalSeedEditor, repeatCount: number):
     fill: "#fbf0df",
     stroke: "#d4b79b",
   }) as EditorElementNode;
-  connectPlanStages(editor, picnicStages[1], dessert, "down");
-  // Place the journal notes beside the diagrams.
-  const notes = [
-    { x: 590, text: "Bring binoculars\nand take the long way home.", fill: "#f8efd8" },
-    { x: 1360, text: "Save a shady spot\nfor lunch by the lake.", fill: "#e8f0e5" },
-    { x: 2130, text: "Ask everyone to bring\na favorite game.", fill: "#eeeafa" },
-  ];
-  for (const note of notes) {
-    editor.commands.execute("edgeless.visual.create", {
-      kind: "sticker",
-      frame: { x: note.x, y: 420, width: 185, height: 150 },
-      text: note.text,
-      fill: note.fill,
-      color: "#38334a",
-      fontSize: 16,
-    });
-  }
-  for (const label of [
-    { x: 590, text: "A quiet morning companion" },
-    { x: 1360, text: "Ready for a walk" },
-    { x: 2130, text: "A few ideas for later" },
-  ]) {
-    editor.commands.execute("edgeless.visual.create", {
-      kind: "text",
-      frame: { x: label.x, y: 590, width: 190, height: 48 },
-      text: label.text,
-      color: "#555569",
-      fontSize: 14,
-    });
-  }
-  // Group each animal’s strokes before clearing the demo selection.
-  for (const [index, strokes] of ANIMAL_STROKES.entries()) {
-    const ids = strokes.map((stroke) => {
-      const drawing = editor.commands.execute("edgeless.visual.create", {
-        kind: "drawing",
-        brush: "pencil",
-        frame: { x: 590 + index * 770, y: 635, width: 180, height: 150 },
-        points: stroke.map(([x, y]) => ({ x, y })),
-        stroke: "#66598d",
-        strokeWidth: 2,
-      }) as EditorElementNode;
-      return drawing.id;
-    });
-    editor.commands.execute("edgeless.selection.set", ids);
-    editor.commands.execute("edgeless.selection.group");
-  }
-  editor.commands.execute("edgeless.selection.clear");
+  connectPlanStages(editor, stages[1], dessert, "down");
 }
 
 /**
@@ -440,6 +431,44 @@ function connectPlanStages(
     stroke: "#7568ad",
     endStyle: "arrow",
   });
+}
+
+/**
+ * Places short reminders and captions beside the related document cards.
+ *
+ * @param editor - Editor whose visual commands create the notes and labels.
+ * @returns The notes and labels have been inserted on the canvas.
+ * @throws If a registered canvas command fails.
+ */
+function seedCanvasNotes(editor: JournalSeedEditor): void {
+  const notes = [
+    { x: 590, text: "Bring binoculars\nand take the long way home.", fill: "#f8efd8" },
+    { x: 1360, text: "Save a shady spot\nfor lunch by the lake.", fill: "#e8f0e5" },
+    { x: 2130, text: "Ask everyone to bring\na favorite game.", fill: "#eeeafa" },
+  ];
+  for (const note of notes) {
+    editor.commands.execute("edgeless.visual.create", {
+      kind: "sticker",
+      frame: { x: note.x, y: 420, width: 185, height: 150 },
+      text: note.text,
+      fill: note.fill,
+      color: "#38334a",
+      fontSize: 16,
+    });
+  }
+  for (const label of [
+    { x: 590, text: "A quiet morning companion" },
+    { x: 1360, text: "Ready for a walk" },
+    { x: 2130, text: "A few ideas for later" },
+  ]) {
+    editor.commands.execute("edgeless.visual.create", {
+      kind: "text",
+      frame: { x: label.x, y: 590, width: 190, height: 48 },
+      text: label.text,
+      color: "#555569",
+      fontSize: 14,
+    });
+  }
 }
 
 /** Pencil strokes for the cat and dog, in a shared 180 by 150 local canvas. */
@@ -561,3 +590,30 @@ const ANIMAL_STROKES: readonly (readonly (readonly [number, number])[])[][] = [
     ],
   ],
 ];
+
+/**
+ * Adds small pencil sketches of a cat and dog beside the notebook cards.
+ *
+ * Each animal is a group of editable pencil strokes in local coordinates.
+ *
+ * @param editor - Editor whose visual command creates each pencil stroke.
+ * @returns Both groups of animal strokes have been inserted.
+ * @throws If a registered drawing or grouping command fails.
+ */
+function seedAnimalDrawings(editor: JournalSeedEditor): void {
+  for (const [index, strokes] of ANIMAL_STROKES.entries()) {
+    const ids = strokes.map((stroke) => {
+      const drawing = editor.commands.execute("edgeless.visual.create", {
+        kind: "drawing",
+        brush: "pencil",
+        frame: { x: 590 + index * 770, y: 635, width: 180, height: 150 },
+        points: stroke.map(([x, y]) => ({ x, y })),
+        stroke: "#66598d",
+        strokeWidth: 2,
+      }) as EditorElementNode;
+      return drawing.id;
+    });
+    editor.commands.execute("edgeless.selection.set", ids);
+    editor.commands.execute("edgeless.selection.group");
+  }
+}

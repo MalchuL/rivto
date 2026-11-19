@@ -1,32 +1,26 @@
+import { getStyleWidth, normalizeResizeWidth } from "./block-resize-size";
 import { useLayoutEffect, useRef, useState } from "react";
 import { editorControlProps } from "../../../constants";
 import { useReactPanel } from "../../../hooks";
 import {
   BlockResizeController,
   type BlockResizeEdge,
-  MIN_RESIZE_HEIGHT,
-  MAX_RESIZE_HEIGHT,
+  type BlockResizeOptions,
 } from "./block-resize-controller";
 import {
+  MIN_RESIZE_HEIGHT,
+  MAX_RESIZE_HEIGHT,
   MAX_RESIZE_WIDTH,
   MIN_RESIZE_WIDTH,
   RESIZE_EDGE_ATTRIBUTE,
 } from "./block-resize-constants";
 
 /** Block and mounted placement borrowed by the width resize controls. */
-export interface BlockResizeHandlesProps {
+export interface BlockResizeHandlesProps extends BlockResizeOptions {
   /** Block receiving the committed width. */
   readonly blockId: string;
   /** Current persisted style, observed by the owning layout when using style width. */
   readonly style: unknown;
-  /** Optional block plugin-data key holding the layout-owned pixel width. */
-  readonly pluginId?: string;
-  /** Optional plugin-data key for the width captured before entering a layout. */
-  readonly originalWidthPluginId?: string;
-  /** Optional block plugin-data key holding the layout-owned height. */
-  readonly heightPluginId?: string;
-  /** Optional key retaining the previous style height and policy. */
-  readonly originalHeightPluginId?: string;
   /** Edges and corners to render; defaults to left and right. */
   readonly edges?: readonly BlockResizeEdge[];
   /** Current value at the plugin-data key, if supplied. */
@@ -35,8 +29,6 @@ export interface BlockResizeHandlesProps {
   readonly label: string;
   /** Explicit placement; absent when the handles are direct children of the shell. */
   readonly placement?: HTMLElement;
-  /** Block shell receiving height previews; defaults to the placement. */
-  readonly heightTarget?: HTMLElement;
   /** Required class of the placement's parent, when the shell must belong to a specific layout. */
   readonly parentClassName?: string;
 }
@@ -81,22 +73,20 @@ export function BlockResizeHandles({
     !!placement &&
     (!parentClassName || placement.parentElement?.classList.contains(parentClassName));
   const width = pluginId
-    ? BlockResizeController.getPluginWidth(pluginWidth, placement ?? undefined)
-    : BlockResizeController.getStyleWidth(style, placement ?? undefined);
+    ? normalizeResizeWidth(pluginWidth, placement)
+    : getStyleWidth(style, placement);
   useLayoutEffect(() => {
     if (!placement || !active) {
       return;
     }
-    const resize = new BlockResizeController(
-      panel.blocks,
-      blockId,
-      placement,
+    // The placement commits through the panel that owns this occurrence of the block.
+    const resize = new BlockResizeController(panel.blocks, blockId, placement, {
       pluginId,
       originalWidthPluginId,
       heightPluginId,
       originalHeightPluginId,
-      suppliedHeightTarget,
-    );
+      heightTarget: suppliedHeightTarget,
+    });
     controller.current = resize;
     return () => {
       controller.current = null;
@@ -153,9 +143,11 @@ export function BlockResizeHandles({
               controller.current?.start(edge, event.nativeEvent, event.currentTarget)
             }
             onPointerMove={(event) => controller.current?.move(event.nativeEvent)}
-            onPointerUp={(event) => controller.current?.finish(event.nativeEvent, true)}
-            onPointerCancel={(event) => controller.current?.finish(event.nativeEvent, false)}
-            onLostPointerCapture={(event) => controller.current?.finish(event.nativeEvent, false)}
+            onPointerUp={(event) => controller.current?.finish(event.nativeEvent, "commit")}
+            onPointerCancel={(event) => controller.current?.finish(event.nativeEvent, "cancel")}
+            onLostPointerCapture={(event) =>
+              controller.current?.finish(event.nativeEvent, "cancel")
+            }
             onKeyDown={(event) => controller.current?.resizeWithKeyboard(edge, event.nativeEvent)}
           />
         );

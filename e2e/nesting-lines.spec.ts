@@ -88,7 +88,9 @@ test("shows child-level lines and updates them on collapse and nested scroll", a
     scroller.style.overflowY = "auto";
     scroller.scrollTop = 60;
   });
-  await expect.poll(async () => (await geometry()).values[1]).not.toBe(initial.values[1]);
+  await expect
+    .poll(() => page.locator(".journal-stack").evaluate((el) => el.scrollTop))
+    .toBeGreaterThan(0);
   const scrolled = await geometry();
   scrolled.values.forEach((value, index) =>
     expect(value).toBeCloseTo(scrolled.expected[index]!, 1),
@@ -283,7 +285,7 @@ test("draws nesting lines in an edgeless block card", async ({ page }) => {
   ).toBeVisible();
   await expect(page.locator("[data-edgeless-card-content]")).toHaveCount(2);
   const path = page.locator("[data-nesting-lines] path").first();
-  await expect.poll(async () => (await path.getAttribute("d"))?.match(/\bM /g)?.length).toBe(2);
+  await expect.poll(async () => (await path.getAttribute("d"))?.match(/\bM /g)?.length).toBe(1);
   const alignment = () =>
     page.evaluate(() => {
       const path = document.querySelector<SVGPathElement>("[data-nesting-lines] path")!;
@@ -302,19 +304,53 @@ test("draws nesting lines in an edgeless block card", async ({ page }) => {
     });
   let measured = await alignment();
   expect(measured.actual).toBeCloseTo(measured.expected, 1);
+  await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { reactEditor: ReactEditorApi } })
+      .__rivtoDemo.reactEditor;
+    editor.elements.insertElement({
+      id: "cover",
+      type: "rectangle",
+      props: { fill: "#bb4422" },
+      zIndex: 10,
+      frame: { x: 20, y: 20, width: 300, height: 200 },
+    });
+  });
+  const cover = page.locator('[data-canvas-element="cover"]');
+  await cover.scrollIntoViewIfNeeded();
+  const point = await path.evaluate((element) => {
+    const line = element as SVGPathElement;
+    const center = line
+      .getPointAtLength(line.getTotalLength() / 2)
+      .matrixTransform(line.getScreenCTM()!);
+    return { x: Math.floor(center.x), y: Math.floor(center.y) };
+  });
+  const bounds = (await cover.boundingBox())!;
+  expect(point.x).toBeGreaterThan(bounds.x);
+  expect(point.x).toBeLessThan(bounds.x + bounds.width);
+  expect(point.y).toBeGreaterThan(bounds.y);
+  expect(point.y).toBeLessThan(bounds.y + bounds.height);
+  const clip = { ...point, width: 2, height: 2 };
+  const visible = await page.screenshot({ clip });
+  await path.evaluate((line) => (line.style.visibility = "hidden"));
+  expect(visible.equals(await page.screenshot({ clip }))).toBe(true);
+  await cover.evaluate((element) => (element.style.visibility = "hidden"));
+  const uncovered = await page.screenshot({ clip });
+  await path.evaluate((line) => (line.style.visibility = ""));
+  expect(uncovered.equals(await page.screenshot({ clip }))).toBe(false);
+
   const before = await path.getAttribute("d");
   await page.getByRole("button", { name: "Zoom in" }).click();
   await expect.poll(() => path.getAttribute("d")).not.toBe(before);
-  await expect.poll(async () => (await path.getAttribute("d"))?.match(/\bM /g)?.length).toBe(2);
+  await expect.poll(async () => (await path.getAttribute("d"))?.match(/\bM /g)?.length).toBe(1);
   measured = await alignment();
   expect(measured.actual).toBeCloseTo(measured.expected, 1);
-  const zoomed = await path.getAttribute("d");
+  const zoomed = (await path.boundingBox())!;
   const viewport = (await page.locator(".edgeless-viewport").boundingBox())!;
   await page.mouse.move(viewport.x + viewport.width - 30, viewport.y + viewport.height - 30);
   await page.mouse.down({ button: "middle" });
   await page.mouse.move(viewport.x + viewport.width - 70, viewport.y + viewport.height - 60);
   await page.mouse.up({ button: "middle" });
-  await expect.poll(() => path.getAttribute("d")).not.toBe(zoomed);
+  await expect.poll(async () => (await path.boundingBox())!.x).not.toBe(zoomed.x);
   measured = await alignment();
   expect(measured.actual).toBeCloseTo(measured.expected, 1);
 });

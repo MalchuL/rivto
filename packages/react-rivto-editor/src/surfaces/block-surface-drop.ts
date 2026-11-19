@@ -12,14 +12,9 @@
  * @returns Whether the surface accepted the release.
  * @throws Propagates errors raised by the surface handler.
  */
-export type BlockSurfaceDrop = (
-  ids: readonly string[],
-  x: number,
-  y: number,
-  hit: Element,
-) => boolean;
+type BlockSurfaceDrop = (ids: readonly string[], x: number, y: number, hit: Element) => boolean;
 
-const drops = new WeakMap<HTMLElement, BlockSurfaceDrop>();
+const drops = new WeakMap<Element, BlockSurfaceDrop>();
 
 /**
  * Associates a surface root with its handler for unclaimed block releases.
@@ -56,21 +51,24 @@ export function registerBlockSurfaceDrop(root: HTMLElement, drop: BlockSurfaceDr
  * @returns The selected handler's result, or false when no eligible handler is found.
  * @throws Propagates errors from hit testing or the selected handler.
  */
-export function isDispatchBlockSurfaceDrop(
+export function dispatchBlockSurfaceDrop(
   root: HTMLElement,
   ids: readonly string[],
   x: number,
   y: number,
 ): boolean {
   const hit = root.ownerDocument.elementFromPoint(x, y);
-  for (let node = hit; node; node = node.parentElement) {
-    if (node instanceof HTMLElement) {
-      const drop = drops.get(node);
-      if (drop && (node === root || root.contains(node))) {
-        return drop(ids, x, y, hit!);
-      }
+  if (!hit || !root.contains(hit)) {
+    // A different occurrence owns this release.
+    return false;
+  }
+  for (let element: Element | null = hit; element; element = element.parentElement) {
+    const drop = drops.get(element);
+    if (drop) {
+      // The innermost registered surface decides whether to accept the release.
+      return drop(ids, x, y, hit);
     }
-    if (node === root) {
+    if (element === root) {
       break;
     }
   }

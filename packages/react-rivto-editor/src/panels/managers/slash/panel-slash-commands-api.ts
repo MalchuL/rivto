@@ -4,7 +4,7 @@ import type { SlashCommandRegistry } from "../../../managers/slash/slash-command
 /** Command availability and execution in one bound editor panel. */
 export interface PanelSlashCommandsApi extends Pick<
   SlashCommandRegistry,
-  "register" | "delete" | "get" | "revision" | "subscribe"
+  "register" | "delete" | "get"
 > {
   /** Shared registry revision; advances when command definitions are registered or removed. */
   readonly revision: number;
@@ -21,9 +21,15 @@ export interface PanelSlashCommandsApi extends Pick<
    * Checks availability again and executes the command using this panel's context.
    * @param id - Registered command ID.
    * @param context - Document-local block ID passed to the predicate and execution callback.
+   * @returns After the selected command has run in this occurrence.
    * @throws For an unknown or unavailable command, or when a command callback throws.
    */
   execute(id: string, context: { blockId: string }): void;
-  /** Observes registry changes without an immediate callback; returns an unsubscribe function. */
+  /**
+   * Observes registry changes without invoking the callback during registration.
+   *
+   * @param listener - Called after the shared command definitions change.
+   * @returns A disposer that removes this subscription.
+   */
   subscribe(listener: () => void): () => void;
 }

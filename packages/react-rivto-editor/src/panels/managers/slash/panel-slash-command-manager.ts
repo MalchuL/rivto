@@ -64,6 +64,7 @@ export class PanelSlashCommandManager implements PanelSlashCommandsApi {
    */
   getAll: PanelSlashCommandsApi["getAll"] = (context) => {
     if (!context) {
+      // Without an invocation context, return all registered commands.
       return this.commands.getAll();
     }
     const commandContext = { ...context, reactPanel: this.reactPanel };
@@ -76,6 +77,7 @@ export class PanelSlashCommandManager implements PanelSlashCommandsApi {
    * Executes one available command.
    * @param id - Stable command identity.
    * @param context - Active block context revalidated before execution.
+   * @returns After invoking the available command in this panel.
    * @throws For an unknown or unavailable command, or when its callback fails.
    */
   execute: PanelSlashCommandsApi["execute"] = (id, context) => {

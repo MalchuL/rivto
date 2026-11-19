@@ -31,7 +31,7 @@ export interface PanelRegistryApi {
   /**
    * Registers one document occurrence and connects shared delegated listeners to its root.
    * @param root - Mounted surface displaying the full document or source subtree.
-   * @param document - Source model used for commands within this region.
+   * @param document - Source model supplied by existing callers. Commands use the registered panel API; the registry does not retain this argument.
    * @param rootBlockId - Displayed source root bounding selection and navigation.
    * @param api - Panel-bound API supplied to handlers; omitted only for a region that must not dispatch editing handlers.
    * @param cancelSelection - Cancels pending DOM selection work before removing the root.

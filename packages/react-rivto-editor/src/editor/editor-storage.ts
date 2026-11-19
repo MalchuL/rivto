@@ -1,17 +1,24 @@
 import { Listeners } from "@chulane/rivto-utils";
 import { YjsDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl, type DocumentModel } from "@chulane/document-model";
-import { createDocumentEditor } from "@chulane/rivto";
-import { BlockReferenceResolver } from "@chulane/rivto";
+import {
+  BlockReferenceResolver,
+  createDocumentEditor,
+  waitWithAbort,
+  type DocumentEditorAPI,
+} from "@chulane/rivto";
 import { createReactEditor } from "./react-editor";
-import type {
-  EditorAcquisition,
-  EditorStorageOptions,
-  EditorStorageEntry,
-  ReactEditorApi,
-} from "./types";
-import { waitWithAbort } from "@chulane/rivto";
+import type { EditorAcquisition, EditorStorageOptions, ReactEditorApi } from "./types";
 export type { BlockReference, BlockResolution } from "@chulane/rivto";
+
+/** One open or closing document and the consumers sharing its runtime. */
+type EditorStorageEntry = {
+  consumers: number;
+  pending: Promise<ReactEditorApi>;
+  editor?: ReactEditorApi;
+  core?: DocumentEditorAPI;
+  closing?: Promise<void>;
+};
 
 /**
  * Loads documents and shares one React runtime and core editor for each document ID.

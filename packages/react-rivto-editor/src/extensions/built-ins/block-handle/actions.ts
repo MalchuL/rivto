@@ -1,10 +1,8 @@
+import type { BlockContextMenuRegistration } from "./types";
 import { focusSelectionCaret } from "../../../managers";
 import { deletePanelSelection } from "../selection/selection-deletion";
 import { createStructuralSelection } from "@chulane/rivto";
-import type {
-  BlockContextMenuContext,
-  BlockContextMenuEntry,
-} from "../../../managers/block-context-menu/types";
+import type { BlockContextMenuContext } from "../../../managers/block-context-menu/types";
 import { assertBlockMenuTargets } from "../../../managers/block-context-menu/targets";
 import { writeClipboardBundle } from "../../../managers/clipboard/browser-clipboard";
 import {
@@ -15,18 +13,6 @@ import {
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
 } from "lucide-react";
-
-/** Registration capability borrowed from the block context menu. */
-interface BlockContextMenuRegistration {
-  /**
-   * Registers a menu entry for the current extension lifecycle.
-   *
-   * @param entry - Menu contribution to register.
-   * @returns Disposer that removes the registered entry.
-   * @throws If the registry is inactive or the entry is invalid or duplicated.
-   */
-  register(entry: BlockContextMenuEntry): () => void;
-}
 
 /**
  * Registers Copy, Cut, and Delete contributions independently of slash commands.

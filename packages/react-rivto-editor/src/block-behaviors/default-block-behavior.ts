@@ -15,12 +15,7 @@ import {
   owningBlockElement,
 } from "../extensions/built-ins/page/navigation/utils/scope";
 import type { KeyboardSelectionTarget } from "../managers/keyboard/selection";
-import {
-  findNextEditableBlock,
-  findParentBlock,
-  findPreviousEditableBlock,
-  findRenderedBlock,
-} from "../blocks/block-dom";
+import { findAdjacentEditableBlock, findParentBlock, findRenderedBlock } from "../blocks/block-dom";
 import { focusCaret, scheduleBlockFocus } from "./utils/focus-ops";
 import { mergeBlocks, resetToWritingType, splitBlock } from "./utils/text-ops";
 import type { BlockBehavior, BlockBehaviorContext, BlockBehaviorOutcome } from "./types";
@@ -74,6 +69,7 @@ export class DefaultBlockBehavior implements BlockBehavior {
     target: KeyboardSelectionTarget,
   ): BlockBehaviorOutcome {
     if (this.removeFirstEmptyBlock(context)) {
+      // The first empty block already consumed Backspace.
       return "handled";
     }
     const rendered = findRenderedBlock(context.root, target.blockId);
@@ -81,12 +77,10 @@ export class DefaultBlockBehavior implements BlockBehavior {
       return "unhandled";
     }
     const { reactPanel } = context;
-    if (!reactPanel.blocks.canOutdent(target.blockId)) {
-      scheduleBlockFocus(reactPanel, context.root, target.blockId, 0);
-      return "handled";
+    if (reactPanel.blocks.canOutdent(target.blockId)) {
+      reactPanel.batchUpdates(() => reactPanel.blocks.outdentBlocks([target.blockId]));
     }
-    reactPanel.batchUpdates(() => reactPanel.blocks.outdentBlocks([target.blockId]));
-    scheduleBlockFocus(context.reactPanel, context.root, target.blockId, 0);
+    scheduleBlockFocus(reactPanel, context.root, target.blockId, 0);
     return "handled";
   }
 
@@ -103,6 +97,7 @@ export class DefaultBlockBehavior implements BlockBehavior {
   ): BlockBehaviorOutcome {
     const { reactPanel, root } = context;
     if (this.removeFirstEmptyBlock(context)) {
+      // The empty block was handled before a sibling merge was needed.
       return "handled";
     }
     const rendered = findRenderedBlock(root, target.blockId);
@@ -113,7 +108,7 @@ export class DefaultBlockBehavior implements BlockBehavior {
     if (removeEmptyBlockAfterStructuralPredecessor(reactPanel, scope, target.blockId)) {
       return "handled";
     }
-    const previous = findPreviousEditableBlock(scope, target.blockId);
+    const previous = findAdjacentEditableBlock(scope, target.blockId, "previous");
     if (!previous) {
       return "unhandled";
     }
@@ -142,7 +137,7 @@ export class DefaultBlockBehavior implements BlockBehavior {
     if (removeEmptyBlockAfterStructuralPredecessor(reactPanel, scope, block.id)) {
       return "handled";
     }
-    const next = findNextEditableBlock(scope, target.blockId);
+    const next = findAdjacentEditableBlock(scope, target.blockId, "next");
     if (!next) {
       return "unhandled";
     }
@@ -174,7 +169,7 @@ export class DefaultBlockBehavior implements BlockBehavior {
       return "unhandled";
     }
     const scope = navigationDomRoot(root, block.id);
-    if (findPreviousEditableBlock(scope, target.blockId)) {
+    if (findAdjacentEditableBlock(scope, target.blockId, "previous")) {
       return "unhandled";
     }
     resetToWritingType(reactPanel, block.id);
@@ -204,6 +199,7 @@ export class DefaultBlockBehavior implements BlockBehavior {
       !reactPanel.blocks.canRemove(block.id) ||
       !reactPanel.editor.defaultWritingBlockFactory.isEmptyBlock(node)
     ) {
+      // Defer to the normal Backspace behavior for this block.
       return false;
     }
     const parentId = reactPanel.blocks.getParentId(block.id);
@@ -216,6 +212,7 @@ export class DefaultBlockBehavior implements BlockBehavior {
         ? owningBlockElement(reactPanel, block.id)
         : undefined;
     if (index < 0 || (index !== 0 && card?.props.startBlockId !== block.id)) {
+      // Only the first block in this editing region qualifies.
       return false;
     }
     const nextSibling = siblings[index + 1];
@@ -237,30 +234,36 @@ export class DefaultBlockBehavior implements BlockBehavior {
             element.props.endBlockId !== block.id,
         )
       ) {
+        // Preserve a card that owns other content or spans additional blocks.
         return false;
       }
       reactPanel.batchUpdates(() => {
         if (!reactPanel.blocks.removeBlocks([block.id])) {
+          // A structural handler kept the block, so retain its card and focus.
           return;
         }
         cards.forEach((element) => reactPanel.elements.removeElement(element.id));
         reactPanel.selection.clear();
         root.focus({ preventScroll: true });
       });
+      // Backspace was consumed even if a structural handler kept the block.
       return true;
     }
     if (!nextSibling) {
+      // Without a successor, another behavior owns this boundary.
       return false;
     }
     const scope = navigationDomRoot(root, block.id);
-    const next = findNextEditableBlock(scope, block.id);
+    const next = findAdjacentEditableBlock(scope, block.id, "next");
     // Do not skip a structural block or move focus into another card or descendant.
     if (!next || next.blockId !== nextSibling) {
+      // Only the immediate editable sibling can receive the caret.
       return false;
     }
     // Keep card ranges and block deletion in the same undo item; publish focus after removal.
     reactPanel.batchUpdates(() => {
       if (!reactPanel.blocks.removeBlocks([block.id])) {
+        // A veto leaves the card endpoints and selection intact.
         return;
       }
       for (const element of reactPanel.elements.getElementNodes()) {

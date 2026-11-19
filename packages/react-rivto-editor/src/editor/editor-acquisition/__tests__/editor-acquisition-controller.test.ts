@@ -1,7 +1,7 @@
 import {
   EditorAcquisitionController,
   type SourceEditorLease,
-} from "./editor-acquisition-controller";
+} from "../editor-acquisition-controller";
 const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
 
 test("releases a late acquisition once without publishing after destruction", async () => {

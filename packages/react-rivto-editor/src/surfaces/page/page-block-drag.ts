@@ -13,7 +13,7 @@ import { transferBlocksBetweenDocuments } from "../../block-transfer/cross-docum
 import { crossDocumentPageRootControllers } from "../../extensions/block-drag/cross-document/target";
 import type { CrossDocumentPageRootController } from "../../extensions/block-drag/types";
 import { PageDragOccurrence } from "./page-drag-occurrence";
-import { isDispatchBlockSurfaceDrop } from "../block-surface-drop";
+import { dispatchBlockSurfaceDrop } from "../block-surface-drop";
 
 /** One borrowed child-ID list in a bounded preview traversal; no descendants are copied. */
 interface PagePreviewCursor {
@@ -52,8 +52,8 @@ export class PageBlockDrag implements BlockDragAdapter {
    * @returns The surface handler's result, or false when the occurrence is detached or no surface accepts the release.
    * @throws Propagates hit-testing or surface handler failures.
    */
-  isDropOutsideTargets(ids: readonly string[], x: number, y: number): boolean {
-    return this.occurrence ? isDispatchBlockSurfaceDrop(this.occurrence.root, ids, x, y) : false;
+  dropOutsideTargets(ids: readonly string[], x: number, y: number): boolean {
+    return this.occurrence ? dispatchBlockSurfaceDrop(this.occurrence.root, ids, x, y) : false;
   }
 
   /**

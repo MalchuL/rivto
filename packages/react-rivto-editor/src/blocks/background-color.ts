@@ -2,7 +2,7 @@ import type { BlockProcessor } from "@chulane/rivto";
 import { isBlockStyle } from "./block-style";
 
 /** Explicit default background stored for colored containers. */
-export const CONTAINER_DEFAULT_BACKGROUND = "#eceef6";
+const CONTAINER_DEFAULT_BACKGROUND = "#eceef6";
 
 /**
  * Creates a block-owned processor that fills a container's missing background.
@@ -25,13 +25,16 @@ export function createContainerBackgroundProcessor(type: string): BlockProcessor
      */
     processor: (block) => {
       if (block.type !== type) {
+        // Another block type owns its defaults.
         return block;
       }
       const style = block.listProps?.style;
       if (style !== undefined && !isBlockStyle(style)) {
+        // Preserve opaque style data from other renderers.
         return block;
       }
       if (typeof style?.background?.color === "string") {
+        // An explicit color also covers a transparent background.
         return block;
       }
       return {
@@ -79,12 +82,12 @@ export const BLOCK_PALETTE_COLORS: Readonly<Record<string, string>> = {
 };
 
 /** Persisted color split into its base and alpha percentage. */
-export interface BlockBackgroundColor {
+type BlockBackgroundColor = {
   /** Six-digit hex color without the alpha channel. */
   readonly color: string;
   /** Alpha as an integer percentage. */
   readonly alpha: number;
-}
+};
 
 /**
  * Reads a persisted background color and its alpha percentage.

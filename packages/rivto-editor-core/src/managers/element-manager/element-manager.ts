@@ -18,11 +18,6 @@ import type { ElementProcessor } from "./element-pipe";
 import type { ElementManagerApi } from "../types";
 import { Pipe } from "../../utils/pipe";
 
-interface ElementProcessorRegistration {
-  readonly processor: ElementProcessor;
-  dispose: () => void;
-}
-
 /** Editor capabilities required by document element operations. */
 export interface ElementManagerEditor extends DocumentCommandsEditor {
   /** Type-specific validation for element data. */
@@ -40,7 +35,7 @@ export class ElementManager<
    * processors follow this editor without becoming shared document state.
    */
   private readonly pipe: Pipe<ElementInput>;
-  private readonly processors: Set<ElementProcessorRegistration>;
+  private readonly processorDisposers: Set<() => void>;
   private readonly ownsProcessors: boolean;
   private readonly subscriptions = new Set<() => void>();
 
@@ -58,7 +53,7 @@ export class ElementManager<
     owner?: ElementManager,
   ) {
     this.pipe = owner ? owner.pipe : new Pipe<ElementInput>();
-    this.processors = owner ? owner.processors : new Set<ElementProcessorRegistration>();
+    this.processorDisposers = owner?.processorDisposers ?? new Set();
     this.ownsProcessors = !owner;
   }
 
@@ -137,16 +132,12 @@ export class ElementManager<
    * @throws If the processor ID is empty.
    */
   registerProcessor(processor: ElementProcessor): () => void {
-    const registration: ElementProcessorRegistration = {
-      processor,
-      dispose: this.pipe.register(processor),
-    };
-    this.processors.add(registration);
+    const dispose = this.pipe.register(processor);
+    this.processorDisposers.add(dispose);
     return () => {
-      if (!this.processors.delete(registration)) {
-        return;
+      if (this.processorDisposers.delete(dispose)) {
+        dispose();
       }
-      registration.dispose();
     };
   }
 
@@ -459,8 +450,8 @@ export class ElementManager<
     this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions.clear();
     if (this.ownsProcessors) {
-      this.processors.forEach((registration) => registration.dispose());
-      this.processors.clear();
+      this.processorDisposers.forEach((dispose) => dispose());
+      this.processorDisposers.clear();
     }
   }
 

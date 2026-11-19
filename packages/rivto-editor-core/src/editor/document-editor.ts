@@ -29,15 +29,15 @@ export class DocumentEditor implements DocumentEditorAPI {
   /** Public owner of typed block operations. */
   readonly blocks: BlockManager;
   /** Public owner of list-property defaults and semantic validation. */
-  readonly blockListProps: DocumentEditorAPI["blockListProps"];
+  readonly blockListProps: BlockListPropsManager;
   /** Public owner of native block definitions, behavior registrations, and property validation. */
   readonly blockRegistry: BlockRegistryManager;
   /** Public owner of first-class canvas element commands. */
   readonly elements: ElementManager;
   /** Element definitions and property rules shared by all panels of this editor. */
-  readonly elementRegistry: ElementRegistry;
+  readonly elementRegistry = new ElementRegistry();
   /** Named command handlers exposed to integrations and focused managers. */
-  readonly commands: CommandRegistry;
+  readonly commands = new CommandRegistry();
   /** Local text and structural selection state; never persisted to the document. */
   readonly selection: DocumentEditorAPI["selection"];
   /** Local history and transaction batching for document changes. */
@@ -65,13 +65,10 @@ export class DocumentEditor implements DocumentEditorAPI {
       throw new Error("Document is required");
     }
     this.model = options.document;
-    this.elementRegistry = new ElementRegistry();
-    this.commands = new CommandRegistry();
     this.history = new HistoryManager(this.model.history);
-    const registry = new BlockRegistryManager();
-    this.blockRegistry = registry;
+    this.blockRegistry = new BlockRegistryManager();
     this.blockListProps = new BlockListPropsManager();
-    this.blocks = new BlockManager(this, registry);
+    this.blocks = new BlockManager(this, this.blockRegistry);
     this.elements = new ElementManager(this);
     this.selection = new SelectionManager(this);
     this.clipboard = new ClipboardManager(this);
@@ -164,15 +161,12 @@ export class DocumentEditor implements DocumentEditorAPI {
       }
     };
     this.unsubscribeFns.splice(0).forEach((unsubscribe) => run(unsubscribe));
-    const { elements, blocks, blockListProps, blockRegistry, commands } = this;
-    run(() => elements.destroy());
+    run(() => this.elements.destroy());
     run(() => this.elementRegistry.destroy());
-    run(() => blocks.destroy());
-    if (blockListProps instanceof BlockListPropsManager) {
-      run(() => blockListProps.destroy());
-    }
-    run(() => blockRegistry.destroy());
-    run(() => commands.clear());
+    run(() => this.blocks.destroy());
+    run(() => this.blockListProps.destroy());
+    run(() => this.blockRegistry.destroy());
+    run(() => this.commands.clear());
     run(() => this.listeners.clear());
     if (errors.length === 1) {
       throw errors[0];

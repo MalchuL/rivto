@@ -34,9 +34,6 @@ export function TestPanel({ panel, children }: { panel: ReactPanel; children?: R
     {
       value: {
         reactPanel: panel,
-        document: panel.document.getDocument(),
-        documentId: panel.documentId,
-        rootBlockId: panel.rootBlockId,
         enabled: true,
       },
     },

@@ -67,6 +67,7 @@ export class PanelBlockContextMenuManager {
    */
   getAll(targets?: BlockContextMenuTargets) {
     if (!targets) {
+      // Without a target, return the unfiltered shared definitions.
       return this.reactPanel.editor.blockContextMenu.getAll();
     }
     const context = { ...targets, reactPanel: this.reactPanel };

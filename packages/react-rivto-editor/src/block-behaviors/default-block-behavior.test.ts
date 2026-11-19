@@ -24,7 +24,12 @@ import { createBlockBehaviorContext } from "./utils/context";
 import { DefaultBlockBehavior } from "./default-block-behavior";
 
 class RejectingBlockBehavior implements BlockStructuralBehavior {
-  /** @param context - Block being checked. @returns Whether this paragraph behavior applies. */
+  /**
+   * Limits the movement veto to paragraphs.
+   *
+   * @param block - Current fields of the proposed block.
+   * @returns Whether this behavior applies to the block.
+   */
   isAvailable(block: BlockInput): boolean {
     return block.type === "paragraph";
   }
@@ -89,6 +94,49 @@ test("asks the resolved behavior whether a drop is accepted", async () => {
   reactPanel.editor.destroy();
   editor.destroy();
 });
+
+test.each(["block", "edgeless"] as const)(
+  "Enter leaves the continuation after its source when a behavior rejects indent in %s",
+  async (mode) => {
+    const editor = await createTestCoreEditor({ registerWritingBlock: false });
+    const reactPanel = createReactEditor({
+      editor,
+      extensions: [defaultWritingBlockExtension()],
+    });
+    try {
+      reactPanel.mode.set(mode);
+      const source = editor.blocks.insertBlock({
+        type: "paragraph",
+        content: "beforeafter",
+        children: [{ type: "paragraph", content: "existing child" }],
+      });
+      reactPanel.editor.blockElements.reconcile();
+      const card = reactPanel.elements
+        .getElementNodes()
+        .find((element) => element.props.endBlockId === source.id)!;
+      editor.blockRegistry.registerBehavior({
+        isAvailable: () => true,
+        onIndent: () => "rejected",
+      });
+      const caret = createCaretSelection(source.id, 6);
+      const context = createBlockBehaviorContext(reactPanel, source.id, {} as HTMLElement, caret)!;
+      reactPanel.blockBehaviors.dispatch("onSplit", context, firstKeyboardTarget(caret)!);
+
+      expect(
+        editor.blocks.getRootIds().map((id) => editor.blocks.getBlockNode(id)?.content),
+      ).toEqual(["before", "after"]);
+      const endBlockId = mode === "edgeless" ? editor.blocks.getRootIds()[1] : source.id;
+      expect(reactPanel.elements.getElementNode(card.id)?.props.endBlockId).toBe(endBlockId);
+      expect(editor.blocks.getChildIds(source.id)).toEqual(
+        source.children.map((child) => child.id),
+      );
+    } finally {
+      await reactPanel.destroy();
+      await reactPanel.editor.destroy();
+      await editor.destroy();
+    }
+  },
+);
 
 test.each(["checkbox", "numbered_list", "start_numbered_list", "continue_numbered_list"])(
   "empty %s clears its marker before outdenting one level per Enter",

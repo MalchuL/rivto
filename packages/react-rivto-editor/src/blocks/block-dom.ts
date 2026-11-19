@@ -60,51 +60,53 @@ function findOwnedContent(block: HTMLElement): HTMLElement | null {
 }
 
 /**
- * Finds the immediately previous rendered block when that block is editable.
+ * Finds an editable neighbor in depth-first DOM order within the supplied panel or card.
  *
- * block shell elements are returned in depth-first DOM order, matching the page's
- * visible traversal. A contentless custom block stops the lookup so Backspace
- * never merges text across structural controls.
+ * At a mounted boundary, Page can synchronously render more roots. Horizontal
+ * movement and text merges stop at contentless custom blocks. Vertical navigation
+ * skips those blocks to reach the next rendered line within the same occurrence.
  *
- * @param root - Active page surface root.
- * @param blockId - Current block whose predecessor is requested.
- * @returns Previous editable block identity and elements, or null.
+ * @param root - Receiving occurrence or card defining the navigation boundary.
+ * @param blockId - Rendered block whose neighbor is requested.
+ * @param direction - Side of the current block to inspect in document order.
+ * @param contentless - Whether a block without editable content stops the search.
+ * @returns Editable neighbor with its persisted identity, or null at the boundary.
+ * @throws Propagates synchronous host mounting failures.
  */
-export function findPreviousEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
+export function findAdjacentEditableBlock(
+  root: HTMLElement,
+  blockId: string,
+  direction: "previous" | "next",
+  contentless: "stop" | "skip" = "stop",
+): EventBlock | null {
   let blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
   let index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
-  if (index === 0 && PageNavigationController.getForElement(root)) {
-    PageNavigationController.getForElement(root)?.mountAdjacentBlocks(blockId, -1);
-    blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
-    index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
+  const step = direction === "previous" ? -1 : 1;
+  if (index >= 0 && !blocks[index + step]) {
+    const navigation = PageNavigationController.getForElement(root);
+    if (navigation) {
+      navigation.mountAdjacentBlocks(blockId, step);
+      blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
+      index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
+    }
   }
-  if (index <= 0) {
-    return null;
+  while (index >= 0) {
+    index += step;
+    const block = blocks[index];
+    if (!block) {
+      break;
+    }
+    const content = findOwnedContent(block);
+    const adjacentId = block.getAttribute(BLOCK_ID_ATTRIBUTE);
+    if (content && adjacentId) {
+      // Return the closest eligible content within this occurrence.
+      return { block, content, blockId: adjacentId };
+    }
+    if (contentless === "stop") {
+      break;
+    }
   }
-
-  const block = blocks[index - 1];
-  const content = findOwnedContent(block);
-  const previousId = block.getAttribute(BLOCK_ID_ATTRIBUTE);
-  return content && previousId ? { block, content, blockId: previousId } : null;
-}
-
-/** Finds the immediately next rendered block when that block is editable. */
-export function findNextEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
-  let blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
-  let index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
-  if (index === blocks.length - 1 && PageNavigationController.getForElement(root)) {
-    PageNavigationController.getForElement(root)?.mountAdjacentBlocks(blockId, 1);
-    blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
-    index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
-  }
-  if (index < 0 || index >= blocks.length - 1) {
-    return null;
-  }
-
-  const block = blocks[index + 1];
-  const content = findOwnedContent(block);
-  const nextId = block.getAttribute(BLOCK_ID_ATTRIBUTE);
-  return content && nextId ? { block, content, blockId: nextId } : null;
+  return null;
 }
 
 /**
@@ -176,55 +178,16 @@ export function verticalCaretPosition(
   if (!currentContent) {
     return;
   }
-  return BlockDOMSelection.verticalCaretPosition(currentContent, position.offset, direction, () =>
-    findVerticalAdjacentContent(root, position.blockId, direction),
+  return BlockDOMSelection.verticalCaretPosition(
+    currentContent,
+    position.offset,
+    direction,
+    () =>
+      findAdjacentEditableBlock(
+        root,
+        position.blockId,
+        direction === "up" ? "previous" : "next",
+        "skip",
+      )?.content,
   );
-}
-
-/**
- * Mounts a neighboring display root when needed and finds its editable content.
- *
- * Vertical movement spans the occurrence, skips contentless blocks and excludes
- * nested panels. Horizontal movement retains its separate card-local policy.
- *
- * @param root - Receiving panel or explicitly bounded DOM region.
- * @param blockId - Current rendered block whose neighbor is requested.
- * @param direction - Previous or next visual block in DOM order.
- * @returns Adjacent editable content, or undefined at the occurrence edge.
- * @throws Propagates synchronous host mounting failures.
- */
-function findVerticalAdjacentContent(
-  root: HTMLElement,
-  blockId: string,
-  direction: "up" | "down",
-): HTMLElement | undefined {
-  let blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
-  let currentIndex = blocks.findIndex(
-    (block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId,
-  );
-  if (
-    ((direction === "up" && currentIndex === 0) ||
-      (direction === "down" && currentIndex === blocks.length - 1)) &&
-    PageNavigationController.getForElement(root)
-  ) {
-    PageNavigationController.getForElement(root)?.mountAdjacentBlocks(
-      blockId,
-      direction === "up" ? -1 : 1,
-    );
-    blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
-    currentIndex = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
-  }
-  for (
-    let index = currentIndex + (direction === "up" ? -1 : 1);
-    index >= 0 && index < blocks.length;
-    index += direction === "up" ? -1 : 1
-  ) {
-    const content = findOwnedContent(blocks[index]!);
-    const adjacentId = blocks[index]!.getAttribute(BLOCK_ID_ATTRIBUTE);
-    if (!content || !adjacentId) {
-      continue;
-    }
-    return content;
-  }
-  return;
 }

@@ -172,6 +172,7 @@ export class PanelClipboardManager implements PanelClipboardApi {
   copy: ClipboardApi["copy"] = (selection, _panel, operation) => {
     const current = selection ?? this.reactPanel.selection.get();
     if (!current) {
+      // There is no panel selection to serialize.
       return undefined;
     }
     this.requireSelection(current);
@@ -197,10 +198,12 @@ export class PanelClipboardManager implements PanelClipboardApi {
   cut: PanelClipboardApi["cut"] = () => {
     const selection = this.reactPanel.selection.get();
     if (!selection) {
+      // There is no panel selection to cut.
       return;
     }
     const bundle = this.clipboard.copy(selection, this.reactPanel, "cut");
     if (!bundle) {
+      // An empty copy must leave the original content intact.
       return;
     }
     this.reactPanel.editor.clipboardFormats.formatBundle(bundle);

@@ -79,15 +79,6 @@ export interface EditorAcquisition {
   release(): Promise<void>;
 }
 
-/** One open or closing document and the consumers sharing its runtime. */
-export interface EditorStorageEntry {
-  consumers: number;
-  pending: Promise<ReactEditorApi>;
-  editor?: ReactEditorApi;
-  core?: DocumentEditorAPI;
-  closing?: Promise<void>;
-}
-
 /** Shared React registrations and the operations of one fixed document editor.
  * Document managers provide the following shared capabilities:
  * Creates and updates document elements, including canvas objects, through the core element manager.

@@ -269,6 +269,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
     };
     pending.frame = view.requestAnimationFrame(() => {
       if (!pending.active) {
+        // A cancellation has already released this frame.
         return;
       }
       // The same model selection can outlive its DOM surface. A replacement root

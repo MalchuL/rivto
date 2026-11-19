@@ -1,6 +1,6 @@
-import { createTestEditor } from "../editor/test-utils";
-import { ChildrenPanel } from "./children-panel";
-import { EmbeddingPanel } from "./embedding-panel";
+import { createTestEditor } from "../../editor/test-utils";
+import { ChildrenPanel } from "../children-panel";
+import { EmbeddingPanel } from "../embedding-panel";
 
 test("outline commands check the panel boundary, movement permissions, adopted tail and undo without React", async () => {
   const editor = await createTestEditor();

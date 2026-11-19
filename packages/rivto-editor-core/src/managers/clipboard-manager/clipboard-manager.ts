@@ -26,7 +26,22 @@ import {
 } from "./strategies";
 import { PasteStrategyRegistry } from "./strategies";
 import type { DocumentEditorAPI } from "../../editor/types";
-import type { ClipboardManagerApi } from "../types";
+import type {
+  BlockManagerApi,
+  ClipboardManagerApi,
+  ElementManagerApi,
+  HistoryBatch,
+  SelectionManagerApi,
+} from "../types";
+
+/** Capabilities used to copy, cut, and paste through the receiving editor or panel. */
+interface ClipboardEditor extends Pick<DocumentEditorAPI, "getDocument"> {
+  readonly blocks: PasteContext["editor"]["blocks"] &
+    Pick<BlockManagerApi, "hasBlock" | "canRemove">;
+  readonly elements: Pick<ElementManagerApi, "hasElement">;
+  readonly selection: Pick<SelectionManagerApi, "resolveBlockSelection" | "get" | "set" | "delete">;
+  readonly history: HistoryBatch;
+}
 
 /** Framework-neutral clipboard operations over blocks with per-block offsets. */
 export class ClipboardManager implements ClipboardManagerApi {
@@ -43,7 +58,7 @@ export class ClipboardManager implements ClipboardManagerApi {
    * @param pasteStrategies - Optional source-owned strategy registry to borrow.
    */
   constructor(
-    private readonly editor: DocumentEditorAPI,
+    private readonly editor: ClipboardEditor,
     pasteStrategies?: PasteStrategyRegistry,
   ) {
     this.pasteStrategies = pasteStrategies ?? new PasteStrategyRegistry();

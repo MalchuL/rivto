@@ -12,6 +12,7 @@ import type {
   BlockRelocationCommands,
   BlockStructuralBehavior,
   BlockStructuralContext,
+  BlockStructuralScope,
 } from "../../../block-behaviors/types";
 
 /** Structural operations borrowed by document and panel block managers. */
@@ -30,17 +31,8 @@ export class BlockStructuralBehaviorStrategy {
    * @param documentBlocks - Document-wide operations used by behaviors across panel boundaries.
    */
   constructor(
-    private readonly blocks: Pick<
-      BlockManagerApi,
-      | "getBlockNode"
-      | "getParentId"
-      | "getInsertionDestinationAfter"
-      | "moveBlocks"
-      | "getOrderedIds"
-      | "getChildIds"
-      | "getRootIds"
-      | "updateBlock"
-    >,
+    private readonly blocks: BlockStructuralScope &
+      Pick<BlockManagerApi, "getInsertionDestinationAfter">,
     private readonly registry: StructuralBehaviorRegistry,
     private readonly documentBlocks: BlockRelocationCommands,
   ) {}

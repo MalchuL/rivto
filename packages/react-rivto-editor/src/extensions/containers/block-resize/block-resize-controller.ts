@@ -1,16 +1,17 @@
-import { normalizeResizeWidth } from "./block-resize-size";
+import { normalizeResizeWidth, getStyleWidth } from "./block-resize-size";
 import type { EditorBlockNode, EditorBlockPatch } from "@chulane/rivto";
 import { BLOCK_ID_ATTRIBUTE } from "../../../constants";
 import { isBlockStyle } from "../../../blocks/block-style";
-import { RESIZING_HANDLE_ATTRIBUTE, RESIZING_PLACEMENT_ATTRIBUTE } from "./block-resize-constants";
+import {
+  MIN_RESIZE_HEIGHT,
+  MAX_RESIZE_HEIGHT,
+  RESIZING_HANDLE_ATTRIBUTE,
+  RESIZING_PLACEMENT_ATTRIBUTE,
+} from "./block-resize-constants";
 
 /** Edge or corner of a placement used as the resize origin. */
 export type BlockResizeEdge =
   "left" | "right" | "top" | "bottom" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
-
-/** Height bounds in CSS pixels for an interactive resize. */
-export const MIN_RESIZE_HEIGHT = 48;
-export const MAX_RESIZE_HEIGHT = 2000;
 
 const HEIGHT_PROPERTIES = ["height", "min-height", "max-height", "overflow-y"] as const;
 
@@ -79,6 +80,20 @@ interface ResizableBlocks {
   updateBlock(id: string, patch: EditorBlockPatch): EditorBlockNode;
 }
 
+/** Layout-specific persistence keys and the optional shell receiving vertical previews. */
+export type BlockResizeOptions = {
+  /** Optional block plugin-data key holding the layout-owned pixel width. */
+  readonly pluginId?: string;
+  /** Optional plugin-data key for the width captured before entering a layout. */
+  readonly originalWidthPluginId?: string;
+  /** Optional block plugin-data key holding the layout-owned height. */
+  readonly heightPluginId?: string;
+  /** Optional key retaining the previous style height and policy. */
+  readonly originalHeightPluginId?: string;
+  /** Block shell receiving height previews; defaults to the placement. */
+  readonly heightTarget?: HTMLElement;
+};
+
 /** Owns one placement's preview, pointer capture and cancellation resources. */
 export class BlockResizeController {
   private gesture: BlockResizeGesture | undefined;
@@ -92,52 +107,19 @@ export class BlockResizeController {
    * @param blocks - Live block reads and mutation commands; lifecycle remains with the panel.
    * @param blockId - Persisted placement identity receiving style and plugin-data dimensions.
    * @param placement - Explicit Page placement or retained Edgeless block shell.
-   * @param pluginId - Optional block plugin-data key for a layout-owned width; omission writes the block style.
-   * @param originalWidthPluginId - Optional key recording the prior style width if it was not captured on entry.
-   * @param heightPluginId - Optional plugin-data key for the layout-owned height and policy.
-   * @param originalHeightPluginId - Optional key recording the height and policy before layout changes.
-   * @param heightTarget - Block shell receiving height previews; defaults to the placement.
+   * @param options - Layout-owned metadata keys and the optional height preview shell.
+   * @param options.pluginId - Optional block plugin-data key for a layout-owned width; omission writes the block style.
+   * @param options.originalWidthPluginId - Optional key recording the prior style width if it was not captured on entry.
+   * @param options.heightPluginId - Optional plugin-data key for the layout-owned height and policy.
+   * @param options.originalHeightPluginId - Optional key recording the height and policy before layout changes.
+   * @param options.heightTarget - Block shell receiving height previews; defaults to the placement.
    */
   constructor(
     private readonly blocks: ResizableBlocks,
     private readonly blockId: string,
     private readonly placement: HTMLElement,
-    private readonly pluginId?: string,
-    private readonly originalWidthPluginId?: string,
-    private readonly heightPluginId?: string,
-    private readonly originalHeightPluginId?: string,
-    private readonly heightTarget?: HTMLElement,
+    private readonly options: BlockResizeOptions = {},
   ) {}
-
-  /**
-   * Reads a pixel width from a stored style, using a measured fallback for other units.
-   *
-   * @param style - Untrusted persisted block style.
-   * @param placement - Placement measured when the stored width is absent or uses non-pixel units.
-   * @returns Width clamped to the supported placement range.
-   */
-  static getStyleWidth(style: unknown, placement?: HTMLElement): number {
-    const width = isBlockStyle(style) ? style.size?.width : undefined;
-    const match = typeof width === "string" ? /^(\d+(?:\.\d+)?)(?:px)?$/.exec(width.trim()) : null;
-    if (match) {
-      return normalizeResizeWidth(Number(match[1]));
-    }
-    return normalizeResizeWidth(placement?.offsetWidth || 280);
-  }
-
-  /**
-   * Reads a plugin-owned pixel width, falling back to the measured placement.
-   *
-   * @param value - Untrusted block plugin-data value.
-   * @param placement - Placement measured when the value is absent or invalid.
-   * @returns Width clamped to the supported range, defaulting to 280 pixels when no measurement exists.
-   */
-  static getPluginWidth(value: unknown, placement?: HTMLElement): number {
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return normalizeResizeWidth(value);
-    }
-    return normalizeResizeWidth(placement?.offsetWidth || 280);
-  }
 
   /**
    * Starts a pointer resize from an edge or corner without writing the document.
@@ -189,7 +171,7 @@ export class BlockResizeController {
         styles: this.captureInlineStyles(this.placement, ["margin-top", "margin-bottom"]),
       });
     }
-    const heightTarget = this.heightTarget ?? this.placement;
+    const heightTarget = this.options.heightTarget ?? this.placement;
     const startHeight = heightTarget.offsetHeight;
     this.gesture = {
       pointerId: event.pointerId,
@@ -274,23 +256,26 @@ export class BlockResizeController {
    * Ends capture, restores frozen siblings and optionally persists the final pointer dimensions.
    *
    * @param event - Pointer release, cancellation or lost capture.
-   * @param commit - Whether to save rather than discard the preview.
+   * @param outcome - Commit saves the final pointer position; cancel discards the preview.
    * @returns The matching gesture is cleared; cancelled and unrelated pointers never write.
    * @throws Propagates cleanup or block-command failures.
    */
-  finish(event: PointerEvent, commit: boolean): void {
+  finish(event: PointerEvent, outcome: "commit" | "cancel"): void {
     const active = this.gesture;
     if (!active || active.pointerId !== event.pointerId) {
+      // A release from another pointer leaves the active gesture alone.
       return;
     }
-    if (commit) {
-      this.move(event);
+    if (outcome === "cancel") {
+      this.cancel();
+      // Cancellation restores the DOM without reading layout or writing the document.
+      return;
     }
+    this.move(event);
     // The preview width can change wrapping, so measure its content before restoring styles.
-    const contentHeight =
-      commit && this.resizesHeight(active.edge) ? active.heightTarget.scrollHeight : 0;
+    const contentHeight = this.resizesHeight(active.edge) ? active.heightTarget.scrollHeight : 0;
     this.cancel();
-    if (commit && (active.width !== active.startWidth || active.height !== active.startHeight)) {
+    if (active.width !== active.startWidth || active.height !== active.startHeight) {
       this.commitDimensions(
         this.resizesWidth(active.edge) ? active.width : undefined,
         this.resizesHeight(active.edge) ? active.height : undefined,
@@ -325,13 +310,13 @@ export class BlockResizeController {
     const step = event.shiftKey ? 50 : 10;
     if (horizontal) {
       const block = this.blocks.getBlockNode(this.blockId);
-      const width = this.pluginId
-        ? BlockResizeController.getPluginWidth(block?.pluginData[this.pluginId], this.placement)
-        : BlockResizeController.getStyleWidth(block?.listProps.style, this.placement);
+      const width = this.options.pluginId
+        ? normalizeResizeWidth(block?.pluginData[this.options.pluginId], this.placement)
+        : getStyleWidth(block?.listProps.style, this.placement);
       this.commitDimensions(width + direction * step, undefined, 0);
       return;
     }
-    const heightTarget = this.heightTarget ?? this.placement;
+    const heightTarget = this.options.heightTarget ?? this.placement;
     const height = heightTarget.offsetHeight + direction * step;
     // Temporarily remove the current height constraints so scrollHeight measures content alone.
     let contentHeight: number;
@@ -471,23 +456,29 @@ export class BlockResizeController {
     // Save the original dimensions once so leaving the layout restores even previously absent properties.
     const pluginData: Record<string, unknown> = {};
     if (nextHeight !== undefined) {
-      if (this.heightPluginId) {
-        pluginData[this.heightPluginId] = {
+      if (this.options.heightPluginId) {
+        pluginData[this.options.heightPluginId] = {
           height: nextSize.height,
           heightPolicy: nextSize.heightPolicy ?? "grow",
         };
       }
-      if (this.originalHeightPluginId && !block.pluginData[this.originalHeightPluginId]) {
-        pluginData[this.originalHeightPluginId] = {
+      if (
+        this.options.originalHeightPluginId &&
+        !block.pluginData[this.options.originalHeightPluginId]
+      ) {
+        pluginData[this.options.originalHeightPluginId] = {
           height: size && Object.hasOwn(size, "height") ? { value: size.height } : {},
           policy: size && Object.hasOwn(size, "heightPolicy") ? { value: size.heightPolicy } : {},
         };
       }
     }
-    if (this.pluginId && nextWidth !== undefined) {
-      pluginData[this.pluginId] = nextWidth;
-      if (this.originalWidthPluginId && !block.pluginData[this.originalWidthPluginId]) {
-        pluginData[this.originalWidthPluginId] =
+    if (this.options.pluginId && nextWidth !== undefined) {
+      pluginData[this.options.pluginId] = nextWidth;
+      if (
+        this.options.originalWidthPluginId &&
+        !block.pluginData[this.options.originalWidthPluginId]
+      ) {
+        pluginData[this.options.originalWidthPluginId] =
           size && Object.hasOwn(size, "width")
             ? { present: true, value: size.width }
             : { present: false };

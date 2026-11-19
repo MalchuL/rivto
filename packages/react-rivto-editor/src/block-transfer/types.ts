@@ -1,4 +1,4 @@
-import type { DocumentEditorAPI } from "@chulane/rivto";
+import type { DocumentEditorAPI, PanelAPI } from "@chulane/rivto";
 
 /** Addressed reads and preparation used before transfer, plus source deletion after insertion. */
 export type BlockTransferBlocks = Pick<
@@ -23,21 +23,11 @@ export interface BlockTransferEditor {
   getDocument(): object;
 }
 
-/** Read-only occurrence permissions used to protect sources and sibling anchors. */
-interface BlockTransferPanelBlocks extends Pick<DocumentEditorAPI["blocks"], "hasBlock"> {
-  /**
-   * Checks whether this occurrence may remove the identified source or sibling anchor.
-   *
-   * @param id - Persisted block identity to check against panel access and protection.
-   * @returns Whether the block is accessible and removable in this occurrence.
-   */
-  canRemove(id: string): boolean;
-}
-
 /** Optional panel access boundary; transfer never attaches or destroys panel resources. */
 export interface BlockTransferPanel {
   readonly rootBlockId?: string;
-  readonly blocks: BlockTransferPanelBlocks;
+  /** Checks whether source blocks and sibling anchors are accessible and removable here. */
+  readonly blocks: Pick<PanelAPI["blocks"], "hasBlock" | "canRemove">;
   readonly document: BlockTransferEditor;
 }
 

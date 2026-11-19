@@ -33,11 +33,11 @@ import type { BlockBehaviorsApi } from "./block-behaviors-api";
  */
 export class BlockBehaviorRegistry implements BlockBehaviorsApi {
   private readonly store = new RevisionStore();
-  private readonly registrations: Array<{
+  /** Immutable order keeps an in-flight dispatch stable when a handler changes registrations. */
+  private registrations: ReadonlyArray<{
     readonly behavior: BlockBehavior;
     readonly priority: number;
   }> = [];
-  private behaviors: readonly BlockBehavior[] = [];
 
   /**
    * Creates a context-aware registry and installs generic outline behavior as an ordinary registration.
@@ -58,6 +58,8 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
   /**
    * Registers an instance whose isAvailable predicate selects its blocks independently of method names.
    * Larger priorities run first; equal priorities preserve registration order.
+   * Replacing the ordered list does not evaluate applicability. Existing dispatches
+   * retain their original lists when a callback changes the installed registrations.
    * @param behavior - Instance whose omitted action methods defer to later registrations.
    * @param priority - Finite ordering value, defaulting to 0; built-in generic handling uses -1000.
    * @returns Idempotent disposer removing only this registration, also owned by the registering extension.
@@ -70,23 +72,19 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
     }
     const unregisterStructural = this.blockRegistry.registerBehavior(behavior, priority);
     const registration = { behavior, priority };
-    this.registrations.push(registration);
-    this.sortRegistrations();
+    this.registrations = [...this.registrations, registration].sort(
+      (left, right) => right.priority - left.priority,
+    );
     let dispose: () => void;
     try {
       dispose = this.extensions.registerCleanup(() => {
         unregisterStructural();
-        const index = this.registrations.indexOf(registration);
-        if (index >= 0) {
-          this.registrations.splice(index, 1);
-          this.sortRegistrations();
-          this.store.changed();
-        }
+        this.registrations = this.registrations.filter((entry) => entry !== registration);
+        this.store.changed();
       });
     } catch (error) {
       unregisterStructural();
-      this.registrations.splice(this.registrations.indexOf(registration), 1);
-      this.sortRegistrations();
+      this.registrations = this.registrations.filter((entry) => entry !== registration);
       throw error;
     }
     try {
@@ -122,12 +120,18 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
   }
 
   /**
-   * Evaluates each registered behavior against the supplied detached block and runtime.
+   * Evaluates each registered behavior against the supplied detached block fields.
    * @param block - Current detached block fields, without method names or movement arguments.
    * @returns Applicable instances in priority order. Results are reevaluated, never cached by type.
    */
   resolveAll(block: BlockInput): readonly BlockBehavior[] {
-    return this.behaviors.filter((behavior) => behavior.isAvailable(block));
+    const applicable: BlockBehavior[] = [];
+    for (const { behavior } of this.registrations) {
+      if (behavior.isAvailable(block)) {
+        applicable.push(behavior);
+      }
+    }
+    return applicable;
   }
 
   /**
@@ -219,7 +223,7 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
         return this.blockRegistry.dispatchBehavior(action, context, target);
     }
     // An explicit rejection claims the key just like a handled action; only deferral continues.
-    for (const behavior of this.behaviors) {
+    for (const { behavior } of this.registrations) {
       const handler = behavior[action];
       if (
         handler &&
@@ -238,24 +242,11 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
    * @returns True unless an applicable behavior explicitly hides the children.
    */
   childrenVisible(block: BlockBehaviorData): boolean {
-    return this.behaviors.every(
-      (behavior) =>
+    return this.registrations.every(
+      ({ behavior }) =>
         !behavior.childrenVisible ||
         !behavior.isAvailable(block) ||
         behavior.childrenVisible(block) !== false,
     );
-  }
-
-  /**
-   * Rebuilds action priority order only when registrations change.
-   *
-   * Sorts stored registrations and caches their ordered behavior instances without
-   * evaluating applicability. Equal-priority registrations retain their order.
-   *
-   * @returns No value; later dispatch and queries use the updated priority order.
-   */
-  private sortRegistrations(): void {
-    this.registrations.sort((left, right) => right.priority - left.priority);
-    this.behaviors = this.registrations.map(({ behavior }) => behavior);
   }
 }

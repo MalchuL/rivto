@@ -49,7 +49,7 @@ export async function run(): Promise<void> {
         createElement(
           ReactPanelContext.Provider,
           {
-            value: { reactPanel, documentId: reactPanel.editor.getDocument().id },
+            value: { reactPanel },
           },
           text ? createElement(Text, { id, domKey }) : createElement(Commands, { id }),
         ),

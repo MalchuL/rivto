@@ -43,6 +43,7 @@ import type {
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { ClipboardManager as CoreClipboardManager } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../panels/types";
+import { isReactPanelApi } from "../../panels/is-react-panel-api";
 
 /** Shared clipboard operations; paste receives a panel or a runtime for document-only commands. */
 export class ClipboardManager {
@@ -430,7 +431,7 @@ export class ClipboardManager {
     input ??= {};
     const selection = input.textTarget ??
       reactPanel.selection.get() ?? { type: "selection" as const, blocks: [], elements: [] };
-    if ("editor" in reactPanel) {
+    if (isReactPanelApi(reactPanel)) {
       if (
         selection.blocks.some(({ id }) => !reactPanel.blocks.hasBlock(id)) ||
         selection.elements?.some((id) => !reactPanel.elements.hasElement(id))
@@ -468,30 +469,30 @@ export class ClipboardManager {
       validateClipboardBundle(bundle);
       let preparedBundle = structuredClone(bundle);
       if (
-        "editor" in reactPanel &&
+        isReactPanelApi(reactPanel) &&
         reactPanel.getSurfaceType() !== "edgeless" &&
         preparedBundle.elements?.length
       ) {
         // Page pastes traverse selected element trees, retaining referenced blocks and converting visuals to writing blocks.
-        const byId = new Map(preparedBundle.elements?.map((node) => [node.id, node]));
+        const byId = new Map(preparedBundle.elements.map((node) => [node.id, node]));
         const blocks = new Map(preparedBundle.blocks.map((block) => [block.id, block]));
+        const sourceRootIds = [...blocks.keys()];
         const included = new Set<string>();
         const result: EditorBlock[] = [];
         const seen = new Set<string>();
         const visit = (id: string): void => {
           if (seen.has(id)) {
+            // A selected ancestor may already have visited this element.
             return;
           }
           seen.add(id);
           const node = byId.get(id);
           if (!node) {
+            // Detached payloads can refer to an element missing from this bundle.
             return;
           }
           const converter = this.converters.elements.get(node.type);
-          const refs = converter?.getReferencedBlockIds?.(
-            node,
-            preparedBundle.blocks.map((block) => block.id),
-          );
+          const refs = converter?.getReferencedBlockIds?.(node, sourceRootIds);
           if (refs) {
             refs.forEach((id) => {
               const block = blocks.get(id);
@@ -553,14 +554,13 @@ export class ClipboardManager {
       }
       const sources = selectedClipboardElements(preparedBundle);
       // An empty block card has no copied content and is omitted before converters see the maps.
+      const sourceRootIds = preparedBundle.blocks.map((block) => block.id);
       const retained = sources.filter((node) => {
         if (node.type !== "block") {
+          // Only block cards depend on referenced roots being copied.
           return true;
         }
-        return blockIdsOf(
-          node,
-          preparedBundle.blocks.map((block) => block.id),
-        ).some((id) => blockIdMap.has(id));
+        return blockIdsOf(node, sourceRootIds).some((id) => blockIdMap.has(id));
       });
       const elementIdMap = new Map(
         this.document.elements.createImportIdMap(retained.map((node) => node.id)),
@@ -613,14 +613,14 @@ export class ClipboardManager {
         bound = new ElementPasteStrategy(reactPanel, convertedElements, created);
       } else if (strategy instanceof BlockPasteStrategy) {
         bound = this.blockPasteStrategy;
-      } else if (isPanelPasteStrategy(strategy) && "editor" in reactPanel) {
+      } else if (isPanelPasteStrategy(strategy) && isReactPanelApi(reactPanel)) {
         // The strategy is registered editor-wide, but this paste must use the receiving panel's bounds.
         bound = strategy.createPanelStrategy(reactPanel);
       }
       return bound;
     });
     // An inactive panel has no caret; undefined would make core borrow another panel's selection.
-    const root = "editor" in reactPanel ? reactPanel.rootBlockId : undefined;
+    const root = isReactPanelApi(reactPanel) ? reactPanel.rootBlockId : undefined;
     const placement = { ...input.placement };
     if (root && placement.parentId === root) {
       placement.parentId = null;
@@ -679,7 +679,7 @@ export class ClipboardManager {
   ): ClipboardBundle {
     return this.convertCopy(
       this.collectElements(ids, reactPanel),
-      "editor" in reactPanel ? reactPanel : undefined,
+      isReactPanelApi(reactPanel) ? reactPanel : undefined,
       operation,
     );
   }
@@ -900,7 +900,7 @@ export class ClipboardManager {
       operation,
       sourceDocumentId: bundle.sourceDocumentId,
       destinationDocumentId: this.document.getDocument().id,
-      reactPanel: "editor" in reactPanel ? reactPanel : undefined,
+      reactPanel: isReactPanelApi(reactPanel) ? reactPanel : undefined,
       blockIdMap,
       elementIdMap,
       offset: { x: 24, y: 24 },

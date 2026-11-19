@@ -1,5 +1,5 @@
-import { createTestEditor } from "../editor/test-utils";
-import { ChildrenPanel } from "./children-panel";
+import { createTestEditor } from "../../editor/test-utils";
+import { ChildrenPanel } from "../children-panel";
 
 test("structural outline policies belong to the editor that performs the operation", async () => {
   const first = await createTestEditor();

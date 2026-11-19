@@ -36,7 +36,7 @@ export interface BlockDragAdapter {
    * @returns True when the host accepted the release; false when it did not.
    * @throws Propagates host mutation failures after gesture cleanup.
    */
-  isDropOutsideTargets?(ids: readonly string[], x: number, y: number): boolean;
+  dropOutsideTargets?(ids: readonly string[], x: number, y: number): boolean;
   /**
    * Captures a bounded text preview once when a pointer gesture activates.
    *
@@ -461,7 +461,7 @@ class BlockDragController {
           focusRoot = target.scope?.root ?? gesture.root;
         }
       } else if (gesture.ids && target === undefined && event.type === "pointerup") {
-        this.adapter.isDropOutsideTargets?.(gesture.ids, event.clientX, event.clientY);
+        this.adapter.dropOutsideTargets?.(gesture.ids, event.clientX, event.clientY);
       }
     } catch (error) {
       errors.push(error);

@@ -70,10 +70,11 @@ export class TextPasteStrategy implements PasteStrategy {
       const [first, ...rest] = bundle.blocks;
       const idMap = new Map<string, string>([[source.id, destination.id]]);
       let caret = { blockId: destination.id, offset: prefix.length + source.content.length };
-      context.editor.blocks.updateBlock(destination.id, {
-        content: prefix + source.content + (rest.length ? "" : suffix),
-      });
-      range.blocks.slice(1).forEach((block) => context.editor.blocks.removeBlock(block.id));
+      context.editor.blocks.replaceTextSelection(
+        destination.id,
+        range.blocks.slice(1).map((block) => block.id),
+        prefix + source.content + (rest.length ? "" : suffix),
+      );
       // Import children under the surviving first block and the remaining roots as siblings.
       const children = importClipboardBlocks(context, first?.children ?? [], {
         parentId: destination.id,

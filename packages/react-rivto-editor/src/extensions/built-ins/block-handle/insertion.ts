@@ -3,19 +3,7 @@ import { ArrowUpToLineIcon, ArrowDownToLineIcon } from "lucide-react";
 import type { BlockFactory } from "../../../block-factories";
 import type { ReactPanelApi } from "../../../panels/types";
 import { focusBlock } from "../../../managers";
-import type { BlockContextMenuEntry } from "../../../managers/block-context-menu/types";
-
-/** Menu registration borrowed from the editor extension lifecycle. */
-interface InsertionMenu {
-  /**
-   * Registers an action until its extension is removed.
-   *
-   * @param entry - Action contributed to the menu.
-   * @returns A disposer that removes the registration.
-   * @throws If the registration is invalid or duplicates an existing entry.
-   */
-  register(entry: BlockContextMenuEntry): () => void;
-}
+import type { BlockContextMenuRegistration } from "./types";
 
 /**
  * Resolves a new sibling and checks its proposed placement against the panel and block behaviors.
@@ -71,7 +59,7 @@ export function siblingInsertion(
  * @returns No value; the extension lifecycle owns the registrations.
  * @throws If a registration is rejected by the registry.
  */
-export function registerBlockInsertionActions(menu: InsertionMenu): void {
+export function registerBlockInsertionActions(menu: BlockContextMenuRegistration): void {
   for (const [position, title, order, icon] of [
     ["above", "Insert block above", 11, ArrowUpToLineIcon],
     ["below", "Insert block below", 12, ArrowDownToLineIcon],

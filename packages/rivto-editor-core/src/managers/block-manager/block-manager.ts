@@ -33,11 +33,6 @@ import {
   type StructuralBehaviorRegistry,
 } from "./structural-behavior/block-structural-behavior-strategy";
 
-interface BlockProcessorRegistration {
-  readonly processor: BlockProcessor;
-  dispose: () => void;
-}
-
 /** Editor capabilities required by block operations and their validation pipeline. */
 export interface BlockManagerEditor extends DocumentCommandsEditor {
   /** Definitions and validation required by creation and conversion. */
@@ -75,7 +70,7 @@ export class BlockManager<
    * processors stay local to this editor without becoming shared document state.
    */
   private readonly pipe: Pipe<BlockInput>;
-  private readonly processors: Set<BlockProcessorRegistration>;
+  private readonly processorDisposers: Set<() => void>;
   private readonly registry: StructuralBehaviorRegistry;
   /** Unbounded commands are required for transitions across panel boundaries. */
   private readonly documentBlocks: BlockManager;
@@ -99,7 +94,7 @@ export class BlockManager<
     const owner = registry instanceof BlockManager ? registry : undefined;
     this.registry = registry instanceof BlockManager ? registry.registry : registry;
     this.pipe = owner ? owner.pipe : new Pipe<BlockInput>();
-    this.processors = owner ? owner.processors : new Set<BlockProcessorRegistration>();
+    this.processorDisposers = owner?.processorDisposers ?? new Set();
     this.ownsProcessors = !owner;
     this.documentBlocks = owner ? owner.documentBlocks : this;
     this.behaviorStrategy = new BlockStructuralBehaviorStrategy(
@@ -120,18 +115,23 @@ export class BlockManager<
     return this.document.blocks.revision;
   }
 
-  /** Registers an editor-owned block processor and returns its disposer. */
+  /**
+   * Adds a processor to the document editor's shared block pipeline.
+   *
+   * Document and panel commands use the same registrations. Reusing an ID
+   * replaces its active processor. The document manager owns final cleanup.
+   *
+   * @param processor - Named step whose priority determines its execution order.
+   * @returns An idempotent disposer for this registration.
+   * @throws If the processor ID is empty.
+   */
   registerProcessor(processor: BlockProcessor): () => void {
-    const registration: BlockProcessorRegistration = {
-      processor,
-      dispose: this.pipe.register(processor),
-    };
-    this.processors.add(registration);
+    const dispose = this.pipe.register(processor);
+    this.processorDisposers.add(dispose);
     return () => {
-      if (!this.processors.delete(registration)) {
-        return;
+      if (this.processorDisposers.delete(dispose)) {
+        dispose();
       }
-      registration.dispose();
     };
   }
 
@@ -292,7 +292,8 @@ export class BlockManager<
 
   /**
    * Applies definitions, list-property policy, and registered processors to
-   * every node, then validates the complete detached forest.
+   * every node, then validates the complete detached forest. Panels share the
+   * document processing pipeline. Preparing a forest does not change the document.
    *
    * @param input - Detached block forest to prepare atomically.
    * @param onError - Optional handler that supplies one replacement for a failed node.
@@ -569,10 +570,11 @@ export class BlockManager<
   }
 
   /**
-   * Removes one block subtree.
+   * Removes one block subtree through the current scope's grouped deletion command.
    *
    * @param id - Block identifier to remove.
-   * @returns No value.
+   * @returns After structural behaviors and any unclaimed deletion have completed.
+   * @throws If the subtree is outside the panel or is its protected embedding root.
    */
   removeBlock(id: string): void {
     this.removeBlocks([id]);
@@ -612,7 +614,7 @@ export class BlockManager<
     // Removing an ancestor would also delete the block that receives the replacement text.
     const removed = new Set(trailingIds);
     let ancestor: string | null | undefined = firstId;
-    while (ancestor != null) {
+    while (removed.size && ancestor != null) {
       if (removed.has(ancestor)) {
         throw new Error("Trailing blocks cannot contain the surviving block");
       }
@@ -732,8 +734,9 @@ export class BlockManager<
   /**
    * Nests one block under its previous sibling.
    *
-   * @param id - Block identifier to indent.
-   * @returns No value.
+   * @param id - Block identifier to indent within the current scope.
+   * @returns After the scoped indent command completes.
+   * @throws If the subtree is outside the panel, protected, or rejected by the document.
    */
   indentBlock(id: string): void {
     this.indentBlocks([id]);
@@ -783,8 +786,9 @@ export class BlockManager<
   /**
    * Moves one block out of its parent and adopts following siblings.
    *
-   * @param id - Block identifier to outdent.
-   * @returns No value.
+   * @param id - Block identifier to outdent within the current scope.
+   * @returns After the scoped outdent command completes.
+   * @throws If the outdent would cross the panel boundary or document validation fails.
    */
   outdentBlock(id: string): void {
     this.outdentBlocks([id]);
@@ -895,8 +899,8 @@ export class BlockManager<
     this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions.clear();
     if (this.ownsProcessors) {
-      this.processors.forEach((registration) => registration.dispose());
-      this.processors.clear();
+      this.processorDisposers.forEach((dispose) => dispose());
+      this.processorDisposers.clear();
     }
   }
 

@@ -29,6 +29,7 @@ export function useAcquiredEditor(
   useEffect(() => {
     setResult({});
     if (!storage || !documentId) {
+      // An unresolved source has no lease to acquire.
       return;
     }
     const acquisition = new EditorAcquisitionController(

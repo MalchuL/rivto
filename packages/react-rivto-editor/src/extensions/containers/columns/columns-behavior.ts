@@ -1,6 +1,3 @@
-import type { BlockStructuralContext, BlockStructuralOutcome } from "@chulane/rivto";
-import { createBlockTypeMoveBehavior } from "../block-move-behavior";
-import type { BlockInput } from "@chulane/document-model";
 /**
  * Columns board and lane views.
  *
@@ -11,8 +8,12 @@ import type { BlockInput } from "@chulane/document-model";
  *
  * @module
  */
-import type { BlockRelocationCommands } from "@chulane/rivto";
-import { ContainerBlockBehavior } from "../../../block-behaviors/container-block-behavior";
+import type {
+  BlockRelocationCommands,
+  BlockStructuralContext,
+  BlockStructuralOutcome,
+} from "@chulane/rivto";
+import { ContainerHierarchyBehavior } from "../container-hierarchy-behavior";
 
 export const COLUMNS_BLOCK_TYPE = "columns";
 export const COLUMNS_COLUMN_BLOCK_TYPE = "columns-column";
@@ -57,118 +58,37 @@ export function relocateColumnContents(
   });
 }
 
-/**
- * Behavior registered for the `columns` board type.
- */
-export class ColumnsBehavior extends ContainerBlockBehavior {
+/** Keeps the removed columns’ contents in the surrounding document. */
+class ColumnsColumnBehavior extends ContainerHierarchyBehavior {
   /**
-   * Selects this native container independently of the registration's owner.
-   * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.
-   * @returns True only for the COLUMNS_BLOCK_TYPE native type.
+   * Relocates lane contents so a structural delete does not drop nested blocks.
+   *
+   * @param context - One selected column whose view was resolved.
+   * @param ids - Complete structural selection about to be removed.
+   * @returns `"unhandled"` so the shared deletion path still removes the shells.
    */
-  override isAvailable(context: BlockInput): boolean {
-    return context.type === COLUMNS_BLOCK_TYPE;
+  onStructuralDelete(
+    context: BlockStructuralContext,
+    ids: readonly string[],
+  ): BlockStructuralOutcome {
+    const columnIds = ids.filter(
+      (id) => context.blocks.getBlockNode(id)?.type === context.block.type,
+    );
+    if (columnIds.length) {
+      relocateColumnContents(context.documentBlocks, columnIds);
+    }
+    return "unhandled";
   }
 }
 
-/**
- * Behavior registered for the `columns-column` lane type.
- */
-export class ColumnsColumnBehavior extends ContainerBlockBehavior {
-  /**
-   * Selects this native container independently of the registration's owner.
-   * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.
-   * @returns True only for the COLUMNS_COLUMN_BLOCK_TYPE native type.
-   */
-  override isAvailable(context: BlockInput): boolean {
-    return context.type === COLUMNS_COLUMN_BLOCK_TYPE;
-  }
-}
+/** Shared board instance registered by {@link columnsExtension}; boards accept only column lanes. */
+export const columnsBehavior = new ContainerHierarchyBehavior({
+  blockType: COLUMNS_BLOCK_TYPE,
+  childType: COLUMNS_COLUMN_BLOCK_TYPE,
+});
 
-/**
- * Shared board instance registered by {@link columnsExtension}.
- *
- * Structural movement restrictions for the COLUMNS_BLOCK_TYPE native type.
- */
-export const columnsBehavior = Object.assign(
-  new ColumnsBehavior(),
-  createBlockTypeMoveBehavior(COLUMNS_BLOCK_TYPE, undefined, [COLUMNS_COLUMN_BLOCK_TYPE]),
-  {
-    /**
-     * Preserves the fixed depth of direct structural children.
-     *
-     * This outline restriction does not prevent independently permitted dragging.
-     * The handler rejects the complete requested group before child behavior runs.
-     *
-     * @param context - Current container fields and the live invoking panel.
-     * @param ids - Complete child group requested by the outline operation.
-     * @returns Rejected without mutating the document.
-     */
-    onChildIndent(context: BlockStructuralContext, ids: readonly string[]): BlockStructuralOutcome {
-      return "rejected";
-    },
-
-    /**
-     * Keeps direct children within this container during outline outdent.
-     *
-     * This outline restriction does not prevent independently permitted dragging.
-     * The handler rejects the complete requested group before child behavior runs.
-     *
-     * @param context - Current container fields and the live invoking panel.
-     * @param ids - Complete child group requested by the outline operation.
-     * @returns Rejected without mutating the document.
-     */
-    onChildOutdent(
-      context: BlockStructuralContext,
-      ids: readonly string[],
-    ): BlockStructuralOutcome {
-      return "rejected";
-    },
-  },
-);
-/**
- * Shared lane instance registered by {@link columnsExtension}.
- *
- * Structural movement restrictions for the COLUMNS_COLUMN_BLOCK_TYPE native type.
- */
-export const columnsColumnBehavior = Object.assign(
-  new ColumnsColumnBehavior(),
-  createBlockTypeMoveBehavior(COLUMNS_COLUMN_BLOCK_TYPE, [COLUMNS_BLOCK_TYPE]),
-  {
-    /**
-     * Keeps direct children within this container during outline outdent.
-     *
-     * This outline restriction does not prevent independently permitted dragging.
-     * The handler rejects the complete requested group before child behavior runs.
-     *
-     * @param context - Current container fields and the live invoking panel.
-     * @param ids - Complete child group requested by the outline operation.
-     * @returns Rejected without mutating the document.
-     */
-    onChildOutdent(
-      context: BlockStructuralContext,
-      ids: readonly string[],
-    ): BlockStructuralOutcome {
-      return "rejected";
-    },
-    /**
-     * Relocates lane contents so a structural delete does not drop nested blocks.
-     *
-     * @param context - One selected column whose view was resolved.
-     * @param ids - Complete structural selection about to be removed.
-     * @returns `"unhandled"` so the shared deletion path still removes the shells.
-     */
-    onStructuralDelete(
-      context: BlockStructuralContext,
-      ids: readonly string[],
-    ): BlockStructuralOutcome {
-      const columnIds = ids.filter(
-        (id) => context.blocks.getBlockNode(id)?.type === context.block.type,
-      );
-      if (columnIds.length) {
-        relocateColumnContents(context.documentBlocks, columnIds);
-      }
-      return "unhandled";
-    },
-  },
-);
+/** Shared lane instance registered by {@link columnsExtension}; each lane stays directly below its board. */
+export const columnsColumnBehavior = new ColumnsColumnBehavior({
+  blockType: COLUMNS_COLUMN_BLOCK_TYPE,
+  parentType: COLUMNS_BLOCK_TYPE,
+});

@@ -1,6 +1,3 @@
-import type { BlockStructuralContext, BlockStructuralOutcome } from "@chulane/rivto";
-import { createBlockTypeMoveBehavior } from "../block-move-behavior";
-import type { BlockInput } from "@chulane/document-model";
 /**
  * Table, row, and cell views.
  *
@@ -10,56 +7,16 @@ import type { BlockInput } from "@chulane/document-model";
  *
  * @module
  */
-import { ContainerBlockBehavior } from "../../../block-behaviors/container-block-behavior";
-import type { BlockBehaviorContext } from "../../../block-behaviors/types";
-import type { BlockBehaviorOutcome } from "../../../block-behaviors/types";
+import { ContainerHierarchyBehavior } from "../container-hierarchy-behavior";
+import type { BlockBehaviorContext, BlockBehaviorOutcome } from "../../../block-behaviors/types";
 import type { KeyboardSelectionTarget } from "../../../managers";
 
 export const TABLE_BLOCK_TYPE = "table";
 export const TABLE_ROW_BLOCK_TYPE = "table-row";
 export const TABLE_CELL_BLOCK_TYPE = "table-cell";
 
-/**
- * Behavior registered for the `table` board type.
- */
-export class TableBehavior extends ContainerBlockBehavior {
-  /**
-   * Selects this native container independently of the registration's owner.
-   * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.
-   * @returns True only for the TABLE_BLOCK_TYPE native type.
-   */
-  override isAvailable(context: BlockInput): boolean {
-    return context.type === TABLE_BLOCK_TYPE;
-  }
-}
-
-/**
- * Behavior registered for the `table-row` type.
- */
-export class TableRowBehavior extends ContainerBlockBehavior {
-  /**
-   * Selects this native container independently of the registration's owner.
-   * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.
-   * @returns True only for the TABLE_ROW_BLOCK_TYPE native type.
-   */
-  override isAvailable(context: BlockInput): boolean {
-    return context.type === TABLE_ROW_BLOCK_TYPE;
-  }
-}
-
-/**
- * Behavior registered for the `table-cell` type.
- */
-export class TableCellBehavior extends ContainerBlockBehavior {
-  /**
-   * Selects this native container independently of the registration's owner.
-   * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.
-   * @returns True only for the TABLE_CELL_BLOCK_TYPE native type.
-   */
-  override isAvailable(context: BlockInput): boolean {
-    return context.type === TABLE_CELL_BLOCK_TYPE;
-  }
-
+/** Table cells always insert a writing child when Enter is pressed. */
+class TableCellBehavior extends ContainerHierarchyBehavior {
   /**
    * Always inserts a nested writing block. Shift+Enter stays native because
    * the keyboard binding is plain Enter.
@@ -76,112 +33,21 @@ export class TableCellBehavior extends ContainerBlockBehavior {
   }
 }
 
-/**
- * Shared table instance registered by {@link tableExtension}.
- *
- * Structural movement restrictions for the TABLE_BLOCK_TYPE native type.
- */
-export const tableBehavior = Object.assign(
-  new TableBehavior(),
-  createBlockTypeMoveBehavior(TABLE_BLOCK_TYPE, undefined, [TABLE_ROW_BLOCK_TYPE]),
-  {
-    /**
-     * Preserves the fixed depth of direct structural children.
-     *
-     * This outline restriction does not prevent independently permitted dragging.
-     * The handler rejects the complete requested group before child behavior runs.
-     *
-     * @param context - Current container fields and the live invoking panel.
-     * @param ids - Complete child group requested by the outline operation.
-     * @returns Rejected without mutating the document.
-     */
-    onChildIndent(context: BlockStructuralContext, ids: readonly string[]): BlockStructuralOutcome {
-      return "rejected";
-    },
+/** Shared table instance registered by {@link tableExtension}; tables accept only rows. */
+export const tableBehavior = new ContainerHierarchyBehavior({
+  blockType: TABLE_BLOCK_TYPE,
+  childType: TABLE_ROW_BLOCK_TYPE,
+});
 
-    /**
-     * Keeps direct children within this container during outline outdent.
-     *
-     * This outline restriction does not prevent independently permitted dragging.
-     * The handler rejects the complete requested group before child behavior runs.
-     *
-     * @param context - Current container fields and the live invoking panel.
-     * @param ids - Complete child group requested by the outline operation.
-     * @returns Rejected without mutating the document.
-     */
-    onChildOutdent(
-      context: BlockStructuralContext,
-      ids: readonly string[],
-    ): BlockStructuralOutcome {
-      return "rejected";
-    },
-  },
-);
-/**
- * Shared row instance registered by {@link tableExtension}.
- *
- * Structural movement restrictions for the TABLE_ROW_BLOCK_TYPE native type.
- */
-export const tableRowBehavior = Object.assign(
-  new TableRowBehavior(),
-  createBlockTypeMoveBehavior(TABLE_ROW_BLOCK_TYPE, [TABLE_BLOCK_TYPE], [TABLE_CELL_BLOCK_TYPE]),
-  {
-    /**
-     * Preserves the fixed depth of direct structural children.
-     *
-     * This outline restriction does not prevent independently permitted dragging.
-     * The handler rejects the complete requested group before child behavior runs.
-     *
-     * @param context - Current container fields and the live invoking panel.
-     * @param ids - Complete child group requested by the outline operation.
-     * @returns Rejected without mutating the document.
-     */
-    onChildIndent(context: BlockStructuralContext, ids: readonly string[]): BlockStructuralOutcome {
-      return "rejected";
-    },
+/** Shared row instance registered by {@link tableExtension}; rows hold cells directly below a table. */
+export const tableRowBehavior = new ContainerHierarchyBehavior({
+  blockType: TABLE_ROW_BLOCK_TYPE,
+  parentType: TABLE_BLOCK_TYPE,
+  childType: TABLE_CELL_BLOCK_TYPE,
+});
 
-    /**
-     * Keeps direct children within this container during outline outdent.
-     *
-     * This outline restriction does not prevent independently permitted dragging.
-     * The handler rejects the complete requested group before child behavior runs.
-     *
-     * @param context - Current container fields and the live invoking panel.
-     * @param ids - Complete child group requested by the outline operation.
-     * @returns Rejected without mutating the document.
-     */
-    onChildOutdent(
-      context: BlockStructuralContext,
-      ids: readonly string[],
-    ): BlockStructuralOutcome {
-      return "rejected";
-    },
-  },
-);
-/**
- * Shared cell instance registered by {@link tableExtension}.
- *
- * Structural movement restrictions for the TABLE_CELL_BLOCK_TYPE native type.
- */
-export const tableCellBehavior = Object.assign(
-  new TableCellBehavior(),
-  createBlockTypeMoveBehavior(TABLE_CELL_BLOCK_TYPE, [TABLE_ROW_BLOCK_TYPE]),
-  {
-    /**
-     * Keeps direct children within this container during outline outdent.
-     *
-     * This outline restriction does not prevent independently permitted dragging.
-     * The handler rejects the complete requested group before child behavior runs.
-     *
-     * @param context - Current container fields and the live invoking panel.
-     * @param ids - Complete child group requested by the outline operation.
-     * @returns Rejected without mutating the document.
-     */
-    onChildOutdent(
-      context: BlockStructuralContext,
-      ids: readonly string[],
-    ): BlockStructuralOutcome {
-      return "rejected";
-    },
-  },
-);
+/** Shared cell instance registered by {@link tableExtension}; cells stay directly below rows. */
+export const tableCellBehavior = new TableCellBehavior({
+  blockType: TABLE_CELL_BLOCK_TYPE,
+  parentType: TABLE_ROW_BLOCK_TYPE,
+});

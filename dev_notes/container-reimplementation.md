@@ -59,7 +59,7 @@ Source directory: [kanban](../packages/react-rivto-editor/src/extensions/contain
   synced view or modal can render the same model ID more than once.
 - The collapsed board summary shows column count and the sum of direct card
   counts, not a recursive descendant count.
-- `KanbanBehavior` rejects indent/outdent of direct column shells. Its move policy
+- `kanbanBehavior` rejects indent/outdent of direct column shells. Its move policy
   accepts only `kanban-column` roots as board children.
 - `KanbanColumnBehavior` keeps column shells inside Kanban boards and rejects
   outdenting direct cards past the column through outline commands. Cards can

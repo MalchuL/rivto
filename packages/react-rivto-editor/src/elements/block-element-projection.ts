@@ -141,7 +141,13 @@ export function elementContainsBlock(
   return contains;
 }
 
-/** @returns Inclusive persisted boundaries for one non-empty ordered root range. */
+/**
+ * Stores the inclusive boundaries of a card's roots in document order.
+ *
+ * @param blockIds - Non-empty ordered root IDs.
+ * @returns The first and last root IDs referenced by the card.
+ * @throws If the range is empty.
+ */
 export function blockRangeProps(blockIds: readonly string[]): BlockElementProps {
   if (!blockIds.length) {
     throw new Error("Block element range cannot be empty");

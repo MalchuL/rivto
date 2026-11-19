@@ -41,7 +41,8 @@ export function PageSurface() {
  */
 function PageSurfaceContent() {
   const rootIds = useRootBlockIds();
-  const { rootBlockId, reactPanel } = useReactPanelContext();
+  const { reactPanel } = useReactPanelContext();
+  const { rootBlockId } = reactPanel;
   const { ref } = useEditorRoot();
   const settings = usePageVirtualization();
   let virtualization: BlockVirtualizationOptions | undefined;

@@ -11,7 +11,7 @@ import {
   useSyncExternalStore,
   type CSSProperties,
 } from "react";
-import type { ReactEditorApi } from "../../../editor/types";
+import type { BlockContextMenuRegistration } from "./types";
 import type { BlockContextMenuContext } from "../../../managers/block-context-menu/types";
 import { assertBlockMenuTargets } from "../../../managers/block-context-menu/targets";
 
@@ -40,43 +40,48 @@ function readBackground(context: BlockContextMenuContext, id: string): string {
 }
 
 /**
- * Checks that updating backgrounds cannot replace a non-record style value.
+ * Updates the captured blocks in one history batch after checking that every style can be merged.
  *
- * @param context - Panel and targets captured by the current menu.
- * @returns Every target has an absent or object-shaped style.
- * @throws If a target has a non-record style that cannot be merged safely.
+ * Callers resolve target availability before requesting the write. The alpha slider derives
+ * a color from each individual block so mixed selections retain their hues.
+ *
+ * @param context - Panel and ordered targets captured when the menu opened.
+ * @param colorForBlock - Computes the color to persist, or returns undefined to skip that block.
+ * @returns All applicable targets have received the color while preserving other style properties.
+ * @throws If an existing style is not an object or a delegated block command fails.
  */
-function assertBackgroundStyles(context: BlockContextMenuContext): void {
-  for (const id of context.blockIds) {
-    const style = context.reactPanel.blocks.getBlockNode(id)?.listProps.style;
+function updateBackgroundColors(
+  context: BlockContextMenuContext,
+  colorForBlock: (blockId: string) => string | undefined,
+): void {
+  const { reactPanel, blockIds } = context;
+  // Check every target before the first write; batching does not roll back an earlier block.
+  for (const blockId of blockIds) {
+    const style = reactPanel.blocks.getBlockNode(blockId)?.listProps.style;
     if (style !== undefined && !isBlockStyle(style)) {
       throw new Error("Cannot update a non-object block style");
     }
   }
-}
-
-/**
- * Updates one captured block's background without replacing its other style properties.
- *
- * @param context - Captured panel and targets.
- * @param id - Block to update within that panel.
- * @param color - Palette value or custom color with alpha.
- * @returns The block style has been updated through its owning manager.
- * @throws If the block is unavailable or the update fails.
- */
-function writeBackground(context: BlockContextMenuContext, id: string, color: string): void {
-  const node = context.reactPanel.page.getNode(id);
-  const style = node.getStyle();
-  node.setStyle({
-    ...style,
-    background: {
-      ...(typeof style.background === "object" &&
-      style.background !== null &&
-      !Array.isArray(style.background)
-        ? style.background
-        : {}),
-      color: color === "transparent" ? "#00000000" : color,
-    },
+  reactPanel.batchUpdates(() => {
+    for (const blockId of blockIds) {
+      const color = colorForBlock(blockId);
+      if (color === undefined) {
+        continue;
+      }
+      // Address the block's page presentation through the panel that opened the menu.
+      const node = reactPanel.page.getNode(blockId);
+      const style = node.getStyle();
+      const background = style.background;
+      node.setStyle({
+        ...style,
+        background: {
+          ...(background && typeof background === "object" && !Array.isArray(background)
+            ? background
+            : {}),
+          color: color === "transparent" ? "#00000000" : color,
+        },
+      });
+    }
   });
 }
 
@@ -133,12 +138,7 @@ function BlockBackgroundColors(context: BlockContextMenuContext) {
     if (color === undefined || blockIds.some((id) => !reactPanel.blocks.hasBlock(id))) {
       return;
     }
-    assertBackgroundStyles(current.current);
-    reactPanel.batchUpdates(() => {
-      for (const id of blockIds) {
-        writeBackground(current.current, id, color);
-      }
-    });
+    updateBackgroundColors(current.current, () => color);
   }, []);
   useEffect(() => () => flush(), [flush]);
   const colorInput: BackgroundColorInput = {
@@ -241,14 +241,13 @@ function BlockBackgroundColors(context: BlockContextMenuContext) {
   const colorValues = colors.split(",");
   const firstColor = colorValues[0] ?? "";
   const background = parseBlockBackground(firstColor);
-  const customColor =
-    background?.color.startsWith("#") &&
-    !Object.values(palette).includes(background.color.toLowerCase())
-      ? background.color
-      : "#d1d5db";
+  const isCustomColor =
+    background !== undefined &&
+    background.color.startsWith("#") &&
+    !Object.values(palette).includes(background.color.toLowerCase());
+  const customColor = isCustomColor ? background.color : "#d1d5db";
   const customSelected =
-    !!background?.color.startsWith("#") &&
-    !Object.values(palette).includes(background.color.toLowerCase()) &&
+    isCustomColor &&
     colorValues.every((value) => {
       const parsed = parseBlockBackground(value);
       return (
@@ -378,8 +377,7 @@ function BackgroundColorSwatch({
   palette,
   flushPendingColor,
 }: BackgroundColorSwatchProps) {
-  const { reactPanel, blockIds } = context;
-  const selected = blockIds.every((id) => {
+  const selected = context.blockIds.every((id) => {
     const current = readBackground(context, id);
     // An inherited background has no parsed color, and the transparent token has no
     // palette entry. Comparing those two missing values would select “No color”.
@@ -407,16 +405,9 @@ function BackgroundColorSwatch({
       onClick={() => {
         flushPendingColor();
         assertBlockMenuTargets(context);
-        assertBackgroundStyles(context);
-        reactPanel.batchUpdates(() => {
-          for (const id of blockIds) {
-            writeBackground(
-              context,
-              id,
-              color === "transparent" ? color : formatBlockBackground(palette[color]!, alpha),
-            );
-          }
-        });
+        const backgroundColor =
+          color === "transparent" ? color : formatBlockBackground(palette[color]!, alpha);
+        updateBackgroundColors(context, () => backgroundColor);
       }}
     >
       {color === "transparent" && <SlashIcon aria-hidden="true" />}
@@ -481,17 +472,10 @@ function BackgroundAlpha({ context, value, color, flushPendingColor }: Backgroun
           if (alpha !== undefined) {
             flushPendingColor();
             // Each target keeps its own hue while the slider sets the same alpha for all.
-            const { reactPanel, blockIds } = context;
             assertBlockMenuTargets(context);
-            assertBackgroundStyles(context);
-            reactPanel.batchUpdates(() => {
-              for (const id of blockIds) {
-                const current = readBackground(context, id);
-                const parsed = parseBlockBackground(current);
-                if (parsed) {
-                  writeBackground(context, id, formatBlockBackground(parsed.color, alpha));
-                }
-              }
+            updateBackgroundColors(context, (blockId) => {
+              const background = parseBlockBackground(readBackground(context, blockId));
+              return background ? formatBlockBackground(background.color, alpha) : undefined;
             });
           }
         }}
@@ -508,12 +492,12 @@ function BackgroundAlpha({ context, value, color, flushPendingColor }: Backgroun
  * palette colors with alpha. Missing backgrounds have no local override. The custom
  * contribution mounts swatches in the active menu rather than introducing a submenu.
  *
- * @param editor - Runtime owning menu contributions and the shared document.
+ * @param menu - Extension-scoped registration for the block menu contribution.
  * @returns No value; the menu registration is owned by the extension lifecycle.
  * @throws If registration is rejected by the context-menu registry.
  */
-export function registerBlockBackground(editor: ReactEditorApi): void {
-  editor.blockContextMenu.register({
+export function registerBlockBackground(menu: BlockContextMenuRegistration): void {
+  menu.register({
     id: "block.background",
     title: "Background",
     kind: "custom",

@@ -29,7 +29,7 @@ export function blockHandleExtension(): ReactEditorExtension {
         priority: 200,
         component: BlockHandle,
       });
-      registerBlockBackground(editor);
+      registerBlockBackground(editor.blockContextMenu);
       registerBlockInsertionActions(editor.blockContextMenu);
       for (const [id, order] of [
         ["format", 15],

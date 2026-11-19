@@ -1,6 +1,6 @@
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { BlockEditorThemeProvider } from "./block-editor-theme";
+import { BlockEditorThemeProvider } from "../block-editor-theme";
 
 const environment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const previousEnvironment = environment.IS_REACT_ACT_ENVIRONMENT;

@@ -1,4 +1,5 @@
 import { useEffect, type RefObject } from "react";
+import { BLOCK_EDITOR_CLASSES } from "@chulane/rivto-page";
 import type { EditorBlockNode } from "@chulane/rivto";
 
 /**
@@ -19,8 +20,9 @@ export function useHandleAlignment(
 ): void {
   useEffect(() => {
     const handle = button.current;
-    const row = handle?.closest<HTMLElement>(".rivto-block-row");
+    const row = handle?.closest<HTMLElement>(`.${BLOCK_EDITOR_CLASSES.row}`);
     if (!handle || !row) {
+      // The slot can unmount before this effect runs.
       return;
     }
     let frame = 0;
@@ -28,33 +30,12 @@ export function useHandleAlignment(
       cancelAnimationFrame(frame);
       // Wait for the renderer to reflect the latest content or focus state.
       frame = requestAnimationFrame(() => {
-        const textRoot = row.querySelector<HTMLElement>(".rivto-block-content");
-        const walker = textRoot && document.createTreeWalker(textRoot, NodeFilter.SHOW_TEXT);
-        let text = walker?.nextNode();
-        while (text) {
-          const parent = text.parentElement;
-          const color = parent && getComputedStyle(parent).color;
-          // Ignore hidden or transparent text, including the idle Markdown editor.
-          if (
-            text.textContent?.trim() &&
-            parent?.checkVisibility({ opacityProperty: true, visibilityProperty: true }) &&
-            !color?.endsWith(", 0)")
-          ) {
-            break;
-          }
-          text = walker?.nextNode();
-        }
-        if (!text) {
+        const line = firstVisibleCharacterRect(row);
+        if (!line) {
           // Restore the original CSS position when the block has no visible text.
           handle.style.top = "";
           return;
         }
-        const range = document.createRange();
-        const start = text.textContent?.search(/\S/) ?? 0;
-        // A single character measures the first line even when the text wraps.
-        range.setStart(text, start);
-        range.setEnd(text, start + 1);
-        const line = range.getBoundingClientRect();
         const box = handle.getBoundingClientRect();
         // Convert viewport coordinates back to local CSS pixels under zoom or scale.
         const scale = box.height / handle.offsetHeight || 1;
@@ -75,4 +56,38 @@ export function useHandleAlignment(
       cancelAnimationFrame(frame);
     };
   }, [button, block, alwaysVisible]);
+}
+
+/**
+ * Measures the first non-whitespace character in the row's visible content.
+ *
+ * A single character measures the first line even when the text wraps.
+ * The inactive Markdown editor and transparent text do not determine alignment.
+ *
+ * @param row - Mounted block row containing the handle and its content.
+ * @returns Character bounds in viewport pixels, or undefined for a row without visible text.
+ */
+function firstVisibleCharacterRect(row: HTMLElement): DOMRect | undefined {
+  const content = row.querySelector(`.${BLOCK_EDITOR_CLASSES.content}`);
+  if (!content) {
+    // A slot without rendered content keeps its CSS alignment.
+    return;
+  }
+  const walker = row.ownerDocument.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+  for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+    const parent = text.parentElement;
+    const start = text.textContent?.search(/\S/) ?? -1;
+    if (
+      start < 0 ||
+      !parent?.checkVisibility({ opacityProperty: true, visibilityProperty: true }) ||
+      getComputedStyle(parent).color.endsWith(", 0)")
+    ) {
+      continue;
+    }
+    const range = row.ownerDocument.createRange();
+    range.setStart(text, start);
+    range.setEnd(text, start + 1);
+    // Later fragments can wrap to a different line.
+    return range.getBoundingClientRect();
+  }
 }

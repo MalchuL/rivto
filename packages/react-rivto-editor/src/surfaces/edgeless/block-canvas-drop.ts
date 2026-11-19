@@ -12,6 +12,7 @@ import {
   EDGELESS_BLOCK_ELEMENT_TYPE,
   EDGELESS_CARD_DEFAULT_FRAME,
   blockIdsOf,
+  blockRangeProps,
   insertBlockElementSeparator,
 } from "../../elements/block-element-projection";
 
@@ -120,15 +121,12 @@ export function registerBlockCanvasDrop(
       const range = blockIdsOf(element, roots);
       return range.length === selected.size && range.every((id) => selected.has(id));
     });
-    if (card) {
-      panel.batchUpdates(() => {
+    const movedIds = panel.batchUpdates(() => {
+      if (card) {
         panel.elements.updateElement(card.id, { frame: { ...card.frame, ...point }, zIndex });
-      });
-      panel.selection.set(createStructuralSelection(blockIdsOf(card, roots)));
-      return true;
-    }
-    let movedIds: readonly string[] = [];
-    panel.batchUpdates(() => {
+        // Repositioning a whole card preserves the existing document order.
+        return blockIdsOf(card, roots);
+      }
       // A separator keeps the new card's roots separate from the preceding card.
       const lastBlock = panel.blocks.getBlockNode(last);
       const separator =
@@ -137,7 +135,7 @@ export function registerBlockCanvasDrop(
           : insertBlockElementSeparator(panel, last).id;
       panel.blocks.moveBlocks(ids, separator, "after");
       // Grouped moves use document order, which can differ from selection order.
-      movedIds = panel.blocks.getRootIds().filter((id) => selected.has(id));
+      const movedIds = panel.blocks.getRootIds().filter((id) => selected.has(id));
       panel.elements.insertElement({
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
         frame: {
@@ -146,8 +144,9 @@ export function registerBlockCanvasDrop(
           width: Number.isFinite(width) && width > 0 ? width : EDGELESS_CARD_DEFAULT_FRAME.width,
         },
         zIndex,
-        props: { startBlockId: movedIds[0], endBlockId: movedIds[movedIds.length - 1] },
+        props: blockRangeProps(movedIds),
       });
+      return movedIds;
     });
     panel.selection.set(createStructuralSelection(movedIds));
     return true;

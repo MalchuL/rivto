@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BLOCK_EDITOR_CLASSES } from "@chulane/rivto-page";
 import { useEditorRoot } from "../../hooks";
@@ -26,10 +26,50 @@ interface ViewportEdges {
 /**
  * Draws lines beside visible child blocks without participating in page layout.
  *
- * @returns An overlay above the canvas plane or in the page body for the attached surface, or null before attachment.
+ * @returns An overlay inside each attached page or card, or null before attachment.
  */
 function NestingLines() {
   const { element: root } = useEditorRoot();
+  const [cards, setCards] = useState<HTMLElement[]>([]);
+  const canvas = root?.matches('[data-rivto-surface="edgeless"]');
+  useEffect(() => {
+    if (!root || !canvas) {
+      return;
+    }
+    /**
+     * Reuses mounted overlays until the set or order of projected cards changes.
+     *
+     * @returns Updates the portal hosts for the current canvas.
+     */
+    const refresh = () => {
+      const next = findPanelElements(root, CARD_CONTENT_SELECTOR);
+      setCards((previous) =>
+        previous.length === next.length && previous.every((card, index) => card === next[index])
+          ? previous
+          : next,
+      );
+    };
+    refresh();
+    const observer = new MutationObserver(refresh);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [root, canvas]);
+  if (canvas) {
+    return cards.map((card) =>
+      createPortal(<OutlinePaths root={card} />, card, card.parentElement?.dataset.edgelessRoot),
+    );
+  }
+  return root && createPortal(<OutlinePaths root={root} />, root);
+}
+
+/**
+ * Measures outlines inside one page or card so foreground elements composite above them.
+ *
+ * @param props - Outline measurement boundary.
+ * @param props.root - Mounted page or card content that owns the SVG.
+ * @returns Pointer-transparent line artwork clipped by the owning scrollport.
+ */
+function OutlinePaths({ root }: { readonly root: HTMLElement }) {
   const overlayRef = useRef<SVGSVGElement>(null);
   const pathRef = useRef<SVGPathElement>(null);
 
@@ -65,6 +105,10 @@ function NestingLines() {
         return;
       }
       const origin = overlay.getBoundingClientRect();
+      if (!origin.width || !origin.height) {
+        return;
+      }
+      overlay.setAttribute("viewBox", `0 0 ${origin.width} ${origin.height}`);
       // Clip outline strokes around the four painted edges of each active drop region.
       const document = overlay.ownerDocument;
 
@@ -277,48 +321,7 @@ function NestingLines() {
       }
       observed.clear();
       nextObserved.forEach((element) => observed.add(element));
-      const rootStyle = view!.getComputedStyle(root);
-      // The portal inherits its host's clip. Only the skipped ancestors need explicit clipping.
-      let top = -Infinity;
-      let right = Infinity;
-      let bottom = Infinity;
-      let left = -Infinity;
-      let clipped = false;
-      for (
-        let element: HTMLElement | null = root;
-        element && element !== overlay.parentElement;
-        element = element.parentElement
-      ) {
-        const overflow = view!.getComputedStyle(element);
-        const clipX = overflow.overflowX !== "visible";
-        const clipY = overflow.overflowY !== "visible";
-        if (clipX || clipY) {
-          const rect = element.getBoundingClientRect();
-          if (clipX) {
-            left = Math.max(left, rect.left);
-            right = Math.min(right, rect.right);
-          }
-          if (clipY) {
-            top = Math.max(top, rect.top);
-            bottom = Math.min(bottom, rect.bottom);
-          }
-          clipped = true;
-        }
-      }
-      // Unclipped axes must remain visible beyond the SVG's viewport-sized box.
-      const extent = Math.max(
-        root.ownerDocument.documentElement.scrollHeight,
-        origin.width,
-        origin.height,
-      );
-      overlay.style.clipPath = clipped
-        ? `inset(${Number.isFinite(top) ? top - origin.top : -extent}px ${Number.isFinite(right) ? origin.right - right : -extent}px ${Number.isFinite(bottom) ? origin.bottom - bottom : -extent}px ${Number.isFinite(left) ? left - origin.left : -extent}px)`
-        : "";
-      overlay.style.setProperty("--rivto-muted", rootStyle.getPropertyValue("--rivto-muted"));
-      overlay.style.setProperty(
-        "--rivto-background",
-        rootStyle.getPropertyValue("--rivto-background"),
-      );
+      // The local host supplies theme values and all ancestor overflow clips.
       if (path.getAttribute("d") !== d) {
         path.setAttribute("d", d);
       }
@@ -372,15 +375,16 @@ function NestingLines() {
     };
   }, [root]);
 
-  if (!root) {
-    return null;
-  }
-  return createPortal(
-    <svg ref={overlayRef} className="rivto-nesting-lines" aria-hidden="true" data-nesting-lines>
+  return (
+    <svg
+      ref={overlayRef}
+      className="rivto-nesting-lines"
+      aria-hidden="true"
+      data-nesting-lines
+      preserveAspectRatio="none"
+    >
       <path ref={pathRef} />
-    </svg>,
-    // The viewport clips both surface and embed overlays as the camera moves underneath them.
-    root.closest('[data-rivto-surface="edgeless"]') ?? root.ownerDocument.body,
+    </svg>
   );
 }
 

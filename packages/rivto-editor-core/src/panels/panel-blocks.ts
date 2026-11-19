@@ -3,7 +3,6 @@ import type { BlockDestination } from "@chulane/document-model";
 import type {
   BlockImportOptions,
   BlockMoveRequest,
-  BlockPrepareErrorHandler,
   DocumentEditorAPI,
   EditorBlock,
   EditorBlockInput,
@@ -25,7 +24,6 @@ type PanelBlocksEditor = BlockManagerEditor & {
     | "getInsertionDestinationAfter"
     | "insertBlock"
     | "importForest"
-    | "prepareInput"
     | "updateBlock"
     | "updateBlocks"
     | "deleteListProps"
@@ -357,7 +355,7 @@ export class PanelBlocks extends BlockManager<PanelBlocksEditor> {
     if (result.parentId === this.rootBlockId) {
       return { parentId: null, beforeId: result.beforeId };
     }
-    return { parentId: result.parentId!, beforeId: result.beforeId };
+    return result;
   }
   /**
    * Inserts a prepared subtree at a panel-relative destination.
@@ -397,19 +395,6 @@ export class PanelBlocks extends BlockManager<PanelBlocksEditor> {
     options?: BlockImportOptions,
   ) {
     return this.editor.blocks.importForest(input, this.destination(destination), options);
-  }
-  /**
-   * Prepares detached block inputs through the document processing pipeline.
-   *
-   * @param input - Detached forest.
-   * @param onError - Optional preparation recovery.
-   * @returns Prepared inputs without changing the document.
-   */
-  prepareInput(
-    input: readonly (EditorBlock | EditorBlockInput)[],
-    onError?: BlockPrepareErrorHandler,
-  ) {
-    return this.editor.blocks.prepareInput(input, onError);
   }
   /**
    * Patches one included block through the document commands.
@@ -502,15 +487,6 @@ export class PanelBlocks extends BlockManager<PanelBlocksEditor> {
     this.editor.blocks.setBlockPluginData(id, pluginId, value);
   }
   /**
-   * Deletes an included subtree while protecting the displayed embedding root.
-   *
-   * @param id - Local subtree to remove.
-   * @throws If outside or the protected embedding root.
-   */
-  removeBlock(id: string) {
-    this.removeBlocks([id]);
-  }
-  /**
    * Validates all selected subtree roots before deleting them together.
    *
    * @param ids - Local subtrees.
@@ -592,15 +568,6 @@ export class PanelBlocks extends BlockManager<PanelBlocksEditor> {
     this.editor.blocks.moveBlocks([...ids], targetId, position);
   }
   /**
-   * Indents one removable subtree under its preceding sibling.
-   *
-   * @param id - Local subtree to indent.
-   * @throws If a required block is outside the panel, a structural target is protected, or document validation fails.
-   */
-  indentBlock(id: string) {
-    this.indentBlocks([id]);
-  }
-  /**
    * Indents selected sibling roots without adopting an outside sibling.
    *
    * @param ids - Local sibling roots.
@@ -611,15 +578,6 @@ export class PanelBlocks extends BlockManager<PanelBlocksEditor> {
     return super.indentBlocks([...ids]);
   }
 
-  /**
-   * Moves one subtree up a level while enforcing the panel boundary.
-   *
-   * @param id - Local subtree to outdent.
-   * @throws At the panel boundary.
-   */
-  outdentBlock(id: string) {
-    this.outdentBlocks([id]);
-  }
   /**
    * Checks all selected roots before delegating an outdent to document commands.
    *

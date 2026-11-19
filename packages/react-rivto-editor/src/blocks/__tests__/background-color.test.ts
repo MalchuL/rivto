@@ -2,7 +2,7 @@ import {
   BLOCK_PALETTE_COLORS,
   formatBlockBackground,
   parseBlockBackground,
-} from "./background-color";
+} from "../background-color";
 
 test("concrete palette colors round-trip with alpha without stored CSS tokens", () => {
   for (const color of Object.values(BLOCK_PALETTE_COLORS)) {

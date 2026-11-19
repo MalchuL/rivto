@@ -5,3 +5,7 @@ export const MAX_RESIZE_WIDTH = 960;
 export const RESIZE_EDGE_ATTRIBUTE = "data-width-resize-edge";
 export const RESIZING_PLACEMENT_ATTRIBUTE = "data-width-resizing";
 export const RESIZING_HANDLE_ATTRIBUTE = "data-resizing";
+
+/** Height bounds in CSS pixels for an interactive resize. */
+export const MIN_RESIZE_HEIGHT = 48;
+export const MAX_RESIZE_HEIGHT = 2000;

@@ -183,10 +183,8 @@ test("table inside a bento tile and bento inside a table cell compose floors", a
  * @returns After asserting the parent's explicit rejection outcome.
  */
 function expectParentOutdentRejected(panel: ReactPanelApi, id: string): void {
-  const children = panel.blocks.getChildIds(id);
-  if (!children.length) {
-    return;
-  }
-  expect(panel.blocks.outdentBlocks([children[0]!])).toBe(true);
-  expect(panel.blocks.getParentId(children[0]!)).toBe(id);
+  const [childId] = panel.blocks.getChildIds(id);
+  expect(childId).toBeDefined();
+  expect(panel.blocks.outdentBlocks([childId!])).toBe(true);
+  expect(panel.blocks.getParentId(childId!)).toBe(id);
 }

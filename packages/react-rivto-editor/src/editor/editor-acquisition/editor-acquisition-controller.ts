@@ -71,6 +71,7 @@ export class EditorAcquisitionController<Editor> {
    */
   async start(): Promise<void> {
     if (this.started || this.abort.signal.aborted) {
+      // A consumed or cancelled occurrence never starts another lease.
       return;
     }
     this.started = true;
@@ -83,6 +84,7 @@ export class EditorAcquisitionController<Editor> {
         if (!this.abort.signal.aborted) {
           this.publish({ error });
         }
+        // A failed acquisition has no lease to publish or release.
         return;
       }
       // A provider may finish after unmount. Release that lease without publishing it.

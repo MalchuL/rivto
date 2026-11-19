@@ -1,7 +1,7 @@
-import type { EditorPanelProps } from "../editor-panel/types";
+import type { ReactPanelProps } from "../types";
 
 /** Properties for displaying a protected source block together with its descendants. */
-export interface EditorEmbedProps extends Omit<EditorPanelProps, "rootBlockId"> {
+export type EditorEmbedProps = ReactPanelProps & {
   /** Required source block; it can be edited but cannot be removed or moved through this embedding. */
   readonly rootBlockId: string;
-}
+};

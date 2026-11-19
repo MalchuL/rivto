@@ -15,8 +15,7 @@ import {
 import type { ReactPanelApi } from "../../../../../panels/types";
 import {
   BUILTIN_KEYMAP,
-  findNextEditableBlock,
-  findPreviousEditableBlock,
+  findAdjacentEditableBlock,
   KEYBOARD_BINDING_IDS,
   verticalCaretPosition,
 } from "../../../../../managers";
@@ -48,12 +47,11 @@ export function registerCaretNavigation(reactEditor: ReactEditorApi): void {
     mode: EditorMode,
   ): boolean => {
     const selection = currentNavigationSelection(reactPanel.selection);
-    const item = selection;
-    if (!item || !hasBlockRanges(item) || isStructuralSelection(selection)) {
+    if (!selection || !hasBlockRanges(selection) || isStructuralSelection(selection)) {
       return false;
     }
     const ends = BlockSelectionEndpoints.resolve(
-      item,
+      selection,
       (id) => reactPanel.blocks.getBlockNode(id)?.content.length ?? 0,
     );
     if (!ends) {
@@ -61,21 +59,21 @@ export function registerCaretNavigation(reactEditor: ReactEditorApi): void {
     }
     const scope = navigationDomRoot(root, ends.head.blockId);
     let handled = false;
-    if (!isCaretSelection(item)) {
+    if (!isCaretSelection(selection)) {
       const towardStart = direction === "left" || direction === "up";
       setNavigationCaret(
         root,
         reactPanel,
-        textSelectionEdge(reactPanel, reactPanel, item, towardStart ? "start" : "end"),
+        textSelectionEdge(reactPanel, reactPanel, selection, towardStart ? "start" : "end"),
       );
       handled = true;
     } else if (direction === "left" || direction === "right") {
       const block = reactPanel.blocks.getBlockNode(ends.head.blockId);
-      let adjacent: ReturnType<typeof findPreviousEditableBlock> | null = null;
+      let adjacent: ReturnType<typeof findAdjacentEditableBlock> = null;
       if (direction === "left" && ends.head.offset === 0) {
-        adjacent = findPreviousEditableBlock(scope, ends.head.blockId);
+        adjacent = findAdjacentEditableBlock(scope, ends.head.blockId, "previous");
       } else if (direction === "right" && ends.head.offset === (block?.content.length ?? -1)) {
-        adjacent = findNextEditableBlock(scope, ends.head.blockId);
+        adjacent = findAdjacentEditableBlock(scope, ends.head.blockId, "next");
       }
       if (adjacent) {
         setNavigationCaret(root, reactPanel, {
@@ -102,12 +100,11 @@ export function registerCaretNavigation(reactEditor: ReactEditorApi): void {
     direction: VerticalDirection,
   ): boolean => {
     const selection = currentNavigationSelection(reactPanel.selection);
-    const item = selection;
-    if (!item || !hasBlockRanges(item) || isStructuralSelection(selection)) {
+    if (!selection || !hasBlockRanges(selection) || isStructuralSelection(selection)) {
       return false;
     }
     const ends = BlockSelectionEndpoints.resolve(
-      item,
+      selection,
       (id) => reactPanel.blocks.getBlockNode(id)?.content.length ?? 0,
     );
     if (!ends) {

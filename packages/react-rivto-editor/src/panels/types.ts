@@ -21,7 +21,12 @@ export interface ReactPanelProps {
   readonly mode?: ModeManagerApi;
   /** False suspends hidden-tab interaction while retaining local bindings; defaults to true. */
   readonly active?: boolean;
-  /** Notifies the host after this panel mounts with its borrowed model; ownership stays with the editor owner. */
+  /**
+   * Notifies the host after this panel mounts with its borrowed model.
+   *
+   * @param document - Model retained by the editor owner throughout the callback.
+   * @returns After the host has observed the mounted document.
+   */
   readonly onReady?: (document: DocumentModel) => void;
   /** Explicit PageSurface or EdgelessSurface, plus optional application chrome; extensions are registered at runtime creation. */
   readonly children?: ReactNode;
