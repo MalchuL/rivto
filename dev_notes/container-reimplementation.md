@@ -21,12 +21,12 @@ All four use ordinary persisted blocks with stable IDs, ordered children,
 `content`, `props`, and `listProps.collapsed`. There is no separate persisted
 card, lane, tile, row, or column collection alongside the block hierarchy.
 
-| Container | Current hierarchy                                                        | Persisted container-specific values                                                             |
-| --------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| Kanban    | `kanban` → `kanban-column` → ordinary blocks/subtrees                    | Column title is its `content`; a card has no special native type.                               |
-| Bento     | `bento` → ordinary blocks/subtrees                                       | Preferred width is `props.bentoWidth` on the direct child block, not on a separate tile record. |
-| Columns   | `columns` → `columns-column` → ordinary blocks/subtrees                  | Board `props.showDividers`, boolean, defaults to true.                                          |
-| Table     | `table` → `table-row` → `table-cell` → optional ordinary blocks/subtrees | Cell text is its `content`; `props.tableColumnWidth` is stored separately on each cell.         |
+| Container | Current hierarchy                                                        | Persisted container-specific values                                                                  |
+| --------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Kanban    | `kanban` → `kanban-column` → ordinary blocks/subtrees                    | Column title is its `content`; a card has no special native type.                                    |
+| Bento     | `bento` → ordinary blocks/subtrees                                       | Preferred width is `pluginData.bentoWidth` on the direct child block, not on a separate tile record. |
+| Columns   | `columns` → `columns-column` → ordinary blocks/subtrees                  | Board `props.showDividers`, boolean, defaults to true.                                               |
+| Table     | `table` → `table-row` → `table-cell` → optional ordinary blocks/subtrees | Cell text is its `content`; `props.tableColumnWidth` is stored separately on each cell.              |
 
 Factories create empty `content` on structural nodes except Kanban column titles.
 Conversion from an existing writing block can retain its original text even when
@@ -59,7 +59,7 @@ Source directory: [kanban](../packages/react-rivto-editor/src/extensions/contain
   synced view or modal can render the same model ID more than once.
 - The collapsed board summary shows column count and the sum of direct card
   counts, not a recursive descendant count.
-- `KanbanBehavior` rejects indent/outdent of direct column shells. Its move policy
+- `kanbanBehavior` rejects indent/outdent of direct column shells. Its move policy
   accepts only `kanban-column` roots as board children.
 - `KanbanColumnBehavior` keeps column shells inside Kanban boards and rejects
   outdenting direct cards past the column through outline commands. Cards can
@@ -84,7 +84,7 @@ Source directory: [bento](../packages/react-rivto-editor/src/extensions/containe
   Page's `BlockDropWrapper`, with the actual block rendered once inside it.
   Resize controls belong to the placement wrapper.
 - Missing/nonfinite width reads as **280 CSS px**. Valid numeric values clamp to
-  **160–960 CSS px**. The value persists on the child as `bentoWidth`.
+  **160–960 CSS px**. The value persists on the child as `pluginData.bentoWidth`.
 - Left and right resize edges preview width without committing each pointer move.
   The controller freezes sibling placement during the gesture, handles viewport
   scale, and commits the width on a successful release.

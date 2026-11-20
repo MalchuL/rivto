@@ -132,6 +132,7 @@ export function inlineDestination(
  * @returns The selected inline destination, or undefined for an unresolved or multi-block selection.
  */
 function selectedInlineDestination(reactPanel: FileSelectionPanel): FileDestination | undefined {
+  // Capture the caret in the receiving view before asynchronous file preparation starts.
   const selection = reactPanel.selection.readDOM() ?? reactPanel.selection.get();
   const endpoints =
     selection &&

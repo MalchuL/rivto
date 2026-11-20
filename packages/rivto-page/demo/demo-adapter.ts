@@ -99,15 +99,12 @@ export class DemoAdapter implements BlockEditorAdapter {
       if (patch.listType != null && !LIST_TYPES.includes(patch.listType)) {
         throw new Error("Unsupported list type");
       }
-      if (patch.color && !BACKGROUND_COLORS.some((color) => color.value === patch.color)) {
-        throw new Error("Unsupported block background");
-      }
       const node = this.requiredNode(id);
       this.publish(id, {
         listType: patch.listType === null ? undefined : (patch.listType ?? node.listType),
         checked: patch.checked ?? node.checked,
         collapsed: patch.collapsed ?? node.collapsed,
-        color: patch.color === null ? undefined : (patch.color ?? node.color),
+        style: patch.style === null ? undefined : (patch.style ?? node.style),
       });
     },
   };
@@ -175,9 +172,41 @@ export class DemoAdapter implements BlockEditorAdapter {
    */
   constructor(repeat: number, example: "outline" | "kanban" | "bento" = "outline") {
     if (example !== "outline") {
-      this.blockIds = Array.from({ length: repeat }, (_, group) =>
-        this.createBoard(example, group),
-      );
+      this.blockIds = Array.from({ length: repeat }, (_, group) => {
+        // Each board owns stable item IDs for its repeated fixture group.
+        const id = `board-${group + 1}`;
+        const count = example === "kanban" ? 3 : 4;
+        const childIds = Array.from({ length: count }, (_, index) => `${id}-item-${index + 1}`);
+        this.nodes.set(id, {
+          id,
+          type: `demo-${example}`,
+          text: example === "kanban" ? "Kanban" : "Bento",
+          childIds,
+        });
+        for (const [index, childId] of childIds.entries()) {
+          const nested = example === "kanban" ? 2 : Number(index < 2);
+          const children = Array.from(
+            { length: nested },
+            (_, child) => `${childId}-child-${child + 1}`,
+          );
+          this.nodes.set(childId, {
+            id: childId,
+            type: example === "kanban" ? "demo-column" : "text",
+            text: `Item ${index + 1}`,
+            childIds: children,
+            width: 280,
+          });
+          for (const nestedId of children) {
+            this.nodes.set(nestedId, {
+              id: nestedId,
+              type: "text",
+              text: "Nested text",
+              childIds: [],
+            });
+          }
+        }
+        return id;
+      });
       return;
     }
     const ids: string[] = [];
@@ -374,7 +403,29 @@ export class DemoAdapter implements BlockEditorAdapter {
     }
     const changed = new Set<string>();
     for (const [parent, ids] of groups) {
-      this.moveSiblingGroup(parent, ids, parents, outdent, changed);
+      // Move each sibling group together and notify only after every parent is updated.
+      const siblings = parent ? this.requiredNode(parent).childIds : this.blockIds;
+      const first = siblings.indexOf(ids[0]!);
+      if (outdent && !parent) {
+        continue;
+      }
+      const target = outdent ? parents.get(parent!) : siblings[first - 1];
+      if (!outdent && !target) {
+        continue;
+      }
+      const destination = target ? this.requiredNode(target).childIds : this.blockIds;
+      const insertion = outdent ? destination.indexOf(parent!) + 1 : destination.length;
+      const selected = new Set(ids);
+      this.replaceChildren(
+        parent,
+        siblings.filter((id) => !selected.has(id)),
+        changed,
+      );
+      this.replaceChildren(
+        target,
+        [...destination.slice(0, insertion), ...ids, ...destination.slice(insertion)],
+        changed,
+      );
     }
     this.selectableIds = undefined;
     this.parentIds = undefined;
@@ -487,47 +538,6 @@ export class DemoAdapter implements BlockEditorAdapter {
   }
 
   /**
-   * Moves one sibling selection and publishes all snapshots before notifications.
-   *
-   * @param parent - Source parent; undefined denotes demo roots.
-   * @param ids - Selected siblings in canonical order.
-   * @param parents - Parent lookup captured before this command.
-   * @param outdent - Whether to lift instead of nesting under the preceding sibling.
-   * @param changed - Accumulates addressed sources notified after all writes.
-   * @returns Ineligible first-root indentation and root outdent leave data unchanged.
-   */
-  private moveSiblingGroup(
-    parent: string | undefined,
-    ids: string[],
-    parents: ReadonlyMap<string, string>,
-    outdent: boolean,
-    changed: Set<string>,
-  ): void {
-    const siblings = parent ? this.requiredNode(parent).childIds : this.blockIds;
-    const first = siblings.indexOf(ids[0]!);
-    if (outdent && !parent) {
-      return;
-    }
-    const target = outdent ? parents.get(parent!) : siblings[first - 1];
-    if (!outdent && !target) {
-      return;
-    }
-    const destination = target ? this.requiredNode(target).childIds : this.blockIds;
-    const insertion = outdent ? destination.indexOf(parent!) + 1 : destination.length;
-    const selected = new Set(ids);
-    this.replaceChildren(
-      parent,
-      siblings.filter((id) => !selected.has(id)),
-      changed,
-    );
-    this.replaceChildren(
-      target,
-      [...destination.slice(0, insertion), ...ids, ...destination.slice(insertion)],
-      changed,
-    );
-  }
-
-  /**
    * Replaces a demo child list without exposing partially updated hierarchy to observers.
    *
    * @param parent - Parent identity, or undefined for the display roots.
@@ -565,43 +575,6 @@ export class DemoAdapter implements BlockEditorAdapter {
       this.parentIds = parents;
     }
     return this.parentIds;
-  }
-
-  /**
-   * Seeds real example hierarchy without adding placeholder content blocks.
-   *
-   * @param example - Host fixture selecting columns or wrapping tiles.
-   * @param group - Zero-based fixture repetition used for stable unique IDs.
-   * @returns The board ID to include in the display list.
-   */
-  private createBoard(example: "kanban" | "bento", group: number): string {
-    const id = `board-${group + 1}`;
-    const count = example === "kanban" ? 3 : 4;
-    const childIds = Array.from({ length: count }, (_, index) => `${id}-item-${index + 1}`);
-    this.nodes.set(id, {
-      id,
-      type: `demo-${example}`,
-      text: example === "kanban" ? "Kanban" : "Bento",
-      childIds,
-    });
-    for (const [index, childId] of childIds.entries()) {
-      const nested = example === "kanban" ? 2 : Number(index < 2);
-      const children = Array.from(
-        { length: nested },
-        (_, child) => `${childId}-child-${child + 1}`,
-      );
-      this.nodes.set(childId, {
-        id: childId,
-        type: example === "kanban" ? "demo-column" : "text",
-        text: `Item ${index + 1}`,
-        childIds: children,
-        width: 280,
-      });
-      for (const nestedId of children) {
-        this.nodes.set(nestedId, { id: nestedId, type: "text", text: "Nested text", childIds: [] });
-      }
-    }
-    return id;
   }
 
   /**
@@ -673,7 +646,22 @@ export class DemoAdapter implements BlockEditorAdapter {
   private setSelection(snapshot: BlockSelectionSnapshot | undefined): void {
     const started = performance.now();
     const previous = this.selected;
-    if (this.matchesSelection(snapshot)) {
+    // Pointer movement frequently publishes the same range. Compare endpoints and
+    // offsets directly so unchanged coverage allocates no serialized snapshots.
+    const current = this.selectionSnapshot;
+    if (
+      current === snapshot ||
+      (current &&
+        snapshot &&
+        current.anchorBlockId === snapshot.anchorBlockId &&
+        current.focusBlockId === snapshot.focusBlockId &&
+        current.reversed === snapshot.reversed &&
+        current.blocks.length === snapshot.blocks.length &&
+        current.blocks.every((range, index) => {
+          const other = snapshot.blocks[index]!;
+          return range.id === other.id && range.start === other.start && range.end === other.end;
+        }))
+    ) {
       return;
     }
     this.selectionSnapshot = snapshot;
@@ -718,31 +706,5 @@ export class DemoAdapter implements BlockEditorAdapter {
       this.selectableIds = result;
     }
     return result;
-  }
-  /**
-   * Compares portable coverage without allocating serialized copies on pointer movement.
-   *
-   * @param next - Candidate coverage, or undefined to clear selection.
-   * @returns Whether the current host snapshot already represents these directed ranges.
-   */
-  private matchesSelection(next: BlockSelectionSnapshot | undefined): boolean {
-    const current = this.selectionSnapshot;
-    if (current === next) {
-      return true;
-    }
-    if (
-      !current ||
-      !next ||
-      current.anchorBlockId !== next.anchorBlockId ||
-      current.focusBlockId !== next.focusBlockId ||
-      current.reversed !== next.reversed ||
-      current.blocks.length !== next.blocks.length
-    ) {
-      return false;
-    }
-    return current.blocks.every((range, index) => {
-      const other = next.blocks[index]!;
-      return range.id === other.id && range.start === other.start && range.end === other.end;
-    });
   }
 }

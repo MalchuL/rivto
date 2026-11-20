@@ -14,9 +14,21 @@ for (const mode of ["block", "edgeless"] as const) {
       const board = editor.blocks.insertBlock({
         type: "bento",
         children: [
-          { type: "paragraph", content: "Previous tile", props: { bentoWidth: 200 } },
-          { type: "paragraph", content: "Hovered tile", props: { bentoWidth: 200 } },
-          { type: "paragraph", content: "Dragged tile", props: { bentoWidth: 200 } },
+          {
+            type: "paragraph",
+            content: "Previous tile",
+            pluginData: { bentoWidth: 200 },
+          },
+          {
+            type: "paragraph",
+            content: "Hovered tile",
+            pluginData: { bentoWidth: 200 },
+          },
+          {
+            type: "paragraph",
+            content: "Dragged tile",
+            pluginData: { bentoWidth: 200 },
+          },
         ],
       });
       editor.history.clear();

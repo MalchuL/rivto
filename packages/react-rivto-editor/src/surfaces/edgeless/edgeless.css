@@ -126,6 +126,16 @@
   cursor: grab;
 }
 
+/* Keep the interactive card shell while exposing a single non-default-writing root. */
+.edgeless-card[data-borderless="true"] {
+  border-color: transparent;
+  background: transparent;
+}
+
+.edgeless-card[data-borderless="true"] > .edgeless-card-content {
+  padding: 0;
+}
+
 /* Wide min-content (Kanban lanes) must not inflate the card's scrollport. */
 .edgeless-card-content > .rivto-block {
   min-width: 0;

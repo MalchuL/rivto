@@ -1,4 +1,6 @@
+import { createContainerBackgroundProcessor } from "../../blocks/background-color";
 import { BLOCK_TEXT_METADATA_KEY } from "../../managers/selection/block-text-metadata";
+import { ListTodoIcon } from "lucide-react";
 /**
  * Provides the opt-in TODO-item model, renderer, properties dialog, and prompt
  * conversion behavior for every renderer exposing Rivto's plain-text content
@@ -66,9 +68,16 @@ export function todoItemExtension(options: TodoItemExtensionOptions = {}): React
      */
     setup: (reactEditor) => {
       const disposers = [
+        // Defaults missing background on creation/conversion; removes the processor with the extension.
+        reactEditor.extensions.registerCleanup(
+          reactEditor.blocks.registerProcessor(
+            createContainerBackgroundProcessor(TODO_STORAGE_BLOCK_TYPE),
+          ),
+        ),
         reactEditor.blockContextMenu.register({
           id: "type.todo-item",
           title: "Convert to TODO item",
+          icon: ListTodoIcon,
           order: 30,
           /**
            * Allows conversion only when every captured block exists and is not already a TODO type.

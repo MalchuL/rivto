@@ -16,12 +16,10 @@ export interface FileIngestionPoint {
 
 /** Editor operations borrowed while committing prepared files. */
 interface FileIngestionEditor extends FileDestinationEditor {
-  /** Checks whether prepared block types are allowed at a Page destination. */
-  readonly blockBehaviors: Pick<ReactPanelApi["editor"]["blockBehaviors"], "canMove">;
   /** Block operations used to commit prepared representations. */
   readonly blocks: Pick<
     ReactPanelApi["editor"]["blocks"],
-    "getBlock" | "setBlockType" | "updateBlock"
+    "getBlock" | "setBlockType" | "updateBlock" | "canMove"
   >;
 }
 

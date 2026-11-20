@@ -26,7 +26,6 @@ export class PanelRegistry {
   private readonly panels = new Map<
     HTMLElement,
     {
-      document: DocumentModel;
       rootBlockId?: string;
       api?: ReactPanelApi;
       deactivate?: () => void;
@@ -106,11 +105,6 @@ export class PanelRegistry {
     return new Set(this.panels.keys());
   }
 
-  /** @returns Whether mounted document panels need focus and pointer lifecycle listeners. */
-  get hasPanels(): boolean {
-    return this.panels.size > 0;
-  }
-
   /** @param root - Registered editor surface.
    * @returns Its API, or undefined for an unknown root or a registration without an API. */
   getApi(root: HTMLElement): ReactPanelApi | undefined {
@@ -166,7 +160,7 @@ export class PanelRegistry {
   /**
    * Registers one document occurrence and connects shared delegated listeners to its root.
    * @param root - Mounted surface displaying the full document or source subtree.
-   * @param document - Source model used for commands within this region.
+   * @param _document - Source model supplied by existing callers. Commands use the registered panel API; the registry does not retain this argument.
    * @param rootBlockId - Displayed source root bounding selection and navigation.
    * @param api - Panel-bound API supplied to handlers; omitted only for a region that must not dispatch editing handlers.
    * @param cancelSelection - Cancels pending DOM selection work before removing the root.
@@ -177,14 +171,14 @@ export class PanelRegistry {
    */
   registerPanel(
     root: HTMLElement,
-    document: DocumentModel,
+    _document: DocumentModel,
     rootBlockId?: string,
     api?: ReactPanelApi,
     deactivate?: () => void,
     cancelSelection?: () => void,
   ): () => void {
     this.extensions.assertActive();
-    const entry = { document, rootBlockId, api, deactivate, cancelSelection };
+    const entry = { rootBlockId, api, deactivate, cancelSelection };
     this.panels.set(root, entry);
     this.notifyRootsChanged();
     return () => {
@@ -241,6 +235,7 @@ export class PanelRegistry {
     const ElementConstructor = fallback.ownerDocument.defaultView!.Element;
     const element =
       target instanceof ElementConstructor ? target : (target as Node | null)?.parentElement;
+    // An event from an embed also bubbles through its host, so start with the innermost panel.
     const boundary = element?.closest<HTMLElement>(PANEL_SELECTOR);
     const activatesPanel =
       raw.type === "focusin" ||

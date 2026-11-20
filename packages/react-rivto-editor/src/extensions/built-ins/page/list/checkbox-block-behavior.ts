@@ -1,7 +1,7 @@
+import type { BlockInput } from "@chulane/document-model";
 import type { KeyboardSelectionTarget } from "../../../../managers/keyboard/selection";
 import type {
   BlockBehavior,
-  BlockBehaviorAvailabilityContext,
   BlockBehaviorContext,
   BlockBehaviorOutcome,
 } from "../../../../block-behaviors/types";
@@ -16,8 +16,8 @@ export class CheckboxBlockBehavior implements BlockBehavior {
    * @param context - Block whose behavior is checked, including explicit source/destination roles for drops.
    * @returns True only when this behavior owns this block's list mode.
    */
-  isAvailable(context: BlockBehaviorAvailabilityContext): boolean {
-    return context.block.listProps.type === "checkbox";
+  isAvailable(context: BlockInput): boolean {
+    return context.listProps?.type === "checkbox";
   }
 
   /**

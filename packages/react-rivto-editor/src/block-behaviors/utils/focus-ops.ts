@@ -27,8 +27,8 @@ export function focusCaret(
   offset: number,
 ): void {
   reactPanel.selection.set(createCaretSelection(blockId, offset));
-  // Only place the caret and its editing focus; model mutations happen before scheduling.
-  reactPanel.selection.scheduleIfSelectionUnchanged(() => focusBlock(root, blockId, offset));
+  // A block can be rendered twice. Restore focus in the view where the edit started.
+  scheduleBlockFocus(reactPanel, root, blockId, offset);
 }
 
 /**

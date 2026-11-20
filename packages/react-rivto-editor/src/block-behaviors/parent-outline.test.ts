@@ -1,4 +1,4 @@
-import type { BlockOutlineContext } from "./types";
+import type { BlockStructuralContext } from "@chulane/rivto";
 import { createCaretSelection } from "@chulane/rivto";
 import {
   createTestCoreEditor,
@@ -31,26 +31,25 @@ for (const operation of ["indent", "outdent"] as const) {
       const selection = panel.selection.get();
       const parentMethod = operation === "indent" ? "onChildIndent" : "onChildOutdent";
       const childMethod = operation === "indent" ? "onIndent" : "onOutdent";
-      panel.editor.blockBehaviors.register(
+      core.blockRegistry.registerBehavior(
         {
-          isAvailable: ({ block }) => block.id === parent.id,
-          [parentMethod]: (context: BlockOutlineContext, received: readonly string[]) => {
+          isAvailable: (block) => block.id === parent.id,
+          [parentMethod]: (context: BlockStructuralContext, received: readonly string[]) => {
             calls.push("parent");
             expect(context.block.id).toBe(parent.id);
-            expect(context.selection).toEqual(selection);
             expect(received).toEqual(ids);
             if (outcome === "handled") {
-              context.reactPanel.blocks.updateBlock(parent.id, { content: "custom parent" });
-              context.reactPanel.blocks.updateBlock(ids[0]!, { content: "custom child" });
+              context.blocks.updateBlock(parent.id, { content: "custom parent" });
+              context.blocks.updateBlock(ids[0]!, { content: "custom child" });
             }
             return outcome;
           },
         },
         10,
       );
-      panel.editor.blockBehaviors.register(
+      core.blockRegistry.registerBehavior(
         {
-          isAvailable: ({ block }) => block.id === ids[0],
+          isAvailable: (block) => block.id === ids[0],
           [childMethod]: () => {
             calls.push("child");
             return "unhandled";
@@ -101,9 +100,9 @@ test("parent priority and equal-priority registration order stop at the first cl
     ["second", 20, "rejected"],
     ["later", 20, "unhandled"],
   ] as const) {
-    panel.editor.blockBehaviors.register(
+    core.blockRegistry.registerBehavior(
       {
-        isAvailable: ({ block }) => block.id === parent.id,
+        isAvailable: (block) => block.id === parent.id,
         onChildOutdent: () => {
           calls.push(label);
           return outcome;
@@ -135,17 +134,16 @@ for (const action of ["onIndent", "onOutdent"] as const) {
     });
     const [previousParent, currentParent] = grandparent.children;
     const source = previousParent!.children[0]!;
-    const selection = createCaretSelection(source.id, 2);
-    const context: BlockOutlineContext = {
-      reactPanel: panel,
+    const context: BlockStructuralContext = {
+      blocks: panel.blocks,
+      documentBlocks: core.blocks,
       block: panel.blocks.getBlockNode(source.id)!,
       parentId: previousParent!.id,
-      selection,
     };
     panel.blocks.moveBlocks([source.id], currentParent!.id, "inside");
     const calls: string[] = [];
     const parentAction = action === "onIndent" ? "onChildIndent" : "onChildOutdent";
-    panel.editor.blockBehaviors.register({
+    core.blockRegistry.registerBehavior({
       /**
        * Makes both hooks applicable so an accidental grandparent traversal is observable.
        *
@@ -160,10 +158,9 @@ for (const action of ["onIndent", "onOutdent"] as const) {
        * @param ids - Complete requested group, retained across parent dispatch.
        * @returns Unhandled so the original child action can continue.
        */
-      [parentAction]: (parentContext: BlockOutlineContext, ids: readonly string[]) => {
+      [parentAction]: (parentContext: BlockStructuralContext, ids: readonly string[]) => {
         calls.push(parentContext.block.id);
         expect(parentContext.parentId).toBe(grandparent.id);
-        expect(parentContext.selection).toBe(selection);
         expect(ids).toEqual([source.id]);
         return "unhandled";
       },
@@ -174,14 +171,18 @@ for (const action of ["onIndent", "onOutdent"] as const) {
        * @param ids - Unchanged requested group.
        * @returns Handled without invoking standard mutation.
        */
-      [action]: (childContext: BlockOutlineContext, ids: readonly string[]) => {
+      [action]: (childContext: BlockStructuralContext, ids: readonly string[]) => {
         calls.push(childContext.block.id);
-        expect(childContext).toBe(context);
+        expect(childContext.block.id).toBe(context.block.id);
         expect(ids).toEqual([source.id]);
         return "handled";
       },
     });
-    expect(panel.editor.blockBehaviors.dispatch(action, context, [source.id])).toBe(true);
+    expect(
+      action === "onIndent"
+        ? panel.blocks.indentBlocks([source.id])
+        : panel.blocks.outdentBlocks([source.id]),
+    ).toBe(true);
     expect(calls).toEqual([currentParent!.id, source.id]);
     expect(panel.blocks.getParentId(source.id)).toBe(currentParent!.id);
     panel.editor.destroy();

@@ -6,7 +6,14 @@
  * @module
  */
 import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
-import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
+import {
+  BLOCK_EDITOR_CLASSES,
+  BlockBody,
+  BlockChildren,
+  BlockContent,
+  BlockRow,
+} from "@chulane/rivto-page";
+import { ArrowDownIcon, ArrowUpIcon, MinusIcon } from "lucide-react";
 import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../../constants";
 import type { ReactPanelApi } from "../../../panels/types";
 import {
@@ -18,6 +25,7 @@ import {
   type ReactEditorExtension,
 } from "../../../managers";
 import { separatorBlockFactory, type BlockFactory } from "../../../block-factories";
+import { siblingInsertion } from "../block-handle/insertion";
 import { SEPARATOR_BLOCK_TYPE } from "./constants";
 
 export { SEPARATOR_BLOCK_TYPE } from "./constants";
@@ -62,6 +70,31 @@ export function SeparatorBlock() {
 }
 
 /**
+ * Distinguishes the separator's descendants while retaining the standard outline behavior.
+ *
+ * @returns The separator row and its bordered, collapsible child outline.
+ */
+function SeparatorLayout() {
+  return (
+    <>
+      <BlockRow>
+        <BlockContent />
+      </BlockRow>
+      <BlockBody />
+      <BlockChildren
+        className={`${BLOCK_EDITOR_CLASSES.outline} rivto-separator-children rounded-md border border-dashed border-border p-[var(--rivto-container-padding,16px)] [&>*]:[opacity:var(--rivto-separator-children-opacity,0.5)]`}
+        data-hide-nesting-line="true"
+        dropBackground
+        dropEndGaps={false}
+        dropScope="local"
+        renderEmpty={false}
+        hoverBoundary={false}
+      />
+    </>
+  );
+}
+
+/**
  * Inserts a real separator and a writable default block at the active block level.
  * Empty leaf blocks are converted in place so slash insertion does not leave a
  * meaningless blank block. Content or descendants are never discarded.
@@ -97,6 +130,7 @@ function insertSeparator(
           ...separatorBlockFactory.createEmptyBlock(),
           listProps: { type: "list", checked: false },
         },
+        // A protected embed root can accept children but cannot be given a sibling here.
         reactPanel.blocks.canRemove(block.id)
           ? reactPanel.blocks.getInsertionDestinationAfter(block.id)
           : { parentId: block.id },
@@ -121,19 +155,13 @@ function insertSeparator(
  */
 export const separatorBlockExtension = (): ReactEditorExtension => ({
   id: "block.separator",
+  /**
+   * Installs separator rendering, clipboard conversion and insertion commands for this editor.
+   *
+   * @param reactEditor - Runtime that owns the extension registrations.
+   * @returns Disposer that releases those registrations in reverse installation order.
+   */
   setup: (reactEditor) => {
-    const focusInserted = (reactPanel: ReactPanelApi, blockId: string): void => {
-      const writing = insertSeparator(
-        reactPanel,
-        blockId,
-        separatorBlockFactory,
-        reactEditor.defaultWritingBlockFactory,
-      );
-      const root = reactPanel.getRoot();
-      if (writing && root) {
-        requestAnimationFrame(() => focusBlock(root, writing.id, 0));
-      }
-    };
     const disposers = [
       reactEditor.blockTypes.register({
         definition: {
@@ -141,6 +169,7 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
           title: "Separator",
         },
         render: SeparatorBlock,
+        layout: SeparatorLayout,
         separatesBlockElements: true,
         clipboard: {
           format: () => ({ plain: "---", markdown: "---", html: "<hr>" }),
@@ -155,7 +184,46 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         title: "Separator",
         group: "Insert",
         keywords: ["divider", "split"],
-        execute: ({ blockId, reactPanel }) => focusInserted(reactPanel, blockId),
+        execute: ({ blockId, reactPanel }) => {
+          // Focus the writing block after its new DOM host mounts.
+          const writing = insertSeparator(
+            reactPanel,
+            blockId,
+            separatorBlockFactory,
+            reactEditor.defaultWritingBlockFactory,
+          );
+          const root = reactPanel.getRoot();
+          if (writing && root) {
+            requestAnimationFrame(() => focusBlock(root, writing.id, 0));
+          }
+        },
+      }),
+      reactEditor.blockContextMenu.register({
+        id: "block.insert-separator",
+        title: "Insert separator",
+        icon: MinusIcon,
+        order: 13,
+        /**
+         * Keeps insertion within the invoking panel's block scope.
+         *
+         * @param context - Invoking panel and clicked block.
+         * @returns Whether the clicked block can have a sibling in this panel.
+         */
+        isAvailable: ({ reactPanel, blockId }) =>
+          !!siblingInsertion(reactPanel, blockId, separatorBlockFactory, "below"),
+        /**
+         * Inserts a separator immediately after the clicked block.
+         *
+         * @param context - Invoking panel and clicked block.
+         * @returns No value after inserting the separator.
+         * @throws If the panel rejects the insertion.
+         */
+        execute: ({ reactPanel, blockId }) => {
+          const insertion = siblingInsertion(reactPanel, blockId, separatorBlockFactory, "below");
+          if (insertion) {
+            reactPanel.blocks.insertBlock(insertion.block, insertion.destination);
+          }
+        },
       }),
       reactEditor.keyboard.register(
         {

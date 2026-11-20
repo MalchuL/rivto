@@ -1,8 +1,7 @@
 import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR } from "../../constants";
-import type { PanelRegistry } from "../../panels/panel-registry";
+import type { EditorEventRoots, AnyEditorEvent } from "./types";
 import type { DOMEventTarget } from "./dom-types";
 import { EditorEvent } from "./editor-event";
-import type { AnyEditorEvent } from "./types";
 
 /** Resolves host panel routing and captures selection and DOM context for native delivery. */
 export class PanelEventFactory {
@@ -12,7 +11,10 @@ export class PanelEventFactory {
    * @param panels - Registry operations needed to resolve the receiving occurrence.
    */
   constructor(
-    private readonly panels: Pick<PanelRegistry, "resolveEventRoot" | "getApi" | "getSurfaceType">,
+    private readonly panels: Pick<
+      EditorEventRoots,
+      "resolveEventRoot" | "getApi" | "getSurfaceType"
+    >,
   ) {}
 
   /**

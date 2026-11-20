@@ -2,7 +2,7 @@ import { KeyboardRuntime } from "@chulane/rivto-keyboard";
 import type { RegistrationOwner } from "../extensions/types";
 import type { EventManager } from "../events/event-manager";
 import type { EditorEventHandler } from "../events/types";
-import type { PanelRegistration } from "../../panels/types";
+import type { PanelEventScope } from "../events/api";
 import type { KeyboardEditorEvent } from "./keyboard-editor-event";
 import type {
   KeyboardBindingSnapshot,
@@ -45,7 +45,7 @@ export class KeyboardManager extends KeyboardRuntime<
   register(
     definition: KeyboardEventDefinition,
     listener: EditorEventHandler<KeyboardEditorEvent>,
-    owner?: Pick<PanelRegistration, "id" | "getRoot">,
+    owner?: PanelEventScope,
   ): () => void {
     const id = definition.id.trim();
     return this.registerBinding(definition, listener, {

@@ -18,7 +18,13 @@ import type {
 import type { ElementDestination, BlockDestination } from "@chulane/document-model";
 import type { EditorMode } from "../editor/types";
 import type { BlockProcessor } from "./block-manager/block-pipe";
-import type { BlockPrepareErrorHandler } from "./block-manager/types";
+import type {
+  BlockMoveRequest,
+  BlockStructuralAction,
+  BlockStructuralContext,
+  BlockStructuralBehavior,
+} from "../block-behaviors/types";
+import type { BlockImportOptions, BlockPrepareErrorHandler } from "./block-manager/types";
 import type { BlockListPropsManagerApi } from "./block-list-props-manager";
 import type { BlockDefinition } from "./block-registry-manager/types";
 import type { ClipboardBundle, ClipboardPasteInput } from "./clipboard-manager/clipboard-data";
@@ -43,15 +49,39 @@ export interface RegisteredCommand {
 /** Public command registry contract. */
 export interface CommandRegistryApi {
   readonly lastExecuted: string | null;
-  /** @param name - Command ID. @param handler - Runtime handler. @returns Registration handle. */
+  /**
+   * Registers a command handler and returns the handle that releases it.
+   *
+   * @param name - Unique, non-empty command ID.
+   * @param handler - Runtime command implementation.
+   * @returns Ownership handle for this exact registration.
+   * @throws If the command name is empty or already registered.
+   */
   register(name: string, handler: CommandHandler): RegisteredCommand;
-  /** @param name - Command ID. @returns Whether it is registered. */
+  /**
+   * Reports whether a command name currently resolves to a handler.
+   *
+   * @param name - Command ID to inspect.
+   * @returns `true` when a handler is registered.
+   */
   has(name: string): boolean;
   /** @param name - Command ID. @returns No value. */
   remove(name: string): void;
-  /** @param name - Command ID. @param payload - Optional data. @returns Handler result. */
+  /**
+   * Executes a registered command and notifies subscribers after success.
+   *
+   * @param name - Command ID to execute.
+   * @param payload - Optional runtime payload passed to the handler.
+   * @returns The command handler result.
+   * @throws If no handler owns the command name, or if the handler throws.
+   */
   execute(name: string, payload?: unknown): unknown;
-  /** @param listener - Execution listener. @returns Its disposer. */
+  /**
+   * Subscribes to successful command executions.
+   *
+   * @param listener - Callback called after a command handler completes.
+   * @returns Function that removes this listener.
+   */
   subscribe(listener: () => void): () => void;
   /** @returns No value after clearing registrations and listeners. */
   clear(): void;
@@ -67,6 +97,29 @@ export interface ImportedBlockForest {
 
 /** Public typed block-operation contract. */
 export interface BlockManagerApi {
+  /** Whether the boundary block itself is visible and protected. */
+  readonly includeRoot: boolean;
+  /**
+   * Checks whether the block can be removed through this manager.
+   *
+   * @param id - Block identifier to inspect.
+   * @returns Whether the block exists and is not protected by the manager's boundary.
+   */
+  canRemove(id: string): boolean;
+  /**
+   * Checks whether the block can be moved out of its current parent.
+   *
+   * @param id - Block identifier to inspect.
+   * @returns Whether the block has a parent and can leave it within this manager's boundary.
+   */
+  canOutdent(id: string): boolean;
+  /**
+   * Evaluates editor-local structural move permissions for detached roots.
+   *
+   * @param request - Moved roots and destination in this editor's document.
+   * @returns False for an invalid destination, empty selection, or a behavior veto.
+   */
+  canMove(request: BlockMoveRequest): boolean;
   /** Monotonic active-document block revision. */
   readonly revision: number;
   /** @param processor - Editor-owned processor. @returns Its disposer. */
@@ -75,23 +128,45 @@ export interface BlockManagerApi {
   hasBlock(id: string): boolean;
   /** @param id - Block ID. @returns Detached subtree or undefined. */
   getBlock(id: string): EditorBlock | undefined;
-  /** @param id - Block ID. @returns Detached non-recursive block fields or undefined. */
+  /**
+   * Resolves one placed block without recursively materializing descendants.
+   *
+   * @param id - Persisted block identifier to resolve.
+   * @returns Detached non-recursive block fields, or undefined when absent.
+   */
   getBlockNode(id: string): EditorBlockNode | undefined;
   /** @returns Complete detached root forest. */
   getBlocks(): EditorBlock[];
-  /** @returns Root block IDs in document order. */
-  getRootIds(): string[];
+  /**
+   * Reads the ordered block IDs at the root of this manager’s scope.
+   *
+   * @returns Root identities in document order, or an empty list for an empty scope.
+   */
+  getRootIds(): readonly string[];
   /** @param ids - Candidate IDs. @returns Unique placed IDs in document order, omitting missing records. */
   getOrderedIds(ids: Iterable<string>): string[];
   /** @param id - Block ID. @param listener - Change listener. @returns Its disposer. */
   subscribeBlock(id: string, listener: () => void): () => void;
-  /** @param id - Block ID. @param listener - Node change listener. @returns Its disposer. */
+  /**
+   * Subscribes to one block's own fields and direct child IDs.
+   *
+   * @param id - Block identifier to observe.
+   * @param listener - Callback invoked after relevant changes.
+   * @returns Function that removes the subscription.
+   */
   subscribeBlockNode(id: string, listener: () => void): () => void;
   /** @param listener - Root-list listener. @returns Its disposer. */
   subscribeRootIds(listener: () => void): () => void;
   /** @param listener - Structure listener. @returns Its disposer. */
   subscribeStructure(listener: () => void): () => void;
-  /** @param input - Detached root forest. @param onError - Optional one-shot node recovery. @returns Recursively prepared creation forest. */
+  /**
+   * Applies definitions, list-property policy, and registered processors to
+   * every node, then validates the complete detached forest.
+   *
+   * @param input - Detached block forest to prepare atomically.
+   * @param onError - Optional handler that supplies one replacement for a failed node.
+   * @returns Recursively copied forest ready for insertion.
+   */
   prepareInput(
     input: readonly (EditorBlock | EditorBlockInput)[],
     onError?: BlockPrepareErrorHandler,
@@ -108,32 +183,96 @@ export interface BlockManagerApi {
   getChildIds(parentId: string): readonly string[];
   /** @param afterId - Sibling to follow, null to prepend, or omitted to append. @returns Document destination. @throws For a missing sibling. */
   getInsertionDestinationAfter(afterId?: string | null): BlockDestination;
-  /** @param blocks - Complete copied roots or creation inputs. @param destination - Actual parent and optional next sibling. @param onError - Optional one-shot node recovery. @param ids - Optional preallocated source-to-destination IDs; processors and validation still run. @returns Imported roots and identities. */
+  /**
+   * Prepares and imports a forest in one history batch.
+   *
+   * @param blocks - Complete copied roots or creation inputs.
+   * @param destination - Actual parent and optional next sibling.
+   * @param options - Optional recovery, identity mapping, and preservation requirements.
+   * @param options.onError - Optional one-shot node recovery.
+   * @param options.ids - Optional preallocated source-to-destination ID mapping.
+   * @param options.preserveIds - Whether to reject missing, conflicting, or changed source IDs.
+   * @returns Imported roots and their source-to-destination identity mapping.
+   * @throws If preparation fails or requested source identities cannot be preserved.
+   */
   importForest(
     blocks: readonly (EditorBlock | EditorBlockInput)[],
     destination?: BlockDestination,
-    onError?: BlockPrepareErrorHandler,
-    ids?: ReadonlyMap<string, string>,
+    options?: BlockImportOptions,
   ): ImportedBlockForest;
-  /** @param id - Block ID. @param patch - Mutable fields. @returns Updated non-recursive block fields. */
+  /**
+   * Applies supplied mutable fields to one block.
+   *
+   * @param id - Block identifier to update.
+   * @param patch - Mutable fields to validate and apply.
+   * @returns Updated persisted fields without recursively materializing descendants.
+   */
   updateBlock(id: string, patch: EditorBlockPatch): EditorBlockNode;
-  /** @param updates - Identified patches. @returns Updated non-recursive block fields in input order. */
+  /**
+   * Applies several identified block patches atomically.
+   *
+   * @param updates - Ordered block identifiers and patches.
+   * @returns Updated persisted fields without descendants, in input order.
+   */
   updateBlocks(updates: readonly EditorBlockUpdate[]): EditorBlockNode[];
   /** @param id - Block ID. @param keys - Keys to delete. @returns Whether deletion applied. */
   deleteListProps(id: string, keys: readonly string[]): boolean;
   /** @param updates - Identified key deletions. @returns No value. */
   deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): void;
-  /** @param id - Block ID to clear. @returns No value. */
+  /**
+   * Clears content and descendants while preserving one block's identity.
+   *
+   * @param id - Block identifier to retain and clear.
+   * @returns No value.
+   */
   clearBlock(id: string): void;
-  /** @param id - Block ID. @param type - Destination type. @returns No value. */
+  /**
+   * Converts one block to another registered native type.
+   *
+   * Processor changes to list properties are validated and committed with the
+   * type change; unrelated existing properties remain intact.
+   *
+   * @param id - Block identifier to convert.
+   * @param type - Registered destination type.
+   * @returns No value.
+   */
   setBlockType(id: string, type: string): void;
   /** @param id - Block ID to remove. @returns No value. */
   removeBlock(id: string): void;
-  /** @param ids - Block IDs to remove. @returns No value. */
-  removeBlocks(ids: string[]): void;
-  /** @param targetId - Surviving block. @param sourceId - Removed source. @returns Merge offset. */
+  /**
+   * Consults structural behaviors and removes the requested subtrees when they defer.
+   *
+   * @param ids - Selected subtree roots in their requested order.
+   * @returns True when generic removal ran; false when a behavior handled or rejected it.
+   * @throws If a behavior or document mutation fails.
+   */
+  removeBlocks(ids: readonly string[]): boolean;
+  /**
+   * Replaces selected text across blocks and removes the trailing block subtrees.
+   *
+   * @param firstId - Block receiving the resulting text.
+   * @param trailingIds - Following selected blocks to remove.
+   * @param content - Remaining prefix and suffix joined by the caller.
+   * @returns After the trailing subtrees and first block are updated.
+   * @throws If block validation, transition hooks, or a document mutation fails.
+   */
+  replaceTextSelection(firstId: string, trailingIds: readonly string[], content: string): void;
+  /**
+   * Appends a source block's content and children into a surviving target.
+   *
+   * @param targetId - Block that remains after the merge.
+   * @param sourceId - Block transferred and removed by the merge.
+   * @returns Target content offset where source content begins.
+   */
   mergeBlocks(targetId: string, sourceId: string): number;
-  /** @param id - Moving block. @param targetId - Destination. @param position - Placement. @returns No value. */
+  /**
+   * Moves one block relative to a destination.
+   *
+   * @param id - Block identifier to move.
+   * @param targetId - Destination, or null for the sibling-list start.
+   * @param position - Placement before, after, or inside the destination.
+   * @returns No value.
+   */
   moveBlock(id: string, targetId: string | null, position?: "before" | "after" | "inside"): void;
   /**
    * Moves selected subtree roots from any parents in canonical document order.
@@ -148,30 +287,139 @@ export interface BlockManagerApi {
    * @throws Before writes for missing sources, stale targets or a destination within a selected subtree.
    */
   moveBlocks(
-    ids: string[],
+    ids: readonly string[],
     targetId: string | null,
     position?: "before" | "after" | "inside",
   ): void;
-  /** @param id - Block ID. @returns No value. */
+  /**
+   * Nests one block under its previous sibling.
+   *
+   * @param id - Block identifier to indent.
+   * @returns No value.
+   */
   indentBlock(id: string): void;
-  /** @param ids - Block IDs. @returns No value. */
-  indentBlocks(ids: string[]): void;
-  /** @param id - Block ID. @returns No value. */
+  /**
+   * Applies registered outline behaviors before indenting a group.
+   *
+   * @param ids - Block IDs in selection order.
+   * @returns True when the leading block exists in the scope, including handled no-ops.
+   * @throws If a behavior or delegated operation fails.
+   */
+  indentBlocks(ids: readonly string[]): boolean;
+  /**
+   * Moves one block out of its parent and adopts following siblings.
+   *
+   * @param id - Block identifier to outdent.
+   * @returns No value.
+   */
   outdentBlock(id: string): void;
-  /** @param ids - Block IDs. @returns No value. */
-  outdentBlocks(ids: string[]): void;
-  /** @param id - Block ID. @param key - Property key. @param value - New value. @returns No value. */
+  /**
+   * Applies registered outline behaviors before outdenting a group.
+   *
+   * @param ids - Block IDs in selection order.
+   * @returns True when the leading block exists in the scope, including handled no-ops.
+   * @throws If a behavior or delegated operation fails.
+   */
+  outdentBlocks(ids: readonly string[]): boolean;
+  /**
+   * Sets or removes one validated native block property.
+   *
+   * @param id - Owning block identifier.
+   * @param key - Native property key.
+   * @param value - Portable value, or undefined to remove the property.
+   * @returns No value.
+   */
   setBlockProp(id: string, key: string, value: unknown): void;
-  /** @param id - Block ID. @param pluginId - Namespace. @param value - New value. @returns No value. */
+  /**
+   * Sets or removes one block plugin-data namespace.
+   *
+   * @param id - Owning block identifier.
+   * @param pluginId - Stable plugin namespace.
+   * @param value - Portable value, or undefined to remove the namespace.
+   * @returns No value.
+   */
   setBlockPluginData(id: string, pluginId: string, value: unknown): void;
-  /** @returns No value after releasing processors and subscriptions. */
-  destroy(): void;
 }
 
 export type { BlockListPropsManagerApi };
 
-/** Public native block-definition registry contract. */
-export interface BlockRegistryManagerApi {
+/** Native definition reads and preparation used by block commands. */
+export interface BlockPreparationRegistry {
+  /**
+   * Checks whether creation rules are registered for a native type.
+   *
+   * @param type - Persisted block discriminator.
+   * @returns Whether the registry contains its definition.
+   */
+  has(type: string): boolean;
+  /**
+   * Applies definition defaults and validates creation properties.
+   *
+   * @param input - Caller-owned creation data containing a registered type.
+   * @returns Detached input with definition defaults and validated props.
+   * @throws If the type is unknown or its property schema rejects the data.
+   */
+  prepare(input: EditorBlockInput): EditorBlockInput;
+  /**
+   * Prepares properties when an existing block changes native type.
+   *
+   * Existing values and unknown extension properties survive conversion. A
+   * destination-owned field that no longer satisfies its Zod field schema is
+   * replaced with that field's registered default. Nested objects are merged
+   * first and validated as one destination field.
+   *
+   * @param type - Registered destination native type.
+   * @param current - Detached properties owned by the existing block.
+   * @returns Merged, repaired, and validated destination properties.
+   * @throws If the type is unknown or invalid data has no valid default.
+   */
+  prepareTypeChange(type: string, current: Record<string, unknown>): Record<string, unknown>;
+  /**
+   * Validates a complete property object for a stored block.
+   *
+   * Unknown types pass through unchanged so block data remains recoverable when
+   * an optional plugin is not installed.
+   *
+   * @param type - Persisted native block type.
+   * @param props - Complete candidate property object.
+   * @returns Validated properties or the original unknown-type properties.
+   */
+  validate(type: string, props: Record<string, unknown>): Record<string, unknown>;
+}
+
+/** Public block-definition and structural-behavior registration contract. */
+export interface BlockRegistryManagerApi extends BlockPreparationRegistry {
+  /**
+   * Registers editor-local structural behavior for parent-child changes.
+   *
+   * The same instance at the same priority runs once until every registration is released.
+   *
+   * Behavior registration does not notify native-definition subscribers.
+   *
+   * @param behavior - Synchronous structural behavior, independent of presentation.
+   * @param priority - Higher-priority behaviors run first; defaults to zero.
+   * @returns Idempotent disposer for this registration.
+   * @throws If priority is not finite.
+   */
+  registerBehavior(behavior: BlockStructuralBehavior, priority?: number): () => void;
+  /**
+   * Invokes one structural hook for the supplied block and group in registration priority order.
+   *
+   * The caller chooses the parent or leading block context and owns the transaction.
+   * A direct dispatch runs only the named hook; a full block command also selects
+   * parent hooks, checks panel boundaries and applies the default operation.
+   *
+   * @param action - Structural hook selected for this block.
+   * @param context - Scoped block operations and the block selecting applicable behaviors.
+   * @param ids - Ordered IDs of the complete group being acted upon.
+   * @returns True when a handler claims or rejects the action, false when all defer.
+   * @throws If an availability check or handler fails.
+   */
+  dispatchBehavior(
+    action: BlockStructuralAction,
+    context: BlockStructuralContext,
+    ids: readonly string[],
+  ): boolean;
   /**
    * Registers the exact complete native definition until its disposer runs.
    *
@@ -184,20 +432,20 @@ export interface BlockRegistryManagerApi {
    * Initial and rollback observer failures are combined in an AggregateError.
    */
   defineBlock(definition: BlockDefinition): () => void;
-  /** @param listener - Registry listener. @returns Its disposer. */
+  /**
+   * Observes additions and removals of native block definitions.
+   *
+   * @param listener - Callback invoked after definition changes.
+   * @returns Idempotent disposer removing the listener.
+   */
   subscribe(listener: () => void): () => void;
-  /** @param type - Native type. @returns Its definition or undefined. */
+  /**
+   * Resolves a registered definition without inventing a fallback type.
+   *
+   * @param type - Persisted native type to resolve.
+   * @returns Its definition, or `undefined` for a losslessly stored unknown type.
+   */
   get(type: string): BlockDefinition | undefined;
-  /** @param type - Native type. @returns Whether it is defined. */
-  has(type: string): boolean;
-  /** @param input - Creation input. @returns Prepared input. */
-  prepare(input: EditorBlockInput): EditorBlockInput;
-  /** @param type - Destination type. @param current - Existing props. @returns Prepared props. */
-  prepareTypeChange(type: string, current: Record<string, unknown>): Record<string, unknown>;
-  /** @param type - Native type. @param props - Candidate props. @returns Validated props. */
-  validate(type: string, props: Record<string, unknown>): Record<string, unknown>;
-  /** @returns No value after releasing definitions. */
-  destroy(): void;
 }
 
 /** Document-wide element commands; canvas handles expose restricted operations. */
@@ -221,19 +469,20 @@ export interface ElementManagerApi {
    * returned snapshot as read-only: changing it does not update the document.
    *
    * @param id - Stable ID of the subtree root, which may itself be nested.
-   * @returns Detached tree with children, or undefined when the ID is absent.
+   * @returns Detached tree with children, or undefined when the ID is absent or outside a panel's boundary.
    * Use getElementNode when only this record and its child IDs are needed.
    */
   getElement(id: string): EditorElement | undefined;
   /**
-   * Reads the root element trees of the whole document, including their nested children.
+   * Reads the root element trees of the document or panel, including their nested children.
    *
    * Roots follow the document root list; descendants follow each element's child list.
    * Descendants appear inside their parents, rather than as additional array entries.
    * Outside transactions, the array is cached until a contributing element changes,
    * and unchanged subtrees reuse their objects. Treat all returned values as read-only.
    *
-   * This collection always starts at document roots; use a panel for bounded subtree reads.
+   * A document manager starts at document roots. A panel starts at its selected
+   * container's children and returns an empty array when that container is missing.
    * @returns Detached recursive roots, or an empty array when there are no elements.
    */
   getElements(): EditorElement[];
@@ -255,7 +504,9 @@ export interface ElementManagerApi {
   /**
    * Reads the ordered direct child IDs of an element or document root IDs, excluding descendants.
    *
-   * Returns document roots only; getChildIds(parentId) reads one real parent's direct children.
+   * A document manager returns document roots; a panel returns its selected
+   * container's children and excludes that container. getChildIds(parentId) reads
+   * one visible parent's direct children.
    * @returns Read-only root list, with stable identity while its contents are unchanged;
    * an empty list when the document contains no root elements.
    */
@@ -264,7 +515,7 @@ export interface ElementManagerApi {
    * Resolves an element's direct parent from document roots and child lists.
    *
    * @param id - Stable element ID to locate.
-   * @returns Parent element ID, null for a document root, or undefined when absent.
+   * @returns Parent element ID, null at this manager's root, or undefined when absent or outside a panel.
    */
   getParentId(id: string): string | null | undefined;
   /**
@@ -272,7 +523,7 @@ export interface ElementManagerApi {
    * Selecting an ancestor and its descendant moves the ancestor only. The model
    * validates all references before writing; the complete move is transactional.
    * @param ids - Existing elements in destination order; duplicate IDs are ignored.
-   * @param destination - Parent (null for document roots) and optional next sibling; omission appends.
+   * @param destination - Parent (null for this manager's roots) and optional next sibling.
    * @throws If an element or destination is missing, the anchor is not a destination
    * sibling, or the move would create a cycle.
    */
@@ -318,7 +569,7 @@ export interface ElementManagerApi {
    * to storage and can corrupt cached reads, so treat it as read-only.
    *
    * @param id - Stable element ID to read.
-   * @returns Detached node, or undefined when the ID is absent.
+   * @returns Detached node, or undefined when the ID is absent or outside a panel.
    */
   getElementNode(id: string): EditorElementNode | undefined;
   /**
@@ -331,12 +582,13 @@ export interface ElementManagerApi {
    * transactions until invalidated by document changes; treat it and its nodes as
    * read-only. Use getElements when recursive root trees are required.
    *
-   * The complete document is observed; React panel APIs separately bind subtree membership.
+   * The document manager observes the complete document. A panel includes only
+   * descendants of its selected container; a missing container produces an empty list.
    * @returns Detached node array, empty when the selected tree contains no elements.
    */
   getElementNodes(): EditorElementNode[];
   /**
-   * Observes element records and structural changes across the document.
+   * Observes element records and structural changes in this manager's scope.
    *
    * The callback runs after affected snapshots are invalidated, including for remote
    * and undo changes. Registration does not invoke it. Read the desired collection
@@ -374,10 +626,11 @@ export interface ElementManagerApi {
    */
   subscribeStructure(listener: () => void): () => void;
   /**
-   * Observes changes to the set of stored element records in the document.
+   * Observes changes to stored element membership in this manager's scope.
    *
    * Insertion and deletion notify this listener; editing props or moving existing
-   * records between parents does not change global membership.
+   * records between parents does not change global membership. A panel also
+   * notifies when a move changes its ordered subtree membership.
    * Registration does not invoke the callback.
    *
    * The subscription remains bound to the document used at registration and is
@@ -395,8 +648,9 @@ export interface ElementManagerApi {
    * document and the new tree. Application preparation may register or validate external
    * database identities before shared document writes.
    *
-   * The destination selects an existing parent or document roots; omission appends
-   * to document roots. children creates new subtrees; childIds instead reparents
+   * The destination selects an existing parent or this manager's roots; omission appends
+   * to those roots. For a panel, null selects the selected container's children.
+   * children creates new subtrees; childIds instead reparents
    * existing nonoverlapping subtrees while preserving their IDs and coordinates.
    * A defined children array cannot be combined with nonempty childIds.
    *
@@ -414,7 +668,7 @@ export interface ElementManagerApi {
    *
    * @param input - Type, finite stacking order, optional ID/props/children,
    * and frame in canvas coordinates when required.
-   * @param destination - Optional parent and next-sibling anchor; defaults to appending to document roots.
+   * @param destination - Optional parent and next-sibling anchor; defaults to appending to this manager's roots.
    * @returns Detached normalized recursive subtree, with supplied IDs preserved and
    * missing IDs allocated. Use getElementNode for a flat record with childIds.
    * @throws If the destination is missing or invalid, an ID collides, input is cyclic or malformed,
@@ -471,7 +725,10 @@ export interface ElementManagerApi {
    * The parent or document root list loses the deleted reference. Source blocks and
    * opaque references stored in other records' props are not changed.
    *
-   * @param id - Subtree root to delete; a missing ID does nothing.
+   * @param id - Subtree root to delete; a missing ID is ignored by the document
+   * manager but rejected by a panel, as are IDs outside its boundary.
+   * @returns After deletion or the document manager's missing-ID no-op.
+   * @throws If a panel target is missing or outside its boundary.
    */
   removeElement(id: string): void;
   /**
@@ -481,11 +738,12 @@ export interface ElementManagerApi {
    * deleted records are removed from their parent or document root lists. Source blocks
    * and opaque references in other records' props are left unchanged.
    *
-   * @param ids - Subtree root IDs to delete; missing IDs and an empty list are harmless.
+   * @param ids - Subtree root IDs to delete; an empty list is harmless. The document
+   * manager ignores missing IDs, while a panel rejects missing or outside targets.
+   * @returns After the requested subtrees are removed.
+   * @throws If any panel target is missing or outside its boundary.
    */
   removeElements(ids: readonly string[]): void;
-  /** @returns No value after releasing processors and subscriptions. */
-  destroy(): void;
 }
 
 /** Public clipboard-operation contract. */
@@ -494,7 +752,12 @@ export interface ClipboardManagerApi {
   readonly pasteStrategies: PasteStrategyRegistry;
   /** @param selection - Optional selection override. @returns Clipboard bundle or undefined. */
   copy(selection?: Selection): ClipboardBundle | undefined;
-  /** @param selection - Text selection. @returns Clipboard bundle or undefined. */
+  /**
+   * Copies characters covered by an explicit selection, excluding collapsed carets.
+   *
+   * @param selection - One block selection to copy.
+   * @returns Partial-text bundle, or undefined for a caret.
+   */
   copyText(selection: Selection): ClipboardBundle | undefined;
   /** @returns Copied bundle or undefined after deleting the selection. */
   cut(): ClipboardBundle | undefined;
@@ -504,11 +767,20 @@ export interface ClipboardManagerApi {
 
 /** Public local mode contract. */
 export interface ModeManagerApi {
-  /** @returns Active local editor mode. */
+  /**
+   * Reads the current editor mode.
+   *
+   * @returns Active local presentation mode.
+   */
   get(): EditorMode;
   /** @param mode - Next mode. @returns No value. */
   set(mode: EditorMode): void;
-  /** @param listener - Mode listener. @returns Its disposer. */
+  /**
+   * Subscribes to mode changes.
+   *
+   * @param listener - Callback called after the active mode changes.
+   * @returns Function that removes this listener.
+   */
   subscribe(listener: () => void): () => void;
 }
 
@@ -518,9 +790,20 @@ export interface SelectionManagerApi {
   get(): Selection | undefined;
   /** @returns Stable selection snapshot. */
   snapshot(): Selection | undefined;
-  /** @param id - Block ID. @returns Whether it has structural coverage. */
+  /**
+   * Reports whether one member is stored as complete coverage (`start: 0`, `end: -1`).
+   * Other members of the same selection may still be partial text ranges.
+   *
+   * @param id - Stable block ID.
+   * @returns Whether that block should show structural selection chrome.
+   */
   isBlockSelected(id: string): boolean;
-  /** @param id - Element ID. @returns Whether it is selected. */
+  /**
+   * Reports whether the generic selection contains an element ID.
+   *
+   * @param id - Stable first-class element ID.
+   * @returns Whether the element is selected.
+   */
   isElementSelected(id: string): boolean;
   /** @param selection - Optional selection override. @returns Resolved live selection. */
   resolveBlockSelection(selection?: Selection): ResolvedSelection | undefined;
@@ -530,16 +813,40 @@ export interface SelectionManagerApi {
   delete(): void;
   /** @returns No value after clearing selection. */
   clear(): void;
-  /** @param listener - Selection listener. @returns Its disposer. */
+  /**
+   * Subscribes to selection changes.
+   *
+   * @param listener - Callback invoked after an effective change.
+   * @returns Function that removes the listener.
+   */
   subscribe(listener: () => void): () => void;
 }
 
-/** Public document-history and transaction contract. */
-export interface HistoryManagerApi {
-  /** @param operation - Captured operation. @returns Its result. */
+/** Undo grouping borrowed by commands that write to the same document. */
+export interface HistoryBatch {
+  /**
+   * Runs a synchronous mutation group within the document history boundary.
+   *
+   * @param operation - Reads and writes that belong to the same operation.
+   * @returns The value returned by the operation.
+   * @throws Propagates failures from the operation.
+   */
   batchUpdates<Result>(operation: () => Result): Result;
-  /** @param operation - Untracked operation. @returns Its result. */
+}
+
+/** Synchronous transaction modes shared by document history and panel commands. */
+export interface HistoryTransactions extends HistoryBatch {
+  /**
+   * Groups synchronous mutations into one transaction excluded from undo history.
+   *
+   * @param operation - Synchronous editor work to execute without an undo item.
+   * @returns Value returned by the operation.
+   */
   batchUpdatesWithoutHistory<Result>(operation: () => Result): Result;
+}
+
+/** Public document-history and transaction contract. */
+export interface HistoryManagerApi extends HistoryTransactions {
   /** @returns No value after undoing. */
   undo(): void;
   /** @returns No value after redoing. */

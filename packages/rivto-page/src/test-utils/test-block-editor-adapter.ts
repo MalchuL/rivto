@@ -86,7 +86,7 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
         listType: patch.listType === null ? undefined : (patch.listType ?? node.listType),
         checked: patch.checked ?? node.checked,
         collapsed: patch.collapsed ?? node.collapsed,
-        color: patch.color === null ? undefined : (patch.color ?? node.color),
+        style: patch.style === null ? undefined : (patch.style ?? node.style),
       });
     }),
   };
@@ -116,7 +116,27 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
      *
      * @returns Canonical selectable IDs for this host occurrence.
      */
-    getSelectableBlockIds: () => this.getSelectableIds(),
+    getSelectableBlockIds: () => {
+      // Keep the visible order until a hierarchy or collapse change invalidates it.
+      if (this.selectableIds) {
+        return this.selectableIds;
+      }
+      const result: string[] = [];
+      const stack = [...this.blockIds].reverse();
+      while (stack.length) {
+        const id = stack.pop()!;
+        const node = this.nodes.get(id);
+        if (!node) {
+          continue;
+        }
+        result.push(id);
+        if (!node.collapsed) {
+          stack.push(...[...node.childIds].reverse());
+        }
+      }
+      this.selectableIds = result;
+      return result;
+    },
     /**
      * Reads the host text's UTF-16 length without a node conversion.
      *
@@ -254,31 +274,5 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
         this.emit(`selection:${id}`);
       }
     }
-  }
-
-  /**
-   * Flattens visible host hierarchy once per invalidation.
-   *
-   * @returns Cached depth-first IDs, excluding descendants of collapsed blocks.
-   */
-  private getSelectableIds(): readonly string[] {
-    if (this.selectableIds) {
-      return this.selectableIds;
-    }
-    const result: string[] = [];
-    const stack = [...this.blockIds].reverse();
-    while (stack.length) {
-      const id = stack.pop()!;
-      const node = this.nodes.get(id);
-      if (!node) {
-        continue;
-      }
-      result.push(id);
-      if (!node.collapsed) {
-        stack.push(...[...node.childIds].reverse());
-      }
-    }
-    this.selectableIds = result;
-    return result;
   }
 }

@@ -15,12 +15,12 @@ import { useBlockChildrenState } from "./block-layout-context";
 import { BlockList, type BlockChildrenItemProps } from "./block-list";
 import { BlockChildrenControlsContext } from "./block-item-context";
 import { useBlockRegion } from "./use-block-region";
-import type { BlockEditorTheme } from "../../block-editor-theme";
+import type { BlockCssProperties } from "./block-css-properties";
 
 /** Child host geometry and optional layout-owned item/control composition. */
 export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
   /** Native styles and the existing shared geometry/theme tokens. */
-  readonly style?: BlockEditorTheme;
+  readonly style?: BlockCssProperties;
   readonly item?: ComponentType<BlockChildrenItemProps>;
   /** Left-top control placement inherited by child rows and descendants; omission inherits the enclosing layout. An explicit BlockItem placement takes precedence for its own row. */
   readonly controlsPlacement?: "inside" | "outside";

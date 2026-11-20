@@ -101,7 +101,7 @@ test("moves Kanban cards in edgeless mode", async ({ page }) => {
       type: "block",
       zIndex: 0,
       frame: { x: 20, y: 20, width: 800, height: 400 },
-      props: { startBlockId: board.id, endBlockId: board.id },
+      props: { startBlockId: board.id, endBlockId: board.id, borderless: false },
     });
   });
   await page.locator('[data-editor-mode="edgeless"]').click();
@@ -162,7 +162,7 @@ for (const mode of ["block", "edgeless"] as const) {
           type: "block",
           zIndex: 0,
           frame: { x: 20, y: 20, width: 950, height: 500 },
-          props: { startBlockId: board.id, endBlockId: board.id },
+          props: { startBlockId: board.id, endBlockId: board.id, borderless: false },
         });
       }
       editor.history.clear();

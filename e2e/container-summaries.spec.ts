@@ -333,7 +333,7 @@ test("reveals root block handles in their headers and exposed lateral gutters", 
 for (const mode of ["block", "edgeless"] as const) {
   test(`uses layout hover for a custom block's handle in ${mode}`, async ({ page }) => {
     await page.goto("/?test_features=1");
-    const id = await page.evaluate(() => {
+    const id = await page.evaluate((mode) => {
       const { editor, reactEditor } = (
         window as unknown as {
           __rivtoDemo: {
@@ -356,8 +356,16 @@ for (const mode of ["block", "edgeless"] as const) {
         children: [{ type: "columns-column", children: [{ type: "paragraph", content: "Child" }] }],
       });
       editor.load({ ...editor.dump(), rootElementIds: [], blocks: [block], elements: [] });
+      if (mode === "edgeless") {
+        editor.elements.insertElement({
+          type: "block",
+          zIndex: 0,
+          frame: { x: 20, y: 20, width: 800, height: 400 },
+          props: { startBlockId: block.id, endBlockId: block.id, borderless: false },
+        });
+      }
       return block.id;
-    });
+    }, mode);
     const today = page.locator('[data-journal-document="today"]');
     if (mode === "edgeless") {
       await today.getByRole("button", { name: "Edgeless", exact: true }).click();

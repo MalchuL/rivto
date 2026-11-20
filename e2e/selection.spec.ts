@@ -67,6 +67,46 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('[data-journal-document="today"] > .page-surface')).toBeVisible();
 });
 
+test("dragging from whitespace between nested rows selects blocks", async ({ page }) => {
+  const upper = page
+    .locator("[data-block-content]")
+    .filter({ hasText: "Second branch level 3 descendant." });
+  const lower = page
+    .locator("[data-block-content]")
+    .filter({ hasText: "Second branch level 2 sibling." });
+  const upperBlock = upper.locator(BLOCK_ANCESTOR_XPATH);
+  const lowerBlock = lower.locator(BLOCK_ANCESTOR_XPATH);
+  await lower.scrollIntoViewIfNeeded();
+  const upperBox = await upperBlock.boundingBox();
+  const lowerBox = await lowerBlock.boundingBox();
+  if (!upperBox || !lowerBox || upperBox.y + upperBox.height >= lowerBox.y) {
+    throw new Error("Expected a visible gap between nested rows");
+  }
+  const destination = await textPoint(lower, 4);
+  await page.mouse.move(destination.x, (upperBox.y + upperBox.height + lowerBox.y) / 2);
+  await page.mouse.down();
+  await page.mouse.move(destination.x, destination.y, { steps: 10 });
+  await page.mouse.up();
+  await expect(lowerBlock).toHaveAttribute("data-block-selected", "true");
+});
+
+test("dragging from page whitespace selects a block", async ({ page }) => {
+  const content = textContents(page).first();
+  const block = content.locator(BLOCK_ANCESTOR_XPATH);
+  const surface = page.locator('[data-journal-document="today"] > .page-surface');
+  const surfaceBox = await surface.boundingBox();
+  const blockBox = await block.boundingBox();
+  if (!surfaceBox || !blockBox || blockBox.x <= surfaceBox.x + 2) {
+    throw new Error("Expected whitespace beside the first block");
+  }
+  const destination = await textPoint(content, 4);
+  await page.mouse.move(surfaceBox.x + 2, destination.y);
+  await page.mouse.down();
+  await page.mouse.move(destination.x, destination.y, { steps: 10 });
+  await page.mouse.up();
+  await expect(block).toHaveAttribute("data-block-selected", "true");
+});
+
 test("switches cross-block drag to blocks and restores text on return", async ({ page }) => {
   const contents = textContents(page);
   const first = contents.nth(0);

@@ -272,8 +272,9 @@ or placing a preset so multiple objects can be created quickly.
 ## Block projection and separators
 
 Block cards fit their complete block content vertically by default, retaining
-their configured width without a vertical scrollbar. A manual resize stores
+their configured width without a vertical scrollbar. A manual height resize stores
 `autoHeight: false` in the block element props and makes both dimensions fixed.
+Changing only the width preserves automatic height.
 Set the same element prop back to `true` to retain its current width and resume
 automatic content-height measurement. Selecting one or more block cards opens
 the shared right-side properties panel with the same **Automatic card height**

@@ -6,6 +6,7 @@ import { useEdgelessCanvas } from "./edgeless-tools-context";
 import { EdgelessToolsProvider } from "./edgeless-tools-context";
 import type { CanvasApi } from "@chulane/rivto-edgeless";
 import { EdgelessSurfaceController } from "./edgeless-surface-controller";
+import { registerBlockCanvasDrop } from "./block-canvas-drop";
 import { SurfaceBoundary } from "../surface";
 import { EdgelessSurfaceRegistration } from "./register";
 /**
@@ -29,7 +30,7 @@ import { EdgelessToolButton } from "../../components/edgeless/tool-button";
 import { EDGELESS_GRID_SIZE } from "../../elements/visuals/utils/geometry";
 import { EdgelessBlockElement } from "./edgeless-block";
 import type { EdgelessSurfaceOptions } from "./types";
-import { EdgelessSnappingStore } from "@chulane/rivto-edgeless";
+import { EdgelessSnappingStore, type EdgelessSnappingSnapshot } from "@chulane/rivto-edgeless";
 
 const GRID_SPOTLIGHT_CLASS = "edgeless-grid-spotlight";
 /** Bottom-left zoom and snapping cluster; `edgeless-zoom-controls` is a stable hook. */
@@ -94,7 +95,11 @@ function EdgelessSurfaceContent({
   const panel = useReactPanel();
   const canvas = useEdgelessCanvas()!;
   const camera = useCanvasCamera(canvas);
-  const snap = useSurfaceSnapping(snapping);
+  const snap = useSyncExternalStore(
+    (listener) => snapping.subscribe(listener),
+    () => snapping.getSnapshot(),
+    () => snapping.getSnapshot(),
+  );
   const controller = useMemo(
     () => new EdgelessSurfaceController(panel, canvas, blockElementWidth),
     [panel, canvas, blockElementWidth],
@@ -111,6 +116,12 @@ function EdgelessSurfaceContent({
     [controller, spotlight, registerRoot],
   );
   useEffect(() => spotlight.observeViewport(), [spotlight]);
+  useEffect(() => {
+    if (!root) {
+      return;
+    }
+    return registerBlockCanvasDrop(root, panel, canvas, blockElementWidth);
+  }, [root, panel, canvas, blockElementWidth]);
   useEffect(() => controller.applySnapping(snap), [controller, snap]);
   return (
     <BlockEditorScope editor={reactPanel.page} root={root}>
@@ -134,20 +145,6 @@ function EdgelessSurfaceContent({
         <EdgelessCards canvas={canvas} />
       </CanvasView>
     </BlockEditorScope>
-  );
-}
-
-/**
- * Observes a surface's borrowed snapping preferences until unmount or store replacement.
- *
- * @param snapping - Read and subscription operations of the surface's settings store.
- * @returns Current stable snapshot, replaced when a preference changes.
- */
-function useSurfaceSnapping(snapping: Pick<EdgelessSnappingStore, "subscribe" | "getSnapshot">) {
-  return useSyncExternalStore(
-    (listener) => snapping.subscribe(listener),
-    () => snapping.getSnapshot(),
-    () => snapping.getSnapshot(),
   );
 }
 
@@ -198,6 +195,9 @@ const EdgelessCards = memo(function EdgelessCards({ canvas }: EdgelessCardsProps
   const visible = useCanvasVisible(canvas);
   const visibleIds = useMemo(() => new Set(visible), [visible]);
   const rootIds = useRootBlockIds();
+  // Only card ranges whose block parent is the panel's top level are rendered.
+  // In an included-root panel, cards for that root's children remain nested and
+  // do not substitute for a card whose range contains the root itself.
   const blockElements = useElements().filter(
     (element) =>
       visibleIds.has(element.id) &&
@@ -275,6 +275,6 @@ function EdgelessZoomControls({ canvas, snapping, snap, zoom }: ZoomControlProps
 interface ZoomControlProps {
   readonly canvas: CanvasApi;
   readonly snapping: EdgelessSnappingStore;
-  readonly snap: ReturnType<EdgelessSnappingStore["getSnapshot"]>;
+  readonly snap: EdgelessSnappingSnapshot;
   readonly zoom: number;
 }

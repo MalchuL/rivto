@@ -1,3 +1,4 @@
+import { useHasSingleNonDefaultWritingRoot } from "./use-single-non-default-writing-root";
 import { scheduleCardHeight } from "./card-height-updates";
 import { BlockRootNode, BlockDropLayout } from "@chulane/rivto-page";
 /**
@@ -40,6 +41,9 @@ interface EdgelessBlockElementProps {
 function EdgelessBlockElementView({ element, blockIds }: EdgelessBlockElementProps) {
   const selected = useEdgelessSelected(element.id);
   const panel = usePanel();
+  const defaultBorderless = useHasSingleNonDefaultWritingRoot(blockIds);
+  const borderless =
+    blockIds.length === 1 && (element.props.borderless ?? defaultBorderless) === true;
   const { ref: hostRef, style } = useEdgelessElementStyle(element);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const autoHeight = element.props.autoHeight !== false;
@@ -66,6 +70,7 @@ function EdgelessBlockElementView({ element, blockIds }: EdgelessBlockElementPro
       data-edgeless-object-kind="block"
       data-edgeless-object-id={element.id}
       data-block-selected={selected || undefined}
+      data-borderless={borderless ? "true" : undefined}
       data-auto-height={autoHeight ? "true" : "false"}
       style={style}
       tabIndex={0}

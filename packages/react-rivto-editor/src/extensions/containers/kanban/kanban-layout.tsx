@@ -8,6 +8,9 @@ import {
   type BlockLayoutProps,
 } from "@chulane/rivto-page";
 import { KanbanAddCard, KanbanAddColumn } from "./kanban-content";
+import { useBlockNode } from "../../../hooks";
+import { BlockResizeHandles } from "../block-resize/block-resize-handles";
+import { MAX_RESIZE_WIDTH, MIN_RESIZE_WIDTH } from "../block-resize/block-resize-constants";
 
 /**
  * Places one already-rendered card on a background matching its block boundary.
@@ -41,8 +44,15 @@ function KanbanCardItem({ children }: BlockChildrenItemProps) {
  * @returns The header, body contributions and one canonical card traversal.
  */
 export function KanbanColumnLayout({ blockId }: BlockLayoutProps) {
+  const { block } = useBlockNode(blockId);
   return (
     <>
+      <BlockResizeHandles
+        blockId={blockId}
+        style={block?.listProps.style}
+        label="Kanban column"
+        parentClassName="rivto-kanban-columns"
+      />
       <BlockRow className="rivto-kanban-lane-header">
         <BlockContent />
       </BlockRow>
@@ -84,6 +94,10 @@ export function KanbanLayout({ blockId }: BlockLayoutProps) {
       <BlockBody />
       <BlockChildren
         className="rivto-kanban-columns"
+        style={{
+          "--rivto-kanban-min-width": `${MIN_RESIZE_WIDTH}px`,
+          "--rivto-kanban-max-width": `${MAX_RESIZE_WIDTH}px`,
+        }}
         dropAxis="horizontal"
         dropPlacement="siblings"
         controlsPlacement="inside"

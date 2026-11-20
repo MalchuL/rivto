@@ -6,15 +6,16 @@ import type {
   ClipboardPasteInput,
   EditorBlock,
   EditorBlockNode,
+  EditorPosition,
+  PasteStrategyRegistry,
   EditorElementNode,
+  PasteStrategy,
   Selection,
 } from "@chulane/rivto";
 import {
   BlockPasteStrategy,
   hasBlockRanges,
   isStructuralSelection,
-  PreserveNewlinesPasteStrategy,
-  TextPasteStrategy,
   validateClipboardBundle,
 } from "@chulane/rivto";
 import type { ReactEditorApi } from "../../editor/types";
@@ -24,7 +25,6 @@ import { ElementPasteStrategy } from "../../extensions/built-ins/clipboard/eleme
 import { clipboardContentBundle, selectedClipboardElements } from "./clipboard-content";
 import { ClipboardConverters } from "./clipboard-converters";
 import { browserClipboardType } from "./utils";
-import { panelClipboardDocument } from "./panel-clipboard-document";
 import type {
   BlockClipboardConverter,
   ClipboardBinaryRepresentation,
@@ -41,18 +41,18 @@ import type {
 } from "./types";
 
 import type { DocumentEditorAPI } from "@chulane/rivto";
-import {
-  BLOCK_PASTE_STRATEGY_ID,
-  ClipboardManager as CoreClipboardManager,
-  PRESERVE_NEWLINES_PASTE_STRATEGY_ID,
-  TEXT_PASTE_STRATEGY_ID,
-} from "@chulane/rivto";
+import { ClipboardManager as CoreClipboardManager } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../panels/types";
+import { isReactPanelApi } from "../../panels/is-react-panel-api";
 
 /** Shared clipboard operations; paste receives a panel or a runtime for document-only commands. */
 export class ClipboardManager {
   /** Runtime-owned type registrations used by structured and portable clipboard operations. */
   readonly converters: ClipboardConverters;
+  /** Applies the runtime's empty-writing-block policy to blocks in the receiving panel. */
+  private readonly blockPasteStrategy = new BlockPasteStrategy((block) =>
+    this.editor.defaultWritingBlockFactory.isEmptyBlock(block),
+  );
   /** File handlers in registration order. */
   private readonly fileHandlers: FileHandler[] = [];
   /** Revision published when file handler registrations change. */
@@ -357,7 +357,7 @@ export class ClipboardManager {
    *
    * @returns The core manager's current paste strategy registry.
    */
-  get pasteStrategies(): CoreClipboardManager["pasteStrategies"] {
+  get pasteStrategies(): PasteStrategyRegistry {
     return this.document.clipboard.pasteStrategies;
   }
 
@@ -401,7 +401,7 @@ export class ClipboardManager {
    * @returns Detached copied bundle, or undefined for an empty selection.
    * @throws If copy or formatting rejects the data; deletion has not started in that case.
    */
-  cut(): ReturnType<CoreClipboardManager["cut"]> {
+  cut(): ClipboardBundle | undefined {
     const bundle = this.copy(undefined, undefined, "cut");
     if (!bundle) {
       return;
@@ -424,14 +424,14 @@ export class ClipboardManager {
    * @throws If a converter, creation processor or validator rejects the payload.
    */
   paste(
-    input: Parameters<CoreClipboardManager["paste"]>[0] = {},
+    input: ClipboardPasteInput = {},
     reactPanel: ReactPanelApi | ReactEditorApi = this.editor,
     operation: "paste" | "duplicate" = "paste",
-  ): ReturnType<CoreClipboardManager["paste"]> {
+  ): EditorPosition | undefined {
     input ??= {};
     const selection = input.textTarget ??
       reactPanel.selection.get() ?? { type: "selection" as const, blocks: [], elements: [] };
-    if ("editor" in reactPanel) {
+    if (isReactPanelApi(reactPanel)) {
       if (
         selection.blocks.some(({ id }) => !reactPanel.blocks.hasBlock(id)) ||
         selection.elements?.some((id) => !reactPanel.elements.hasElement(id))
@@ -466,68 +466,181 @@ export class ClipboardManager {
     const created: CreatedClipboardRecords = { blockIds: new Set(), elementIds: new Set() };
     const previousSelection = this.document.selection.get();
     if (bundle) {
-      const converted = this.convertPasteBundle(bundle, input, selection, reactPanel, operation);
-      input = { ...input, bundle: converted.bundle, blockIdMap: converted.blockIdMap };
-      convertedElements = converted.elements;
-      for (const id of converted.blockIdMap.values()) {
+      validateClipboardBundle(bundle);
+      let preparedBundle = structuredClone(bundle);
+      if (
+        isReactPanelApi(reactPanel) &&
+        reactPanel.getSurfaceType() !== "edgeless" &&
+        preparedBundle.elements?.length
+      ) {
+        // Page pastes traverse selected element trees, retaining referenced blocks and converting visuals to writing blocks.
+        const byId = new Map(preparedBundle.elements.map((node) => [node.id, node]));
+        const blocks = new Map(preparedBundle.blocks.map((block) => [block.id, block]));
+        const sourceRootIds = [...blocks.keys()];
+        const included = new Set<string>();
+        const result: EditorBlock[] = [];
+        const seen = new Set<string>();
+        const visit = (id: string): void => {
+          if (seen.has(id)) {
+            // A selected ancestor may already have visited this element.
+            return;
+          }
+          seen.add(id);
+          const node = byId.get(id);
+          if (!node) {
+            // Detached payloads can refer to an element missing from this bundle.
+            return;
+          }
+          const converter = this.converters.elements.get(node.type);
+          const refs = converter?.getReferencedBlockIds?.(node, sourceRootIds);
+          if (refs) {
+            refs.forEach((id) => {
+              const block = blocks.get(id);
+              if (block && !included.has(id)) {
+                included.add(id);
+                result.push(block);
+              }
+            });
+          } else if (converter?.format) {
+            const writingType =
+              input.defaultBlockType ??
+              this.editor.defaultWritingBlockFactory.createEmptyBlock().type;
+            const formats = this.editor.clipboardFormats.formatElement(node, preparedBundle);
+            const parsed = this.editor.clipboardFormats.parseContent(
+              { html: formats.html, text: formats.plain },
+              { surface: "page", defaultBlockType: writingType },
+            );
+            result.push(
+              ...clipboardContentBundle(
+                parsed ?? {
+                  blocks: formats.plain ? [{ type: writingType, content: formats.plain }] : [],
+                },
+              ).blocks,
+            );
+          }
+          node.childIds.forEach(visit);
+        };
+        (preparedBundle.selectedElementIds ?? [...byId.keys()]).forEach(visit);
+        preparedBundle.blocks.forEach((block) => {
+          if (!included.has(block.id)) {
+            result.push(block);
+          }
+        });
+        preparedBundle = {
+          ...preparedBundle,
+          blocks: result,
+          elements: undefined,
+          selectedElementIds: undefined,
+        };
+      }
+      const sourceIds: string[] = [];
+      // Collect source block IDs recursively before allocating destination IDs.
+      const collect = (block: EditorBlock): void => {
+        sourceIds.push(block.id);
+        block.children.forEach(collect);
+      };
+      preparedBundle.blocks.forEach(collect);
+      const blockIdMap = new Map(this.document.getDocument().blocks.createImportIdMap(sourceIds));
+      if (
+        preparedBundle.fromTextSelection &&
+        input.placement?.mergeText !== false &&
+        hasBlockRanges(selection) &&
+        !isStructuralSelection(selection)
+      ) {
+        const target = this.document.selection.resolveBlockSelection(selection)?.blocks[0];
+        if (target && preparedBundle.blocks[0]) {
+          blockIdMap.set(preparedBundle.blocks[0].id, target.id);
+        }
+      }
+      const sources = selectedClipboardElements(preparedBundle);
+      // An empty block card has no copied content and is omitted before converters see the maps.
+      const sourceRootIds = preparedBundle.blocks.map((block) => block.id);
+      const retained = sources.filter((node) => {
+        if (node.type !== "block") {
+          // Only block cards depend on referenced roots being copied.
+          return true;
+        }
+        return blockIdsOf(node, sourceRootIds).some((id) => blockIdMap.has(id));
+      });
+      const elementIdMap = new Map(
+        this.document.elements.createImportIdMap(retained.map((node) => node.id)),
+      );
+      const context = this.pasteContext(
+        preparedBundle,
+        reactPanel,
+        blockIdMap,
+        elementIdMap,
+        operation,
+      );
+      // Apply the paste converter recursively while preserving child order.
+      const convert = (block: EditorBlock): EditorBlock => {
+        const fields = this.converters.blocks
+          .get(block.type)
+          ?.paste?.(this.blockNode(block), context);
+        return { ...block, ...this.blockFields(fields), children: block.children.map(convert) };
+      };
+      preparedBundle.blocks = preparedBundle.blocks.map(convert);
+      const elements = this.convertElements(
+        preparedBundle,
+        reactPanel,
+        blockIdMap,
+        elementIdMap,
+        operation,
+      );
+
+      input = { ...input, bundle: preparedBundle, blockIdMap };
+      convertedElements = elements;
+      for (const id of blockIdMap.values()) {
         if (!this.document.blocks.hasBlock(id)) {
           created.blockIds.add(id);
         }
       }
-      for (const id of converted.elements.idMap.values()) {
+      for (const id of elements.idMap.values()) {
         if (!this.document.elements.hasElement(id)) {
           created.elementIds.add(id);
         }
       }
     }
     // A local pipeline retains the destination even if a strategy invokes another paste.
-    const pasteDocument =
-      "editor" in reactPanel ? panelClipboardDocument(reactPanel) : this.document;
-    const clipboard = new CoreClipboardManager(pasteDocument);
-    for (const id of [
-      BLOCK_PASTE_STRATEGY_ID,
-      TEXT_PASTE_STRATEGY_ID,
-      PRESERVE_NEWLINES_PASTE_STRATEGY_ID,
-    ]) {
-      clipboard.pasteStrategies.unregister(id);
-    }
+    const clipboard = new CoreClipboardManager(reactPanel, this.pasteStrategies);
     const strategies = this.pasteStrategies.getPasteStrategies();
     if (!strategies.some((strategy) => strategy instanceof ElementPasteStrategy)) {
       strategies.push(new ElementPasteStrategy(this.editor));
     }
-    strategies.forEach((strategy, index) => {
-      const bind = (strategy as Partial<PanelPasteStrategy>).createPanelStrategy;
+    const boundStrategies = strategies.map((strategy) => {
       let bound = strategy;
       if (strategy instanceof ElementPasteStrategy) {
         bound = new ElementPasteStrategy(reactPanel, convertedElements, created);
       } else if (strategy instanceof BlockPasteStrategy) {
-        bound = new BlockPasteStrategy(pasteDocument, (block) =>
-          this.editor.defaultWritingBlockFactory.isEmptyBlock(block),
-        );
-      } else if (strategy instanceof TextPasteStrategy) {
-        bound = new TextPasteStrategy(pasteDocument);
-      } else if (strategy instanceof PreserveNewlinesPasteStrategy) {
-        bound = new PreserveNewlinesPasteStrategy(pasteDocument);
-      } else if (bind && "editor" in reactPanel) {
-        bound = bind.call(strategy, reactPanel);
+        bound = this.blockPasteStrategy;
+      } else if (isPanelPasteStrategy(strategy) && isReactPanelApi(reactPanel)) {
+        // The strategy is registered editor-wide, but this paste must use the receiving panel's bounds.
+        bound = strategy.createPanelStrategy(reactPanel);
       }
-      clipboard.pasteStrategies.register(String(index), bound);
+      return bound;
     });
     // An inactive panel has no caret; undefined would make core borrow another panel's selection.
-    const root = "editor" in reactPanel ? reactPanel.rootBlockId : undefined;
+    const root = isReactPanelApi(reactPanel) ? reactPanel.rootBlockId : undefined;
     const placement = { ...input.placement };
+    if (root && placement.parentId === root) {
+      placement.parentId = null;
+    }
     if (
       root &&
       !selection.blocks.length &&
       placement.afterId === undefined &&
       placement.parentId === undefined
     ) {
-      placement.parentId = root;
-      placement.afterId = this.document.blocks.getChildIds(root).at(-1) ?? null;
+      placement.parentId = null;
+      placement.afterId =
+        (reactPanel.blocks.includeRoot
+          ? reactPanel.blocks.getChildIds(root)
+          : reactPanel.blocks.getRootIds()
+        ).at(-1) ?? null;
     }
     return this.document.history.batchUpdates(() => {
       try {
-        return clipboard.paste({ ...input, placement, textTarget: selection });
+        return clipboard.paste({ ...input, placement, textTarget: selection }, boundStrategies);
       } catch (error) {
         // The text-merge destination existed before paste and is deliberately absent from these sets.
         try {
@@ -566,7 +679,7 @@ export class ClipboardManager {
   ): ClipboardBundle {
     return this.convertCopy(
       this.collectElements(ids, reactPanel),
-      "editor" in reactPanel ? reactPanel : undefined,
+      isReactPanelApi(reactPanel) ? reactPanel : undefined,
       operation,
     );
   }
@@ -641,89 +754,6 @@ export class ClipboardManager {
       return [{ ...input, childIds: source.childIds.flatMap((child) => idMap.get(child) ?? []) }];
     });
     return { nodes, idMap, referencedBlocks };
-  }
-
-  /**
-   * Prepares a detached paste bundle and allocates IDs before running converters.
-   *
-   * Strategy inputs retain source IDs while converted properties can refer to
-   * allocated destination IDs. A text merge may reuse the selected target ID.
-   *
-   * @param bundle - Source clipboard bundle to validate and clone.
-   * @param input - Paste placement and optional default block type.
-   * @param selection - Current destination selection used to resolve text merges.
-   * @param reactPanel - Receiving panel or editor-wide runtime.
-   * @param operation - Paste or duplicate operation supplied to converters.
-   * @returns Converted bundle, block ID map, and prepared canvas elements.
-   * @throws If validation, ID allocation, cloning, or a converter fails.
-   */
-  private convertPasteBundle(
-    bundle: ClipboardBundle,
-    input: ClipboardPasteInput,
-    selection: Selection,
-    reactPanel: ReactPanelApi | ReactEditorApi,
-    operation: "paste" | "duplicate",
-  ): {
-    /** Validated and converted clipboard content. */
-    bundle: ClipboardBundle;
-    /** Source-to-destination block identities allocated for the paste. */
-    blockIdMap: ReadonlyMap<string, string>;
-    /** Converted canvas elements and their associated identity maps. */
-    elements: ConvertedClipboardElements;
-  } {
-    validateClipboardBundle(bundle);
-    bundle = structuredClone(bundle);
-    if (
-      "editor" in reactPanel &&
-      reactPanel.getSurfaceType() !== "edgeless" &&
-      bundle.elements?.length
-    ) {
-      bundle = this.pageBundle(bundle, input.defaultBlockType);
-    }
-    const sourceIds: string[] = [];
-    // Collect source block IDs recursively before allocating destination IDs.
-    const collect = (block: EditorBlock): void => {
-      sourceIds.push(block.id);
-      block.children.forEach(collect);
-    };
-    bundle.blocks.forEach(collect);
-    const blockIdMap = new Map(this.document.getDocument().blocks.createImportIdMap(sourceIds));
-    if (
-      bundle.fromTextSelection &&
-      input.placement?.mergeText !== false &&
-      hasBlockRanges(selection) &&
-      !isStructuralSelection(selection)
-    ) {
-      const target = this.document.selection.resolveBlockSelection(selection)?.blocks[0];
-      if (target && bundle.blocks[0]) {
-        blockIdMap.set(bundle.blocks[0].id, target.id);
-      }
-    }
-    const sources = selectedClipboardElements(bundle);
-    // An empty block card has no copied content and is omitted before converters see the maps.
-    const retained = sources.filter((node) => {
-      if (node.type !== "block") {
-        return true;
-      }
-      return blockIdsOf(
-        node,
-        bundle.blocks.map((block) => block.id),
-      ).some((id) => blockIdMap.has(id));
-    });
-    const elementIdMap = new Map(
-      this.document.elements.createImportIdMap(retained.map((node) => node.id)),
-    );
-    const context = this.pasteContext(bundle, reactPanel, blockIdMap, elementIdMap, operation);
-    // Apply the paste converter recursively while preserving child order.
-    const convert = (block: EditorBlock): EditorBlock => {
-      const fields = this.converters.blocks
-        .get(block.type)
-        ?.paste?.(this.blockNode(block), context);
-      return { ...block, ...this.blockFields(fields), children: block.children.map(convert) };
-    };
-    bundle.blocks = bundle.blocks.map(convert);
-    const elements = this.convertElements(bundle, reactPanel, blockIdMap, elementIdMap, operation);
-    return { bundle, blockIdMap, elements };
   }
 
   /**
@@ -870,73 +900,21 @@ export class ClipboardManager {
       operation,
       sourceDocumentId: bundle.sourceDocumentId,
       destinationDocumentId: this.document.getDocument().id,
-      reactPanel: "editor" in reactPanel ? reactPanel : undefined,
+      reactPanel: isReactPanelApi(reactPanel) ? reactPanel : undefined,
       blockIdMap,
       elementIdMap,
       offset: { x: 24, y: 24 },
       sourceRootBlockIds: bundle.blocks.map((block) => block.id),
     };
   }
+}
 
-  /**
-   * Converts canvas elements to page blocks through references or clipboard formats, preserving unreferenced bundle blocks.
-   *
-   * @param bundle - Clipboard bundle containing source blocks, elements, and identity metadata.
-   * @param defaultBlockType - Writing block type used when converting element formats to page content; defaults to the editor's default block type.
-   * @returns A page-only bundle without elements or selected-element IDs.
-   */
-  private pageBundle(bundle: ClipboardBundle, defaultBlockType?: string): ClipboardBundle {
-    const byId = new Map(bundle.elements?.map((node) => [node.id, node]));
-    const blocks = new Map(bundle.blocks.map((block) => [block.id, block]));
-    const included = new Set<string>();
-    const result: EditorBlock[] = [];
-    const seen = new Set<string>();
-    const visit = (id: string): void => {
-      if (seen.has(id)) {
-        return;
-      }
-      seen.add(id);
-      const node = byId.get(id);
-      if (!node) {
-        return;
-      }
-      const converter = this.converters.elements.get(node.type);
-      const refs = converter?.getReferencedBlockIds?.(
-        node,
-        bundle.blocks.map((block) => block.id),
-      );
-      if (refs) {
-        refs.forEach((id) => {
-          const block = blocks.get(id);
-          if (block && !included.has(id)) {
-            included.add(id);
-            result.push(block);
-          }
-        });
-      } else if (converter?.format) {
-        const writingType =
-          defaultBlockType ?? this.editor.defaultWritingBlockFactory.createEmptyBlock().type;
-        const formats = this.editor.clipboardFormats.formatElement(node, bundle);
-        const parsed = this.editor.clipboardFormats.parseContent(
-          { html: formats.html, text: formats.plain },
-          { surface: "page", defaultBlockType: writingType },
-        );
-        result.push(
-          ...clipboardContentBundle(
-            parsed ?? {
-              blocks: formats.plain ? [{ type: writingType, content: formats.plain }] : [],
-            },
-          ).blocks,
-        );
-      }
-      node.childIds.forEach(visit);
-    };
-    (bundle.selectedElementIds ?? [...byId.keys()]).forEach(visit);
-    bundle.blocks.forEach((block) => {
-      if (!included.has(block.id)) {
-        result.push(block);
-      }
-    });
-    return { ...bundle, blocks: result, elements: undefined, selectedElementIds: undefined };
-  }
+/**
+ * Checks whether a paste strategy supports binding to a rendered panel.
+ *
+ * @param strategy - Shared paste strategy to inspect.
+ * @returns Whether it provides the panel binding contract.
+ */
+function isPanelPasteStrategy(strategy: PasteStrategy): strategy is PanelPasteStrategy {
+  return "createPanelStrategy" in strategy && typeof strategy.createPanelStrategy === "function";
 }

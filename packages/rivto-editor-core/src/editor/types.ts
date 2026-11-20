@@ -1,4 +1,4 @@
-import type { ElementRegistry } from "../managers/element-registry";
+import type { ElementRegistryApi } from "../managers/element-registry";
 /**
  * Editor coordinator contracts. Selection and clipboard types live with their owning managers.
  */
@@ -10,6 +10,7 @@ import type {
   CommandRegistryApi,
   ElementManagerApi,
   HistoryManagerApi,
+  HistoryBatch,
   SelectionManagerApi,
 } from "../managers";
 import type { DocumentModel } from "@chulane/document-model";
@@ -23,21 +24,32 @@ export interface CreateDocumentEditorOptions {
   document: DocumentModel;
 }
 
+/** Borrowed document and undo grouping used by block and element operations. */
+export interface DocumentCommandsEditor {
+  readonly history: HistoryBatch;
+  /**
+   * Supplies the fixed model used by this editor's reads, mutations, and subscriptions.
+   *
+   * @returns The caller-owned collaborative model.
+   */
+  getDocument(): DocumentModel;
+}
+
 /**
  * Public editor coordinator exposed to UI and integrations.
  *
- * Block and element behavior is intentionally available only through
- * `.blocks` and `.elements`. The editor itself owns cross-cutting runtime lifecycle,
- * commands, selection, history, snapshots, and document subscriptions.
+ * Block and element operations live on `.blocks` and `.elements`; editor-local
+ * structural policy is owned by `.blocks`. The editor owns their
+ * lifecycle as well as commands, selection, history, snapshots, and subscriptions.
  */
-export interface DocumentEditorAPI {
+export interface DocumentEditorAPI extends DocumentCommandsEditor {
   /** Definitions applied by the element command pipeline; loading unknown types remains lossless. */
-  readonly elementRegistry: ElementRegistry;
+  readonly elementRegistry: ElementRegistryApi;
   /** Typed block operations. */
   readonly blocks: BlockManagerApi;
   /** Editor-wide list-property defaults and semantic validation. */
   readonly blockListProps: BlockListPropsManagerApi;
-  /** Native block definitions, defaults, and property validation. */
+  /** Native block definitions, behavior registrations, defaults, and property validation. */
   readonly blockRegistry: BlockRegistryManagerApi;
   /** Generic first-class canvas element operations. */
   readonly elements: ElementManagerApi;
@@ -59,11 +71,6 @@ export interface DocumentEditorAPI {
    * @returns Function that removes the listener.
    */
   subscribe(listener: () => void): () => void;
-
-  /**
-   * @returns The fixed model used by every read, mutation, and subscription of this editor.
-   */
-  getDocument(): DocumentModel;
 
   /**
    * Replaces supplied sections in the fixed document and clears its previous local history.

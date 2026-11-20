@@ -1,9 +1,7 @@
-import { ReactPanel } from "../../../../panels/react-panel";
-import { ChildrenPanel } from "@chulane/rivto";
+import { createTestPanel, createTestMultiEditor } from "../../../../test-utils";
 import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage } from "@chulane/document-model";
 import { createCaretSelection } from "@chulane/rivto";
-import { createTestMultiEditor } from "../../../../test-utils";
 import { registerCollapse } from "./register";
 
 test.each([
@@ -31,7 +29,7 @@ test.each([
     extensions: [{ id: "collapse", setup: registerCollapse }],
   });
   const a = core.getEditor(first.id)!;
-  const reactPanel = new ReactPanel(a, new ChildrenPanel(a, {}), {});
+  const reactPanel = createTestPanel(a);
   reactPanel.mode.set(mode);
   const b = core.getEditor(second.id)!;
   await Promise.resolve(); // Finish initial block-element projection before measuring commands.

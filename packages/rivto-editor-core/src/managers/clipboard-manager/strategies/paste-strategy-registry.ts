@@ -14,7 +14,7 @@ export class PasteStrategyRegistry {
   /**
    * Adds or replaces a strategy under an explicit registry ID.
    * @param id - Stable identity owned by the registering layer.
-   * @param strategy - Algorithm bound to an editor runtime.
+   * @param strategy - Algorithm shared by receivers using this registry.
    * @returns Disposer that removes this exact registration.
    */
   register(id: string, strategy: PasteStrategy): () => void {

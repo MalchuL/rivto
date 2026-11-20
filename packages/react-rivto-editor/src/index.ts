@@ -17,6 +17,9 @@ export { EditorStorageContext } from "./editor/editor-storage-context";
 export { ReactEditor, createReactEditor } from "./editor/react-editor";
 export type { BlockElementProps } from "./elements/types";
 export { pageDragExtension } from "./extensions/block-drag";
+export { BlockResizeHandles } from "./extensions/containers/block-resize/block-resize-handles";
+export type { BlockResizeHandlesProps } from "./extensions/containers/block-resize/block-resize-handles";
+export type { BlockResizeEdge } from "./extensions/containers/block-resize/block-resize-controller";
 export type { PageDragOptions } from "./extensions/block-drag";
 export {
   blockExtension,
@@ -114,13 +117,15 @@ export type {
 } from "./extensions/todo-item/todo-item";
 export * from "./hooks";
 export {
+  readEditorDOMSelection,
+  restoreEditorDOMSelection,
+} from "./panels/managers/selection/panel-dom-selection";
+export {
   BLOCK_FLOW_SLOT_POSITIONS,
   BUILTIN_KEYMAP,
   KEYBOARD_BINDING_IDS,
   SLOT_POSITIONS,
   parseShortcut,
-  readEditorDOMSelection,
-  restoreEditorDOMSelection,
   shortcutFromKeyboardEvent,
 } from "./managers";
 export type {
@@ -170,7 +175,8 @@ export type {
   PanelPasteStrategy,
 } from "./managers";
 export type { CreateReactEditorOptions, MarkdownLinkClick } from "./types";
-export { isReactPanelApi, isRivtoEditor } from "./utils";
+export { isRivtoEditor } from "./utils";
+export { isReactPanelApi } from "./panels/is-react-panel-api";
 
 export {
   KANBAN_BLOCK_TYPE,
@@ -184,11 +190,8 @@ export { ContainerBlockBehavior, DefaultBlockBehavior } from "./block-behaviors"
 export type {
   BlockBehavior,
   BlockBehaviorContext,
-  BlockOutlineContext,
   BlockBehaviorData,
-  BlockBehaviorAvailabilityContext,
   BlockBehaviorOutcome,
-  BlockMoveContext,
 } from "./block-behaviors";
 export { BlockModal, BlockModalButton } from "./blocks/block-modal/block-modal";
 export {
@@ -233,20 +236,18 @@ export { SurfaceContext } from "./surfaces/surface";
 
 export * from "./editor/editor-storage";
 
-export { EditorPanel } from "./components/editor-panel/editor-panel";
-export type { EditorPanelProps } from "./components/editor-panel/types";
+export { EditorPanel } from "./panels/editor-panel/editor-panel";
+export type { EditorPanelProps } from "./panels/editor-panel/types";
 export type { AttachmentApi } from "./attachments/api";
 export type { ClipboardApi } from "./managers/clipboard/api";
-export type { PanelBlocksAPI } from "@chulane/rivto";
 export type { PanelDestination } from "@chulane/rivto";
-export type { PanelElementsAPI } from "@chulane/rivto";
 export type { EditorStorageOptions, EditorAcquisition, ReactEditorApi } from "./editor/types";
 export { useReactEditor } from "./hooks/editor/use-react-editor";
 export type { ReactEditorState, UseReactEditorOptions } from "./hooks/editor/types";
 export type { ReactPanelApi } from "./types";
 
-export { EditorEmbed } from "./components/editor-embed/editor-embed";
-export type { EditorEmbedProps } from "./components/editor-embed/types";
+export { EditorEmbed } from "./panels/editor-embed/editor-embed";
+export type { EditorEmbedProps } from "./panels/editor-embed/types";
 
 export type {
   CreateElementInput,
@@ -316,3 +317,9 @@ export type { RegisteredSurfaceProps } from "./surfaces/registered-surface";
 export * from "./extensions/file";
 export * from "./extensions/image";
 export * from "./attachments";
+
+export { transferBlocksBetweenDocuments } from "./block-transfer/cross-document-block-transfer";
+export type {
+  BlockTransferPanel,
+  CrossDocumentBlockTransferPlacement,
+} from "./block-transfer/types";

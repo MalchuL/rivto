@@ -1,11 +1,11 @@
 import type { EditorBlock as Block } from "@chulane/rivto";
 import type { ReactNode } from "react";
 import type { BlockDragTargetScope, ResolvedBlockDropTarget } from "@chulane/rivto-page";
-import type { CrossDocumentBlockPanel } from "./cross-document/panel";
+import type { BlockDragOperations } from "./block-drag-operations";
 
 /** Live receiving attachment using canonical Page geometry in either surface. */
 export interface CrossDocumentPageRootController extends BlockDragTargetScope {
-  readonly reactPanel: CrossDocumentBlockPanel;
+  readonly reactPanel: BlockDragOperations;
   readonly root: HTMLElement;
   /**
    * Resolves native receiving geometry and semantic policy for another source occurrence.

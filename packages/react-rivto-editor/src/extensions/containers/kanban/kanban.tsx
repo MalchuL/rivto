@@ -1,3 +1,4 @@
+import { createContainerBackgroundProcessor } from "../../../blocks/background-color";
 import { BLOCK_TEXT_METADATA_KEY } from "../../../managers/selection/block-text-metadata";
 import { KanbanLayout, KanbanColumnLayout } from "./kanban-layout";
 /**
@@ -61,8 +62,20 @@ function KanbanDialog({ block, children }: BlockWrapperProps) {
 export function kanbanExtension(): ReactEditorExtension {
   return {
     id: "block.kanban",
+    /**
+     * Installs Kanban presentation, dialog controls and background defaults for this editor.
+     *
+     * @param reactEditor - Runtime that owns the extension registrations.
+     * @returns Disposer that releases those registrations in reverse installation order.
+     */
     setup: (reactEditor) => {
       const disposers = [
+        // Defaults missing background on creation/conversion; removes the processor with the extension.
+        reactEditor.extensions.registerCleanup(
+          reactEditor.blocks.registerProcessor(
+            createContainerBackgroundProcessor(KANBAN_BLOCK_TYPE),
+          ),
+        ),
         reactEditor.surfaces.registerBlockWrapper("block", KanbanDialog),
         reactEditor.surfaces.registerBlockWrapper("edgeless", KanbanDialog),
         reactEditor.surfaces.registerBlockSlot({

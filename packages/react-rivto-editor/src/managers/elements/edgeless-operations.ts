@@ -2,11 +2,7 @@ import { Listeners } from "@chulane/rivto-utils";
 import { EdgelessCreationDefaults } from "./edgeless-creation-defaults";
 import type { CreationDefaultsScope, ElementCreationDefaults } from "./creation-defaults-types";
 import { ChildrenPanel } from "@chulane/rivto";
-import {
-  type ClipboardBundle,
-  type EditorElementNode,
-  type EditorElementInput,
-} from "@chulane/rivto";
+import { type EditorElementNode, type EditorElementInput } from "@chulane/rivto";
 import type { CreateElementInput } from "./types";
 import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorApi } from "../../editor/types";
@@ -613,7 +609,7 @@ export class EdgelessOperations {
         this.reactPanel.elements.moveElements(
           [group.id],
           parentId === null
-            ? { root: true, beforeId: ordered[0] }
+            ? { parentId: null, beforeId: ordered[0] }
             : { parentId, beforeId: ordered[0] },
         );
       } else {
@@ -896,12 +892,11 @@ export class EdgelessOperations {
     if (!items.length) {
       return [];
     }
-    const created = this.pasteClipboardBundle(
-      this.createClipboardBundle(items, "duplicate"),
-      "duplicate",
-    );
-    const createdById = new Map(created.map((element) => [element.id, element]));
-    return this.selection.get().items.flatMap((id) => createdById.get(id) ?? []);
+    // Duplicate uses the same panel for both conversion steps. Paste publishes the new IDs.
+    const panel = this.reactPanel ?? this.runtime;
+    const bundle = this.runtime.clipboard.copyElements(items, panel, "duplicate");
+    this.runtime.clipboard.paste({ bundle, placement: { mergeText: false } }, panel, "duplicate");
+    return this.selection.get().items.flatMap((id) => this.elements.getElementNode(id) ?? []);
   }
 
   // Resolve through this controller so panel proxies keep their Panel boundary.
@@ -1024,39 +1019,6 @@ export class EdgelessOperations {
   }
 
   /**
-   * Copies the selected elements through the shared clipboard converter pipeline.
-   *
-   * @param items - Selected element IDs to copy or transform.
-   * @param operation - Clipboard operation associated with conversion; defaults are specified by the method signature.
-   * @returns Clipboard bundle for the requested operation, defaulting to copy.
-   */
-  private createClipboardBundle(
-    items: readonly string[],
-    operation: "copy" | "cut" | "duplicate" = "copy",
-  ): ClipboardBundle {
-    return this.runtime.clipboard.copyElements(items, this.reactPanel ?? this.runtime, operation);
-  }
-
-  /**
-   * Pastes a bundle without merging text and reads the resulting selection.
-   *
-   * @param bundle - Clipboard bundle containing source blocks, elements, and identity metadata.
-   * @param operation - Clipboard operation associated with conversion; defaults are specified by the method signature.
-   * @returns Existing element nodes selected after paste or duplicate.
-   */
-  private pasteClipboardBundle(
-    bundle: ClipboardBundle,
-    operation: "paste" | "duplicate" = "paste",
-  ): EditorElementNode[] {
-    this.runtime.clipboard.paste(
-      { bundle, placement: { mergeText: false } },
-      this.reactPanel ?? this.runtime,
-      operation,
-    );
-    return this.selection.get().items.flatMap((id) => this.elements.getElementNode(id) ?? []);
-  }
-
-  /**
    * Translates reachable leaf frames within a history batch, omitting missing elements.
    *
    * @param items - Selected element IDs to copy or transform.
@@ -1066,9 +1028,12 @@ export class EdgelessOperations {
   private translateLeaves(items: readonly string[], dx: number, dy: number): void {
     this.runtime.history.batchUpdates(() =>
       this.getLeafIds(items).forEach((id) => {
-        const frame = this.getElement(id)?.frame;
-        if (frame) {
-          this.updateElementFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy });
+        const element = this.getElement(id);
+        if (element && element.type !== "group") {
+          const { frame } = element;
+          this.elements.updateElement(id, {
+            frame: this.validateFrame({ ...frame, x: frame.x + dx, y: frame.y + dy }),
+          });
         }
       }),
     );
@@ -1144,20 +1109,6 @@ export class EdgelessOperations {
     return this.geometry.bounds(id);
   }
 
-  /**
-   * Validates and writes an existing non-group element's frame; missing elements and groups are ignored.
-   *
-   * @param id - Stable ID of the record or registration to access.
-   * @param frame - Requested element frame in canvas coordinates.
-   * @throws If the new frame has non-finite coordinates or non-positive dimensions.
-   */
-  private updateElementFrame(id: string, frame: VisualFrame): void {
-    const element = this.getElement(id);
-    if (!element || element.type === "group") {
-      return;
-    }
-    this.elements.updateElement(id, { frame: this.validateFrame(frame) });
-  }
   /**
    * Reads a selectable parent while stopping at the panel boundary.
    *

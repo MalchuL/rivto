@@ -6,9 +6,25 @@ import type { Block } from "@chulane/document-model";
 import type { Selection } from "../../selection-manager";
 import type { BlockPastePlacement, ClipboardBundle } from "../clipboard-data";
 import type { BlockPrepareErrorHandler } from "../../block-manager/types";
+import type { BlockManagerApi, SelectionManagerApi } from "../../types";
 
 /** Shared clipboard payload supplied to every strategy. */
 export interface PasteContext {
+  /** Editor or panel receiving this paste; operations must use its boundaries. */
+  readonly editor: {
+    readonly blocks: Pick<
+      BlockManagerApi,
+      | "getBlocks"
+      | "getBlockNode"
+      | "getInsertionDestinationAfter"
+      | "getParentId"
+      | "importForest"
+      | "insertBlock"
+      | "removeBlock"
+      | "replaceTextSelection"
+    >;
+    readonly selection: Pick<SelectionManagerApi, "resolveBlockSelection">;
+  };
   /** Valid structured clipboard, when present. */
   readonly bundle?: ClipboardBundle;
   /** Plain-text fallback used when no structured merge applies. */
@@ -48,7 +64,10 @@ export interface TextPasteTarget {
   readonly endOffset: number;
 }
 
-/** Clipboard paste algorithm that accepts or ignores a shared context. */
+/**
+ * Clipboard paste algorithm shared by a document and its panels.
+ * Read the receiving editor from the context in both matching and insertion.
+ */
 export interface PasteStrategy {
   /**
    * Reports whether this algorithm should run for the clipboard and destination.

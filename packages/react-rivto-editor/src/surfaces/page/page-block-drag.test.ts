@@ -47,7 +47,7 @@ it("rechecks stale gaps, missing sources and live policy without partial changes
      */
     childrenVisible: () => true,
   };
-  jestApi.spyOn(panel.editor.blockBehaviors, "canMove").mockImplementation(behaviors.canMove);
+  jestApi.spyOn(panel.editor.blocks, "canMove").mockImplementation(behaviors.canMove);
   jestApi
     .spyOn(panel.editor.blockBehaviors, "childrenVisible")
     .mockImplementation(behaviors.childrenVisible);

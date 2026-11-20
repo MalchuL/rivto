@@ -1,4 +1,3 @@
-import type { PanelEventsApi } from "../../managers/events/api";
 import { CanvasMarquee, CanvasViewport } from "@chulane/rivto-edgeless/browser";
 import type { ReactPanelApi } from "../../panels/types";
 import type { EdgelessSelectionRuntime } from "../built-ins/selection/edgeless-runtime";
@@ -67,7 +66,7 @@ export class EdgelessSelectionController {
    * @returns Cleanup removing all installed listeners and the owned marquee node.
    * @throws Rolls back acquired resources if any registration fails.
    */
-  install(events: Pick<PanelEventsApi, "register">): () => void {
+  install(events: Pick<ReactPanelApi["events"], "register">): () => void {
     try {
       this.releases.push(
         events.register(

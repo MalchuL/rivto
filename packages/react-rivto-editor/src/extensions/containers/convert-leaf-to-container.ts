@@ -44,6 +44,7 @@ export function convertLeafToContainer(
     return;
   }
   reactPanel.batchUpdates(() => {
+    // Keep the new container inside the embed when its root is the conversion target.
     const destination = reactPanel.blocks.canRemove(blockId)
       ? reactPanel.blocks.getInsertionDestinationAfter(blockId)
       : { parentId: blockId };

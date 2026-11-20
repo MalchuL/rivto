@@ -81,15 +81,17 @@ for (const [type, name] of [
         window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }
       ).__rivtoDemo.editor;
       const board = editor.blocks.getBlocks().find((block) => block.type === type)!;
+      // Give the board one visible occurrence so the gesture targets its own card.
+      editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
       editor.elements.insertElement({
         type: "block",
         zIndex: 0,
         frame: { x: 20, y: 20, width: 700, height: 500 },
-        props: { startBlockId: board.id, endBlockId: board.id },
+        props: { startBlockId: board.id, endBlockId: board.id, borderless: false },
       });
     }, type);
     await page.locator('[data-editor-mode="edgeless"]').click();
-    const block = page.locator(`[data-block-type="${type}"]:visible`).first();
+    const block = page.locator(`[data-edgeless-root] [data-block-type="${type}"]`);
     await block.locator(":scope > .rivto-block-row [data-collapse-toggle]").click();
     const button = block.locator(":scope > .rivto-block-row .rivto-container-summary > span");
     await button.scrollIntoViewIfNeeded();
@@ -116,12 +118,12 @@ test("selects the default name by dragging the visible text", async ({ page }) =
   const block = page.locator('[data-block-type="bento"]').first();
   await block.locator(":scope > .rivto-block-row [data-collapse-toggle]").click();
   const name = block.locator(".rivto-container-summary-title");
-  await name.evaluate((element) => element.scrollIntoView({ block: "center" }));
-  const rect = (await name.boundingBox())!;
-  await page.mouse.move(rect.x + 1, rect.y + rect.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(rect.x + rect.width - 1, rect.y + rect.height / 2, { steps: 10 });
-  await page.mouse.up();
+  // Resolve both ends against the title as the row settles after collapse.
+  const { width, height } = (await name.boundingBox())!;
+  await name.dragTo(name, {
+    sourcePosition: { x: 1, y: height / 2 },
+    targetPosition: { x: width - 1, y: height / 2 },
+  });
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("Bento");
   await expect(block).not.toHaveAttribute("data-block-selected", "true");
 });

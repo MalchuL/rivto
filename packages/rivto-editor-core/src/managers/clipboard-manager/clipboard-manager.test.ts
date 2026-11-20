@@ -42,6 +42,48 @@ describe("core ClipboardManager", () => {
     editor.destroy();
   });
 
+  it.each(["plain", "preserve-newlines", "partial bundle"])(
+    "replaces a multi-block text range without invoking structural deletion for %s",
+    async (format) => {
+      const editor = await createDocumentEditor();
+      try {
+        const first = editor.blocks.insertBlock({ type: "paragraph", content: "Left" }).id;
+        const last = editor.blocks.insertBlock({ type: "paragraph", content: "Right" }).id;
+        const textTarget = testRange(
+          editor,
+          { blockId: first, offset: 2 },
+          { blockId: last, offset: 2 },
+        );
+        const onStructuralDelete = jest.fn(() => "rejected" as const);
+        editor.blockRegistry.registerBehavior({ isAvailable: () => true, onStructuralDelete });
+        const bundle =
+          format === "partial bundle"
+            ? editor.clipboard.copyText(
+                testRange(editor, { blockId: first, offset: 0 }, { blockId: first, offset: 1 }),
+              )
+            : undefined;
+
+        editor.clipboard.paste({
+          text: "L",
+          bundle,
+          defaultBlockType: "paragraph",
+          textTarget,
+          placement: { preserveNewlines: format === "preserve-newlines" },
+        });
+
+        expect(editor.blocks.getBlocks()).toMatchObject([{ id: first, content: "LeLght" }]);
+        expect(onStructuralDelete).not.toHaveBeenCalled();
+        editor.history.undo();
+        expect(editor.blocks.getBlocks()).toMatchObject([
+          { id: first, content: "Left" },
+          { id: last, content: "Right" },
+        ]);
+      } finally {
+        await editor.destroy();
+      }
+    },
+  );
+
   it("copies overlapping offsets as empty text and still pastes at the clamped caret", async () => {
     const editor = await createDocumentEditor();
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
@@ -215,10 +257,7 @@ describe("core ClipboardManager", () => {
       const editor = await createDocumentEditor();
       editor.clipboard.pasteStrategies.register(
         "paste.blocks",
-        new BlockPasteStrategy(
-          editor,
-          (block) => block.type === "paragraph" && block.content === "",
-        ),
+        new BlockPasteStrategy((block) => block.type === "paragraph" && block.content === ""),
       );
       const source = editor.blocks.insertBlock({ type: "paragraph", content: "Copied" });
       const bundle = editor.clipboard.copy(createStructuralSelection([source.id]))!;
@@ -568,7 +607,8 @@ describe("core ClipboardManager", () => {
     editor.destroy();
   });
 
-  it("owns strategy IDs at registration without stale disposers removing replacements", () => {
+  it("owns strategy IDs at registration without stale disposers removing replacements", async () => {
+    const editor = await createDocumentEditor();
     const registry = new PasteStrategyRegistry();
     const first = { matches: () => true, paste: () => undefined };
     const replacement = { matches: () => true, paste: () => undefined };
@@ -577,8 +617,9 @@ describe("core ClipboardManager", () => {
 
     disposeFirst();
 
-    expect(registry.findMatchingPasteStrategies({ selection: undefined }, {})).toEqual([
+    expect(registry.findMatchingPasteStrategies({ editor, selection: undefined }, {})).toEqual([
       replacement,
     ]);
+    await editor.destroy();
   });
 });

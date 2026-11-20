@@ -2,7 +2,6 @@
  * Stateless matching, placement, and plain-text insertion helpers shared by
  * clipboard paste strategies.
  */
-import type { DocumentEditorAPI } from "../../../editor/types";
 import type { EditorPosition, Selection } from "../../selection-manager";
 import { isStructuralSelection } from "../../selection-manager";
 import type { PasteContext, PastePlacement, TextPasteTarget } from "./types";
@@ -14,7 +13,7 @@ import type { PasteContext, PastePlacement, TextPasteTarget } from "./types";
  * @returns Range including empty overlap slices, or undefined for structural/empty selection.
  */
 export function textRangeFromSelection(
-  editor: DocumentEditorAPI,
+  editor: PasteContext["editor"],
   selection: Selection | undefined,
 ): TextPasteTarget | undefined {
   if (!selection || isStructuralSelection(selection)) {
@@ -100,7 +99,7 @@ export function isBlockPasteContext(
  * @returns Resulting caret, or undefined for empty input.
  */
 export function insertPlainText(
-  editor: DocumentEditorAPI,
+  editor: PasteContext["editor"],
   value: string,
   defaultBlockType: string,
   splitNewlines: boolean,
@@ -116,16 +115,17 @@ export function insertPlainText(
   const suffixBlock = range?.blocks.at(-1);
   const prefix = destination ? destination.content.slice(0, range!.startOffset) : "";
   const suffix = suffixBlock ? suffixBlock.content.slice(range!.endOffset) : "";
-  if (range) {
-    range.blocks.slice(1).forEach((block) => editor.blocks.removeBlock(block.id));
-  }
   let previous = destination?.id ?? afterId;
   let caret: EditorPosition | undefined;
   lines.forEach((line, index) => {
     const last = index === lines.length - 1;
     let offset = line.length;
-    if (destination && index === 0) {
-      editor.blocks.updateBlock(destination.id, { content: prefix + line + (last ? suffix : "") });
+    if (range && destination && index === 0) {
+      editor.blocks.replaceTextSelection(
+        destination.id,
+        range.blocks.slice(1).map((block) => block.id),
+        prefix + line + (last ? suffix : ""),
+      );
       offset += prefix.length;
     } else {
       previous = editor.blocks.insertBlock(

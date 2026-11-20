@@ -1,16 +1,20 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode, SVGProps } from "react";
 import type { ReactPanelApi } from "../../panels/types";
 
-/** Stable targets captured when a block context menu opens. IDs belong to the invoking panel. */
-export interface BlockContextMenuContext {
-  /** Guarded operations of the occurrence that opened the menu. */
-  readonly reactPanel: ReactPanelApi;
+/** Stable targets captured when a block context menu opens. IDs belong to the invoking panel. Callers supply these captured IDs without supplying a panel. */
+export interface BlockContextMenuTargets {
   /** Clicked block, whose presence in selection determines group targeting. */
   readonly blockId: string;
   /** Explicit structural targets in document order, retained across menu focus changes. */
   readonly blockIds: readonly string[];
   /** Targets excluding descendants of another target, for subtree operations and clipboard output. */
   readonly rootIds: readonly string[];
+}
+
+/** Captured target identities and the occurrence in which menu actions execute. */
+export interface BlockContextMenuContext extends BlockContextMenuTargets {
+  /** Guarded operations of the occurrence that opened the menu. */
+  readonly reactPanel: ReactPanelApi;
 }
 
 /** Context for interactive extension content; close dismisses the current menu. */
@@ -29,6 +33,10 @@ export interface BlockContextMenuEntry {
   readonly id: string;
   /** Nonempty label; required for every kind, even when a custom renderer supplies its own content. */
   readonly title: string;
+  /** Optional decorative icon supplied by the registering extension. */
+  readonly icon?: ComponentType<SVGProps<SVGSVGElement>>;
+  /** Whether this action uses destructive styling. */
+  readonly destructive?: boolean;
   /** Parent submenu ID; omitted places the contribution at the top level. */
   readonly parentId?: string;
   /** Lower values appear first; equal values retain registration order. */

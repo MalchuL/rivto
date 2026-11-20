@@ -1,5 +1,5 @@
+import type { ReactEditorApi, ReactEditorConfiguration } from "./editor/types";
 import type { ReactPanelApi } from "./panels/types";
-import { createBlockOutlineContext } from "./block-behaviors/utils/context";
 import { ReactPanel } from "./panels/react-panel";
 import { YjsDoc } from "@chulane/crdt-doc";
 import {
@@ -14,13 +14,13 @@ import {
   ModeManager,
   type EditorMode,
 } from "@chulane/rivto";
-import { ChildrenPanel } from "@chulane/rivto";
+import { ChildrenPanel, type PanelOptions } from "@chulane/rivto";
 import { createReactEditor, type CreateReactEditorOptions } from "./editor/react-editor";
 import { EditorStorage } from "./editor/editor-storage";
 import { DEFAULT_WRITING_BLOCK_TYPE } from "./extensions/built-ins/page/default-writing-block";
 import { createElement, type ReactNode } from "react";
-import { ReactPanelContext } from "./components/editor-panel/react-panel-context";
-import { EditorRootContext } from "./components/editor-panel/editor-root-context";
+import { ReactPanelContext } from "./panels/react-panel-context";
+import { EditorRootContext } from "./panels/editor-root-context";
 
 /**
  * Supplies an already constructed test panel to synchronous renderer and hook tests.
@@ -34,9 +34,6 @@ export function TestPanel({ panel, children }: { panel: ReactPanel; children?: R
     {
       value: {
         reactPanel: panel,
-        document: panel.document.getDocument(),
-        documentId: panel.documentId,
-        rootBlockId: panel.rootBlockId,
         enabled: true,
       },
     },
@@ -102,12 +99,29 @@ export async function createTestCoreEditor(
   return proxy;
 }
 
-/** Creates a React runtime bound directly to the fixture's document. */
-export function createTestReactEditor(
-  options: Omit<CreateReactEditorOptions, "editor"> & {
-    readonly editor: DocumentEditorAPI;
-  },
-): ReactPanel {
+/**
+ * Creates a headless subtree view on an existing test runtime.
+ *
+ * @param editor - Runtime that owns cleanup of the returned view.
+ * @param options - Optional block and element boundaries for this occurrence.
+ * @returns A mounted test panel sharing the supplied runtime's document.
+ * @throws If the runtime has been destroyed or the panel cannot be initialized.
+ */
+export function createTestPanel(editor: ReactEditorApi, options?: PanelOptions): ReactPanel {
+  const core = new ChildrenPanel(editor, options);
+  editor.registerCleanup(() => void core.destroy());
+  const panel = new ReactPanel(editor, core);
+  editor.registerCleanup(panel.destroy);
+  return panel;
+}
+
+/**
+ * Opens a headless panel over the fixture's document and registers panel disposal with its runtime.
+ *
+ * @param options - Fixed core document editor, extensions and React runtime settings.
+ * @returns The panel configured with the fixture's initial mode.
+ */
+export function createTestReactEditor(options: CreateReactEditorOptions): ReactPanel {
   const runtime = createReactEditor(options);
   const editor = new ReactPanel(runtime, new ChildrenPanel(options.editor, {}), {
     mode: new ModeManager(modes.get(options.editor)),
@@ -132,9 +146,7 @@ export function createTestReactEditor(
 export async function createTestMultiEditor(
   models: readonly DocumentModel[],
   storage?: DocumentStorage,
-  options:
-    | Omit<CreateReactEditorOptions, "editor">
-    | (() => Omit<CreateReactEditorOptions, "editor">) = {},
+  options: ReactEditorConfiguration | (() => ReactEditorConfiguration) = {},
 ): Promise<EditorStorage> {
   const seeds = new Map(models.map((model) => [model.id, model]));
   const runtime = new EditorStorage({
@@ -182,13 +194,7 @@ export async function createTestMultiEditor(
  * @throws If a behavior or delegated block mutation fails.
  */
 export function indentBlocks(reactPanel: ReactPanelApi, ids: readonly string[]): void {
-  const context = createBlockOutlineContext(reactPanel, ids[0], reactPanel.selection.get());
-  if (!context) {
-    return;
-  }
-  reactPanel.batchUpdates(() =>
-    reactPanel.editor.blockBehaviors.dispatch("onIndent", context, ids),
-  );
+  reactPanel.batchUpdates(() => reactPanel.blocks.indentBlocks(ids));
 }
 
 /**
@@ -203,11 +209,8 @@ export function indentBlocks(reactPanel: ReactPanelApi, ids: readonly string[]):
  * @throws If a behavior or delegated block mutation fails.
  */
 export function outdentBlocks(reactPanel: ReactPanelApi, ids: readonly string[]): void {
-  const context = createBlockOutlineContext(reactPanel, ids[0], reactPanel.selection.get());
-  if (!context) {
+  if (ids.some((id) => !reactPanel.blocks.canOutdent(id))) {
     return;
   }
-  reactPanel.batchUpdates(() =>
-    reactPanel.editor.blockBehaviors.dispatch("onOutdent", context, ids),
-  );
+  reactPanel.batchUpdates(() => reactPanel.blocks.outdentBlocks(ids));
 }

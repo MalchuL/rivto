@@ -35,7 +35,10 @@
   margin: 0;
   min-height: 96px;
   border-radius: 16px;
-  background: var(--rivto-block-selection-fill, var(--rivto-bento-background));
+  background: var(
+    --rivto-block-selection-fill,
+    var(--rivto-block-own-background, var(--rivto-bento-background))
+  );
 }
 /* The declared width includes Page's insertion strips, so adjacent strips alone
  * supply tile spacing. Neither an extra flex gap nor padding enlarges the item. */
@@ -46,6 +49,11 @@
   max-width: 100%;
   box-sizing: border-box;
 }
+.rivto-bento-tile[data-width-policy="grow"] {
+  flex-basis: max-content;
+  min-width: min(var(--rivto-bento-width), 100%);
+  max-width: min(var(--rivto-bento-max-width), 100%);
+}
 .rivto-bento-tile > .rivto-block-drop-wrapper-content {
   min-width: 0;
   background: var(--rivto-block-selection-fill, var(--rivto-background));
@@ -55,30 +63,16 @@
 .rivto-bento-tile > .rivto-block-drop-wrapper-content > .rivto-block {
   padding: 12px;
 }
+.rivto-bento-tile > .rivto-block-drop-wrapper-content > .rivto-block[data-block-width] {
+  width: 100%;
+  min-width: 0;
+}
 .rivto-bento-tile > .rivto-block-drop-wrapper-content > .rivto-block > .rivto-block-row {
   padding: 0;
 }
-.rivto-bento-resize {
-  position: absolute;
-  z-index: 4;
-  top: 8px;
-  bottom: 8px;
-  width: 8px;
-  background: transparent;
-  cursor: col-resize;
-  touch-action: none;
-  pointer-events: auto;
-  outline: none;
-}
-.rivto-bento-resize[data-bento-resize-edge="left"] {
-  left: 4px;
-}
-.rivto-bento-resize[data-bento-resize-edge="right"] {
-  right: 4px;
-}
 /* The active preview may cover neighboring placements. Its ordinary block and
  * resize controls remain intact; cancelling restores the saved placement styles. */
-.rivto-bento-tile[data-bento-resizing] {
+.rivto-bento-tile[data-width-resizing] {
   z-index: 8;
   overflow: visible;
   transition: none;
@@ -87,4 +81,8 @@
  * the rest of the strip still resizes without shifting either control. */
 .rivto-bento-tile .rivto-block-slot:has(> .block-handle) {
   z-index: 5;
+}
+
+.rivto-block[data-block-type="bento"] {
+  --rivto-block-shell-background: transparent;
 }

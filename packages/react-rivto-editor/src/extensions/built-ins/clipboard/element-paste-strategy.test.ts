@@ -1,9 +1,10 @@
-import { ReactPanel } from "../../../panels/react-panel";
-import { ChildrenPanel } from "@chulane/rivto";
-import { createTestReactEditor as createReactEditor } from "../../../test-utils";
+import {
+  createTestPanel,
+  createTestReactEditor as createReactEditor,
+  createTestCoreEditor,
+} from "../../../test-utils";
 /** Element paste recreates visual-only clipboard bundles in edgeless mode. */
 
-import { createTestCoreEditor } from "../../../test-utils";
 import { findEdgelessRuntime, installEdgelessRuntime } from "../selection/edgeless-runtime";
 import { ElementPasteStrategy } from "./element-paste-strategy";
 
@@ -21,6 +22,7 @@ describe("ElementPasteStrategy", () => {
     const uninstall = installEdgelessRuntime(reactPanel);
     const created = new ElementPasteStrategy(reactPanel).paste(
       {
+        editor: reactPanel,
         bundle: {
           version: 4,
           blocks: [],
@@ -81,6 +83,7 @@ describe("ElementPasteStrategy", () => {
 
     const created = new ElementPasteStrategy(reactPanel).paste(
       {
+        editor: reactPanel,
         bundle: { version: 4, blocks: [], elements: [source], selectedElementIds: [source.id] },
         selection: undefined,
       },
@@ -103,6 +106,7 @@ describe("ElementPasteStrategy", () => {
 
     const created = new ElementPasteStrategy(reactPanel).paste(
       {
+        editor: reactPanel,
         bundle: {
           version: 4,
           blocks: [
@@ -173,7 +177,7 @@ it("pastes cards into an explicit second document and remaps their block referen
     { extensions: [standardPreset()] },
   );
   const runtime = multi.getEditor("B")!;
-  const reactPanel = new ReactPanel(runtime, new ChildrenPanel(runtime, {}), {});
+  const reactPanel = createTestPanel(runtime);
   reactPanel.mode.set("edgeless");
   const a = (await multi.acquireEditor("A")).editor;
   const b = (await multi.acquireEditor("B")).editor;

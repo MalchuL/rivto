@@ -38,8 +38,8 @@
   animation: none;
   width: 94vw;
   height: 94vh;
-  /* Extra right padding leaves room for the expand button in the right slot. */
-  padding: 24px 64px 24px 24px;
+  /* Extra side padding leaves room for root controls and the expand button. */
+  padding: 24px 64px;
   border-radius: 16px;
   background: var(--rivto-background);
   overflow: auto;

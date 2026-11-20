@@ -70,7 +70,7 @@ test("inserts rectangular rows and columns as draggable ordinary blocks", async 
   );
 
   editor.blocks.moveBlocks([cellId], table.id, "inside");
-  expect(editor.blocks.getParentId(cellId)).toBe(table.id);
+  expect(editor.blocks.getParentId(cellId)).toBe(rowId);
   reactPanel.editor.destroy();
   editor.destroy();
 });

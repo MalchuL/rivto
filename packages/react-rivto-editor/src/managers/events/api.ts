@@ -2,6 +2,30 @@ import type { DOMEventDefinition, DOMEventName, DOMEventTarget } from "./dom-typ
 import type { EditorEvent } from "./editor-event";
 import type { EditorEventHandler } from "./types";
 
+/** Local registration identity and DOM root belonging to one mounted EditorPanel. */
+export interface PanelEventScope {
+  /** Stable occurrence identity; shared shortcut settings continue to use semantic action IDs. */
+  readonly id: string;
+  /**
+   * Reads the root currently available to this occurrence's handlers.
+   *
+   * @returns Mounted root, or null before mounting, when disabled, or after cleanup.
+   */
+  getRoot(): HTMLElement | null;
+}
+
+/** A panel event scope that also retains the disposers of its local registrations. */
+export interface PanelRegistration extends PanelEventScope {
+  /**
+   * Retains local registration cleanup until this occurrence is destroyed.
+   *
+   * @param dispose - Callback releasing the occurrence's registration.
+   * @returns Idempotent disposer, also invoked during occurrence cleanup.
+   * @throws If cleanup registration is attempted during or after panel destruction.
+   */
+  registerCleanup(dispose: () => void): () => void;
+}
+
 /** Event registrations for one EditorPanel. */
 export interface PanelEventsApi {
   /**
@@ -28,4 +52,36 @@ export interface PanelEventsApi {
    * @returns Whether a matching registration was removed.
    */
   delete(id: string): boolean;
+  /**
+   * Checks whether this panel's registration was captured for a native event.
+   *
+   * @param id - Local registration identifier.
+   * @param event - Native event whose registration snapshot is inspected.
+   * @returns Whether the captured registration is still active.
+   */
+  has(id: string, event: Event): boolean;
+}
+
+/** Shared document registrations, optionally restricted to a single panel. */
+export interface DocumentEventsApi extends PanelEventsApi {
+  /**
+   * Installs a handler for the document or for the specified panel occurrence.
+   *
+   * With an owner, dispatch checks its current root and qualifies the definition ID
+   * with the panel ID. The panel retains the returned disposer for its own cleanup.
+   *
+   * @param definition - Native event, filters, listener options and registration ID.
+   * @param listener - Handler returning true to claim an event.
+   * @param owner - Optional occurrence restricting the handler to one mounted root.
+   * @returns Idempotent disposer for the active registration.
+   * @throws If the ID is empty or duplicated, attachment fails, or the runtime is inactive.
+   */
+  register<
+    Target extends DOMEventTarget = "surface",
+    Type extends DOMEventName<Target> = DOMEventName<Target>,
+  >(
+    definition: DOMEventDefinition<Target, Type>,
+    listener: EditorEventHandler<EditorEvent<Target, Type>>,
+    owner?: PanelEventScope,
+  ): () => void;
 }

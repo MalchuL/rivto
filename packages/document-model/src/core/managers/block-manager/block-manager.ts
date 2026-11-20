@@ -84,6 +84,22 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   protected generateId(): string {
     return crypto.randomUUID();
   }
+
+  /**
+   * Allocates an identity using this document's block identity policy.
+   *
+   * The returned identity is not reserved until insertion.
+   *
+   * @returns A newly generated identity not currently present in storage.
+   * @throws If the configured generator returns an invalid or existing identity.
+   */
+  createBlockId(): string {
+    const id = requireNonemptyId(this.generateId(), "Block");
+    if (this.storage.has(id)) {
+      throw new Error(`Block ${id} already exists`);
+    }
+    return id;
+  }
   /** Detached snapshots invalidated before subscribers are notified. */
   private readonly cache: BlockCache;
   /**
@@ -328,7 +344,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
       }
       afterId = index === 0 ? null : siblings[index - 1];
     }
-    this.validateInsertedForest([block]);
+    // Validate descendants and storage identities before writing the first record.
+    validateBlockForest([block], { existingIds: this.storage });
     const prepared = this.prepareBlock(block);
     let inserted: Block | undefined;
     this.crdt.transact(() => {
@@ -568,7 +585,14 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   setBlockProp(id: string, key: string, value: unknown): void {
     this.crdt.transact(() => {
       const block = this.requiredBlock(id);
-      this.patchProps(this.requiredMap(block, "props"), { [key]: value });
+      const props = this.requiredMap(block, "props");
+      if (value === undefined) {
+        props.delete(key);
+      } else {
+        // Detach host-owned values before storing them in the collaborative map.
+        assertPortableValue(value, `block.props.${key}`);
+        props.set(key, clone(value) as CRDTType);
+      }
     });
   }
 
@@ -1225,17 +1249,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   }
 
   /**
-   * Preflights one inserted forest against current storage before writing.
-   *
-   * @param blocks - Root inputs that will be written in one insertion.
-   * @returns No value.
-   * @throws {Error} When any descendant is malformed or collides with storage.
-   */
-  private validateInsertedForest(blocks: readonly BlockInput[]): void {
-    validateBlockForest(blocks, { existingIds: this.storage });
-  }
-
-  /**
    * Materializes one stored block and its descendants as detached values.
    *
    * @param id - ID of the block to read.
@@ -1277,9 +1290,14 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   private readBlockNode(value: CRDTMap<BlockStorage>, id: IDBlock): BlockNode {
     // The adapter can expose plain nested property values by reference.
     // Detach them before callers receive or cache the node.
+    const type = value.get("type");
+    if (typeof type !== "string" || !type) {
+      throw new Error(`Block ${id} has no type`);
+    }
+
     const fields = clone({
       id,
-      type: this.requiredType(value, id),
+      type,
       listProps: validateBlockListProps(this.requiredMap(value, "listProps").toObject()),
       props: this.requiredMap(value, "props").toObject() as Record<IDProp, unknown>,
       pluginData: this.requiredMap(value, "pluginData").toObject() as Record<IDPlugin, unknown>,
@@ -1482,29 +1500,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   }
 
   /**
-   * Applies caller-owned prop keys without rebuilding the live CRDT map.
-   *
-   * @param props - Shared property map to patch.
-   * @param patch - Property keys owned by this operation.
-   * @returns No value.
-   */
-  private patchProps(
-    props: CRDTMap<Record<string, CRDTType>>,
-    patch: Record<string, unknown>,
-  ): void {
-    Object.entries(patch).forEach(([key, value]) => {
-      if (value !== undefined) {
-        assertPortableValue(value, `block.props.${key}`);
-      }
-      if (value === undefined) {
-        props.delete(key);
-      } else {
-        props.set(key, clone(value) as CRDTType);
-      }
-    });
-  }
-
-  /**
    * Reads a block map or fails with a domain-specific message.
    *
    * @param id - Block ID to resolve.
@@ -1517,25 +1512,6 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
       throw new Error(`Block ${id} not found`);
     }
     return value;
-  }
-
-  /**
-   * Reads the immutable native type stored on a block.
-   *
-   * Missing types indicate malformed shared data and are rejected instead of
-   * silently changing the block into a built-in editor type.
-   *
-   * @param block - Stored block map to inspect.
-   * @param id - Block ID included in a descriptive error.
-   * @returns The non-empty native block type.
-   * @throws If shared storage does not contain a valid type.
-   */
-  private requiredType(block: CRDTMap<BlockStorage>, id: string): string {
-    const type = block.get("type");
-    if (typeof type !== "string" || !type) {
-      throw new Error(`Block ${id} has no type`);
-    }
-    return type;
   }
 
   /**

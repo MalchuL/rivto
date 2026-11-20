@@ -9,4 +9,4 @@ export * from "./keyboard";
 export * from "../blocks/block-dom";
 export { PanelDOM } from "../panels/panel-dom";
 export * from "../dom/dom-nodes";
-export type { PanelRegistration } from "../panels/types";
+export type { PanelRegistration } from "./events/api";

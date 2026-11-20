@@ -94,6 +94,8 @@ List/collapse metadata хранится в canonical `block.listProps`. `listSho
 
 `separatorBlockExtension()` регистрирует type `SEPARATOR_BLOCK_TYPE` (`"separator"`). В page mode он показывает separator; в edgeless root flow он разделяет block cards. Enter/delete behavior создаёт подходящий default writing block через runtime factory.
 
+Дочерние блоки separator в Page отображаются в общей пунктирной рамке с непрозрачностью 50% по умолчанию. Её можно настроить через CSS-переменную `--rivto-separator-children-opacity`, например `0.8`. Рамку можно свернуть; внутри сохраняются обычные вложенность и перетаскивание блоков. Линия вложенности первого уровня не рисуется, линии более глубоких уровней сохраняются. В Edgeless дочерние блоки корневого separator не отображаются, а вложенный separator остаётся частью своей карточки.
+
 ## Custom page chrome
 
 Toolbar, breadcrumbs и document title лучше рендерить children `EditorPanel`, а не persisted blocks, если они не являются частью документа. Именно так demo держит journal date и mode toolbar вне CRDT state.

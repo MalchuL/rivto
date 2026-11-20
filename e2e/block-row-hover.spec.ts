@@ -128,7 +128,10 @@ class HoverLayoutFixture {
     return {
       id: "board",
       type: layout,
-      children: children.map((block) => ({ ...block, props: { bentoWidth: 400 } })),
+      children: children.map((block) => ({
+        ...block,
+        pluginData: { bentoWidth: 400 },
+      })),
     };
   }
 }

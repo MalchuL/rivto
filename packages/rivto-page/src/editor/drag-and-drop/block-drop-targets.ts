@@ -22,11 +22,10 @@ import type { BlockEditorResourceOwner } from "../extensions/block-editor-resour
 import type {
   BlockDropLayoutRegistration,
   BlockDropPoint,
+  BlockDropDestination,
   BlockDropAcceptance,
   BlockDropTargetsApi,
   BlockDropTargetRegistration,
-  BlockDropDestination,
-  BetweenBlockDropDestination,
   ResolvedBlockDropTarget,
 } from "./types";
 
@@ -92,6 +91,24 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * boundaries retain their measured line, including indented child append choices.
    * Missing shells retain anchor feedback.
    *
+   * A nearer layout bounds discovery even when its source policy later rejects the
+   * candidate. Explicitly excluded areas and inert virtual space never redirect
+   * to an outer target. A matching descendant region remains eligible before that
+   * boundary; exclusion wins over registrations on its own element. Control
+   * semantics do not imply drop exclusion.
+   * A rounded hit outside a layout's physical bounds can reach an explicitly
+   * registered ancestor layout or region; occupied layouts still bound discovery.
+   * The nearest inside declaration is retained while checking placement edges up
+   * to that layout boundary; content must not shadow its wrapper's declared edge.
+   * Ancestor sibling rims are checked before local body/background discovery,
+   * keeping outer boundaries reachable through nested lists without promoting
+   * ancestor inside bands. An actual nearer item edge keeps its explicit depth
+   * choices before ancestor fallback. Exclusions still stop that bounded ancestor walk.
+   * The first local edge is retained until the layout can normalize shared feedback;
+   * unrelated ancestor registrations cannot replace that winner. A contained
+   * block-shell inside hit needs no sibling search because its coordinate is not
+   * a gap. Custom inside wrappers can span several anchors and still require it.
+   *
    * @param clientX - Viewport X coordinate in CSS pixels.
    * @param clientY - Viewport Y coordinate in CSS pixels.
    * @param excluded - Captured moving roots omitted after validating the registered gap.
@@ -117,20 +134,45 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       nativeHit?.isConnected && nativeHit.ownerDocument === root.ownerDocument
         ? nativeHit
         : root.ownerDocument.elementFromPoint(clientX, clientY);
-    // Geometry chooses exactly one candidate before model and source policy run.
-    const candidate = this.resolvePoint(hit, { x: clientX, y: clientY }, excluded);
-    if (!candidate) {
+    const point = { x: clientX, y: clientY };
+    // When all children move, the first-child seam also exposes the parent's
+    // trailing depth choices. Otherwise resolve the ordinary hit geometry.
+    // Both paths choose one candidate before destination and source validation.
+    if (!hit || !root.contains(hit) || hit.closest("[data-rivto-block-editor]") !== root) {
       return undefined;
+    }
+    let candidate = this.resolveFirstChildBoundaryForMovingChildren(hit, point, excluded);
+    if (!candidate) {
+      const target =
+        this.resolveNestedBoundary(hit, point, root, excluded) ??
+        this.resolveLocalTarget(hit, point, root);
+      if (!target) {
+        // No registered edge, body or gap owns this point.
+        return undefined;
+      }
+      const aligned = this.normalizeOutlineBoundary(target, point, hit, root);
+      candidate = this.normalizeTerminalDepth(aligned, point);
     }
     const destination = this.currentDestination(candidate.destination, excluded);
     if (!destination) {
+      // The winning geometry no longer describes a valid destination.
       return undefined;
     }
     const target = { ...candidate, destination };
     if (accepts && !accepts(target.destination)) {
       return undefined;
     }
-    return this.withInsideOutline(target);
+    // A boundary retains its insertion line. A body hit highlights the receiving shell.
+    if (destination.kind === "inside" && !target.indicator) {
+      return {
+        ...target,
+        outlineElement:
+          destination.parentId === null
+            ? undefined
+            : this.regions.get(destination.parentId, "shell"),
+      };
+    }
+    return target;
   }
 
   /**
@@ -151,309 +193,97 @@ export class BlockDropTargets implements BlockDropTargetsApi {
   }
 
   /**
-   * Walks visible hit ancestors, resolving local geometry before validating any destination.
+   * Exposes the parent's row boundary when all its children are being moved.
+   * Only an ordinary outline participates. The live child list prevents hidden
+   * or stationary children from being bypassed. Both sides of the first child
+   * boundary share the parent's existing trailing depth choices and line.
    *
-   * A nearer layout bounds discovery even when its source policy later rejects the
-   * candidate. Explicitly excluded areas and inert virtual space never redirect
-   * to an outer target. A matching descendant region remains eligible before that
-   * boundary; exclusion wins over registrations on its own element. Control
-   * semantics do not imply drop exclusion.
-   * A rounded hit outside a layout's physical bounds can reach an explicitly
-   * registered ancestor layout or region; occupied layouts still bound discovery.
-   * The nearest inside declaration is retained while checking placement edges up
-   * to that layout boundary; content must not shadow its wrapper's declared edge.
-   * Ancestor sibling rims are checked before local body/background discovery,
-   * keeping outer boundaries reachable through nested lists without promoting
-   * ancestor inside bands. An actual nearer item edge keeps its explicit depth
-   * choices before ancestor fallback. Exclusions still stop that bounded ancestor walk.
-   * The first local edge is retained until the layout can normalize shared feedback;
-   * unrelated ancestor registrations cannot replace that winner. A contained
-   * block-shell inside hit needs no sibling search because its coordinate is not
-   * a gap. Custom inside wrappers can span several anchors and still require it.
-   *
-   * @param hit - Connected native hit from the current occurrence.
-   * @param point - Current viewport position.
-   * @param excluded - Captured moving roots; their adjacent boundary does not reserve a stationary shared seam.
-   * @returns First local winner, or undefined for neutral/occluded/foreign geometry.
+   * @param hit - Native hit inside the editor.
+   * @param point - Current viewport pointer coordinates.
+   * @param excluded - Captured moving root IDs.
+   * @returns Parent row boundary at the chosen outline depth, otherwise undefined.
    */
-  private resolvePoint(
-    hit: Element | null,
+  private resolveFirstChildBoundaryForMovingChildren(
+    hit: Element,
     point: BlockDropPoint,
     excluded?: ReadonlySet<string>,
   ): ResolvedBlockDropTarget | undefined {
-    const root = this.getRoot();
-    if (!root || !hit || !this.isEditorHit(root, hit)) {
-      return;
-    }
-    // Reserve shared sibling seams before a nested body or list can consume them.
-    const target =
-      this.resolveNestedBoundary(hit, point, root, excluded) ??
-      this.resolveLocalTarget(hit, point, root);
-    // Align the seam first, then restore the depth choices hidden below it.
-    return (
-      target &&
-      this.normalizeTerminalDepth(this.normalizeOutlineBoundary(target, point, hit, root), point)
-    );
-  }
-
-  /**
-   * Extends a shared outline seam through its mounted terminal descendants.
-   *
-   * The next sibling can own the native hit below a seam, so its preceding
-   * anchor must supply the same descendant depth choices as the upper edge.
-   * Only ordinary outline child lists ending at that physical seam participate.
-   * The last mounted child must also be the last canonical child; an unmounted
-   * terminal child cannot supply a depth choice. Each eligible descendant uses
-   * the pointer's horizontal position, while the shared line keeps its vertical
-   * position. Local child scopes and other layout axes retain their own behavior.
-   *
-   * @param target - Locally resolved boundary and its shared line.
-   * @param point - Viewport pointer selecting the outline depth.
-   * @returns The deepest eligible depth choice with the original seam position.
-   */
-  private normalizeTerminalDepth(
-    target: ResolvedBlockDropTarget,
-    point: BlockDropPoint,
-  ): ResolvedBlockDropTarget {
-    if (target.region?.kind !== "gap" || target.region.axis !== "vertical" || !target.indicator) {
-      return target;
-    }
-    let entry = target.region.previous;
-    let result = target;
-    let seam: number | undefined;
-    while (true) {
-      // Follow registered child lists only; local layouts do not continue the outline.
-      const id = entry.element.dataset.blockId;
-      const children = id && this.regions.get(id, "children", entry.element);
-      const layout = children && this.layouts.get(children);
-      if (!layout || layout.axis !== "vertical" || !continuesDropOutline(entry.element)) {
-        break;
-      }
-      const items = layout.getItems();
-      const child = items?.[items.length - 1];
-      if (!child) {
-        break;
-      }
-      seam ??= entry.element.getBoundingClientRect().bottom;
-      const geometry = readDropGeometry(child.element);
-      const region = child
-        .getRegions()
-        .find(
-          (candidate) =>
-            candidate.kind === "edge" && candidate.side === "block-end" && candidate.depth,
-        );
-      // A mounted last item is insufficient if another canonical child follows it.
-      // The one-pixel tolerance accommodates fractional layout measurements.
-      if (
-        !region ||
-        region.kind !== "edge" ||
-        region.destination.kind !== "between" ||
-        region.destination.nextId !== null ||
-        Math.abs(geometry.rect.bottom - seam) > 1
-      ) {
-        break;
-      }
-      const bounds = dropEdgeRect(region, geometry);
-      // Do not promote a descendant whose depth bands do not cover the pointer.
-      if (point.x < bounds.left || point.x > bounds.right) {
-        break;
-      }
-      const descendant = dropRegionTarget(child, region, geometry, point);
-      if (descendant.indicator) {
-        // Keep the descendant's destination and indentation on the shared seam.
-        result = {
-          ...descendant,
-          indicator: { ...descendant.indicator, top: target.indicator.top },
-        };
-      }
-      entry = child;
-    }
-    return result;
-  }
-
-  /**
-   * Aligns an outline edge with the shared gap at its selected ancestor or append level.
-   *
-   * A terminal descendant's gutter can select an ancestor boundary before that
-   * ancestor's own inset strip starts. An equivalent merged sibling gap or a
-   * terminal descendant sharing its physical bottom may replace its line;
-   * destination, depth and declared hit ownership stay unchanged.
-   * A local child layout can append to the same parent at a physically distinct
-   * boundary; its own line must not jump to the enclosing owner's outer edge.
-   * Terminal child append and parent-inside choices share that same physical seam,
-   * even when the selected child edge remains local to its own list.
-   * The walk uses mounted ancestor layouts and their bounded neighbor search;
-   * exclusions, separate boundaries and virtual holes retain their existing rules.
-   *
-   * @param target - Physical winner before live destination and source-policy checks.
-   * @param point - Viewport coordinates selecting the existing outline depth.
-   * @param hit - Native hit already admitted to this editor occurrence.
-   * @param root - Attached editor bounding the ancestor walk.
-   * @returns Original target with shared line geometry, or unchanged without an equivalent gap.
-   */
-  private normalizeOutlineBoundary(
-    target: ResolvedBlockDropTarget,
-    point: BlockDropPoint,
-    hit: Element,
-    root: HTMLElement,
-  ): ResolvedBlockDropTarget {
+    const hitShell = hit.closest<HTMLElement>("[data-block-id]");
+    const hitId = hitShell?.dataset.blockId;
+    // The pointer can be in an ancestor gutter outside the moving child's shell.
+    const onlySource = excluded?.size === 1 ? excluded.values().next().value : undefined;
+    const id = onlySource ? this.blocks.getParentId(onlySource) : hitId;
+    const shell = id ? this.regions.get(id, "shell") : undefined;
+    // A gutter hit may belong to an ancestor, but an unrelated block, excluded
+    // control, or self-contained child layout must keep its own drop behavior.
     if (
-      target.element === root ||
-      !target.indicator ||
-      target.region?.kind !== "edge" ||
-      !target.region.depth
+      !shell ||
+      !id ||
+      !hitShell ||
+      (!shell.contains(hitShell) && !hitShell.contains(shell)) ||
+      !excluded?.size ||
+      hit.closest(`[${BLOCK_DROP_EXCLUDE_ATTRIBUTE}]`) ||
+      !continuesDropOutline(shell)
     ) {
-      return target;
+      return undefined;
     }
-    for (let element = target.element.parentElement; element; element = element.parentElement) {
-      if (element.hasAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE)) {
-        break;
-      }
-      const layout = this.layouts.get(element);
-      const gap = layout && resolveLayoutGap(layout, point, hit, target);
-      const separateLocalBoundary =
-        gap?.region?.kind === "gap" &&
-        gap.indicator &&
-        !continuesDropOutline(gap.region.previous.element) &&
-        gap.region.previous.element.contains(target.element) &&
-        target.destination.parentId === gap.region.previous.element.dataset.blockId &&
-        Math.abs(gap.indicator.top - target.indicator.top) > 1;
-      // A deeper destination can share the same physical seam without being the
-      // ancestor gap's canonical destination; borrow its line, not its destination.
-      if (
-        gap?.region?.kind === "gap" &&
-        !separateLocalBoundary &&
-        (sameOutlineBoundary(gap.destination, target.destination) ||
-          (gap.region.previous.element.contains(target.element) &&
-            Math.abs(
-              gap.region.previous.element.getBoundingClientRect().bottom -
-                target.element.getBoundingClientRect().bottom,
-            ) <= 1))
-      ) {
-        return { ...target, indicator: gap.indicator };
-      }
-      if (element === root) {
-        break;
-      }
+    const children = this.blocks.getBlockNode(id)?.childIds;
+    const row = this.regions.get(id, "row", shell);
+    // Use canonical children, including unmounted ones: a stationary child
+    // must not be crossed by a sibling drop on the parent's row.
+    if (!row || !children?.length || !children.every((child) => excluded.has(child))) {
+      return undefined;
     }
-    return target;
-  }
-
-  /**
-   * Checks that a native hit belongs to this occurrence rather than a nested editor.
-   *
-   * @param root - Current editor attachment.
-   * @param hit - Native hit whose registered ancestors may be inspected.
-   * @returns True only for a contained hit whose nearest editor is this attachment.
-   */
-  private isEditorHit(root: HTMLElement, hit: Element): boolean {
-    return root.contains(hit) && hit.closest("[data-rivto-block-editor]") === root;
-  }
-
-  /**
-   * Resolves the nearest declared edge or inside area within its owning layout.
-   *
-   * The first edge stops further registration reads but can still be normalized
-   * by its containing list. Inside feedback is retained while looking for that
-   * edge. Exclusion stops the walk after any eligible descendant declaration.
-   *
-   * @param hit - Native hit already checked against the current editor occurrence.
-   * @param point - Viewport coordinates tested against live geometry.
-   * @param root - Attached editor bounding ancestor discovery.
-   * @returns Nearest target or shared gap, or undefined without a matching declaration.
-   */
-  private resolveLocalTarget(
-    hit: Element,
-    point: BlockDropPoint,
-    root: HTMLElement,
-  ): ResolvedBlockDropTarget | undefined {
-    let inside: ResolvedBlockDropTarget | undefined;
-    let edge: ResolvedBlockDropTarget | undefined;
-    for (let element: Element | null = hit; element; element = element.parentElement) {
-      if (element.hasAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE)) {
-        return edge ?? inside;
-      }
-      const entries = this.targets.get(element as HTMLElement);
-      const target = !edge && entries ? this.resolveEntries(entries, point, hit) : undefined;
-      if (target && target.region?.kind !== "inside") {
-        edge = target;
-      }
-      if (target?.region?.kind === "inside") {
-        inside ??= target;
-      }
-      const layout = edge ? this.layouts.get(element as HTMLElement) : this.readLayout(element);
-      const gap = this.resolveLocalGap(layout, point, hit, edge, inside);
-      if (gap) {
-        return gap;
-      }
-      if (element === root || this.stopsLocalSearch(element, layout, point, edge ?? inside)) {
-        return edge ?? inside;
+    const childId = children[0]!;
+    const parentBlockId = shell.dataset.blockId!;
+    const geometry = readDropGeometry(shell);
+    const rowRect = row.getBoundingClientRect();
+    // The shell includes descendants; substitute only the row bounds so the
+    // existing trailing edge paints and resolves depth at the first-child seam.
+    const rowGeometry = { ...geometry, rect: rowRect };
+    for (const entry of this.targets.get(shell) ?? []) {
+      for (const region of entry.getRegions()) {
+        if (region.kind !== "edge" || region.side !== "block-end" || !region.depth) {
+          continue;
+        }
+        const edge = dropEdgeRect(region, rowGeometry);
+        const first = this.regions.get(childId, "row", shell)?.getBoundingClientRect();
+        // Extend the same edge through the adjacent first-child strip, but do
+        // not bridge a larger layout gap or target an unmounted first child.
+        if (
+          !first ||
+          first.top - rowRect.bottom > edge.height ||
+          point.y < edge.top ||
+          point.y > first.top + edge.height
+        ) {
+          continue;
+        }
+        // Clamp only Y: the shared trailing-edge resolver still uses the actual
+        // horizontal pointer position to choose sibling and ancestor depths.
+        const edgePoint = { x: point.x, y: Math.min(point.y, rowRect.bottom) };
+        if (!containsDropRegion(shell, region, rowGeometry, edgePoint, hit)) {
+          continue;
+        }
+        const target = dropRegionTarget(entry, region, rowGeometry, edgePoint);
+        if (target.destination.kind === "inside" && target.destination.parentId === parentBlockId) {
+          // The child-depth choice here inserts before the first child, not after it.
+          return {
+            ...target,
+            destination: {
+              kind: "between",
+              parentId: parentBlockId,
+              previousId: null,
+              nextId: childId,
+            },
+          };
+        }
+        return target;
       }
     }
-    return edge ?? inside;
-  }
-
-  /**
-   * Searches list gaps unless a contained block body has already claimed this point.
-   *
-   * An inside wrapper spanning multiple anchors still needs gap discovery. A
-   * selected edge also needs the list to normalize its physical feedback.
-   *
-   * @param layout - Registered or owner-bounded list, absent outside list scope.
-   * @param point - Viewport coordinates tested by the list resolver.
-   * @param hit - Native hit limiting background and adjacent-anchor ownership.
-   * @param edge - First matched edge, retained while walking ancestors.
-   * @param inside - First matched inside declaration, if any.
-   * @returns Matching shared gap, or undefined when the body owns the point or no gap matches.
-   */
-  private resolveLocalGap(
-    layout: BlockDropLayoutRegistration | undefined,
-    point: BlockDropPoint,
-    hit: Element,
-    edge?: ResolvedBlockDropTarget,
-    inside?: ResolvedBlockDropTarget,
-  ): ResolvedBlockDropTarget | undefined {
-    if (!layout) {
-      return;
-    }
-    const bodyOwnsPoint =
-      inside &&
-      inside.element !== layout.element &&
-      (inside.element.hasAttribute("data-block-id") ||
-        (inside.destination.kind === "inside" &&
-          inside.destination.parentId !== null &&
-          this.regions.get(inside.destination.parentId, "row")?.contains(inside.element)));
-    if (bodyOwnsPoint && !edge) {
-      return;
-    }
-    return resolveLayoutGap(layout, point, hit, edge);
-  }
-
-  /**
-   * Stops local discovery at an occupied layout without trapping rounded outside hits.
-   *
-   * A rounded native hit can enter a child layout while the point remains in its
-   * ancestor's free space. Only occupied layout bounds stop lookup when no target
-   * has matched; an already matched target needs no extra rectangle read.
-   *
-   * @param element - Current ancestor, also the measured host for this decision.
-   * @param layout - List associated with that ancestor, if any.
-   * @param point - Viewport pointer coordinates.
-   * @param target - First edge or inside declaration retained by the walk.
-   * @returns True for a list with a retained target or containing physical bounds.
-   */
-  private stopsLocalSearch(
-    element: Element,
-    layout: BlockDropLayoutRegistration | undefined,
-    point: BlockDropPoint,
-    target?: ResolvedBlockDropTarget,
-  ): boolean {
-    return Boolean(layout && (target || containsDropPoint(element.getBoundingClientRect(), point)));
   }
 
   /**
    * Resolves local row gaps and exposed ancestor sibling rims across nested layouts.
-   *
    * Ancestor fallback considers only an actual edge beyond a nested layout;
    * ancestor body and background append declarations never gain priority.
    * An owner's bounded child layout also participates when a native hit lands
@@ -492,7 +322,7 @@ export class BlockDropTargets implements BlockDropTargetsApi {
     let hasOuterPerpendicularLayout = false;
     for (let element: Element | null = hit; element; element = element.parentElement) {
       if (element.hasAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE)) {
-        return;
+        return undefined;
       }
       const layout = this.readLayout(element);
       hasOuterPerpendicularLayout ||= areDropAxesPerpendicular(innerLayout?.axis, layout?.axis);
@@ -509,52 +339,294 @@ export class BlockDropTargets implements BlockDropTargetsApi {
         return gap ?? resolveLayoutGap(layout, point, hit, ancestorEdge) ?? ancestorEdge;
       }
       const entries = !ancestorEdge && this.targets.get(element as HTMLElement);
-      const target = entries ? this.resolveEntries(entries, point, hit) : undefined;
-      if (!innerLayout && isLocalOutlineEdge(target)) {
-        nearestOutlineEdge ??= target;
+      const registeredTarget = entries ? this.resolveEntries(entries, point, hit) : undefined;
+      if (!innerLayout && isLocalOutlineEdge(registeredTarget)) {
+        nearestOutlineEdge ??= registeredTarget;
       }
-      const sameAppend = this.isSameAppendBoundary(target, nearestOutlineEdge);
-      if (innerLayout && target && (this.isSiblingEdge(target) || sameAppend)) {
+      // Appending inside the parent and dropping after its last child share a seam.
+      const sameAppend =
+        registeredTarget?.region?.kind === "edge" &&
+        registeredTarget.region.side === "block-end" &&
+        registeredTarget.destination.kind === "inside" &&
+        nearestOutlineEdge?.destination.kind === "between" &&
+        nearestOutlineEdge.destination.nextId === null &&
+        nearestOutlineEdge.destination.parentId === registeredTarget.destination.parentId;
+      const siblingEdge =
+        registeredTarget?.region?.kind === "edge" &&
+        registeredTarget.destination.kind === "between";
+      if (innerLayout && registeredTarget && (siblingEdge || sameAppend)) {
         if (
           nearestOutlineEdge &&
           !sameAppend &&
-          !prefersOuterSiblingEdge(target, nearestOutlineEdge, excluded)
+          !prefersOuterSiblingEdge(registeredTarget, nearestOutlineEdge, excluded)
         ) {
-          return;
+          return undefined;
         }
-        ancestorEdge = target;
+        ancestorEdge = registeredTarget;
       }
       innerLayout ??= layout;
       if (element === root) {
-        return ancestorEdge;
+        break;
       }
     }
     return ancestorEdge;
   }
 
   /**
-   * Recognizes equivalent terminal append choices at two outline levels.
+   * Resolves the nearest declared edge or inside area within its owning layout.
+   * The first edge stops further registration reads but can still be normalized
+   * by its containing list. Inside feedback is retained while looking for that
+   * edge. Exclusion stops the walk after any eligible descendant declaration.
    *
-   * An inside choice on the parent's trailing edge and a gap after its last
-   * child describe the same append. Normalizing through the parent's containing
-   * list keeps their shared line stationary while crossing the physical seam.
-   *
-   * @param outer - Ancestor edge, absent before reaching a matching declaration.
-   * @param inner - Nearest outline edge, absent outside a child boundary.
-   * @returns True for a trailing parent-inside choice matching a terminal child gap.
+   * @param hit - Native hit already checked against the current editor occurrence.
+   * @param point - Viewport coordinates tested against live geometry.
+   * @param root - Attached editor bounding ancestor discovery.
+   * @returns Nearest target or shared gap, or undefined without a matching declaration.
    */
-  private isSameAppendBoundary(
-    outer: ResolvedBlockDropTarget | undefined,
-    inner: ResolvedBlockDropTarget | undefined,
-  ): boolean {
-    return (
-      outer?.region?.kind === "edge" &&
-      outer.region.side === "block-end" &&
-      outer.destination.kind === "inside" &&
-      inner?.destination.kind === "between" &&
-      inner.destination.nextId === null &&
-      inner.destination.parentId === outer.destination.parentId
-    );
+  private resolveLocalTarget(
+    hit: Element,
+    point: BlockDropPoint,
+    root: HTMLElement,
+  ): ResolvedBlockDropTarget | undefined {
+    let inside: ResolvedBlockDropTarget | undefined;
+    let edge: ResolvedBlockDropTarget | undefined;
+    for (let element: Element | null = hit; element; element = element.parentElement) {
+      if (element.hasAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE)) {
+        break;
+      }
+      const entries = this.targets.get(element as HTMLElement);
+      const declaration = !edge && entries ? this.resolveEntries(entries, point, hit) : undefined;
+      if (declaration && declaration.region?.kind !== "inside") {
+        edge = declaration;
+      }
+      if (declaration?.region?.kind === "inside") {
+        inside ??= declaration;
+      }
+      const layout = edge ? this.layouts.get(element as HTMLElement) : this.readLayout(element);
+      // A contained block body owns its point. A wrapper spanning multiple anchors
+      // still needs a gap lookup, as does an edge awaiting shared line geometry.
+      if (layout) {
+        const bodyOwnsPoint =
+          inside &&
+          inside.element !== layout.element &&
+          (inside.element.hasAttribute("data-block-id") ||
+            (inside.destination.kind === "inside" &&
+              inside.destination.parentId !== null &&
+              this.regions.get(inside.destination.parentId, "row")?.contains(inside.element)));
+        if (edge || !bodyOwnsPoint) {
+          const gap = resolveLayoutGap(layout, point, hit, edge);
+          if (gap) {
+            return gap;
+          }
+        }
+      }
+      // Rounded corners can report a hit outside this layout's occupied bounds.
+      if (
+        element === root ||
+        (layout && (edge || inside || containsDropPoint(element.getBoundingClientRect(), point)))
+      ) {
+        break;
+      }
+    }
+    return edge ?? inside;
+  }
+
+  /**
+   * Aligns an outline edge with the shared gap at its selected ancestor or append level.
+   * A terminal descendant's gutter can select an ancestor boundary before that
+   * ancestor's own inset strip starts. An equivalent merged sibling gap or a
+   * terminal descendant sharing its physical bottom may replace its line;
+   * destination, depth and declared hit ownership stay unchanged.
+   * A local child layout can append to the same parent at a physically distinct
+   * boundary; its own line must not jump to the enclosing owner's outer edge.
+   * Terminal child append and parent-inside choices share that same physical seam,
+   * even when the selected child edge remains local to its own list.
+   * The walk uses mounted ancestor layouts and their bounded neighbor search;
+   * exclusions, separate boundaries and virtual holes retain their existing rules.
+   *
+   * @param target - Physical winner before live destination and source-policy checks.
+   * @param point - Viewport coordinates selecting the existing outline depth.
+   * @param hit - Native hit already admitted to this editor occurrence.
+   * @param root - Attached editor bounding the ancestor walk.
+   * @returns Original target with shared line geometry, or unchanged without an equivalent gap.
+   */
+  private normalizeOutlineBoundary(
+    target: ResolvedBlockDropTarget,
+    point: BlockDropPoint,
+    hit: Element,
+    root: HTMLElement,
+  ): ResolvedBlockDropTarget {
+    if (
+      target.element !== root &&
+      target.indicator &&
+      target.region?.kind === "edge" &&
+      target.region.depth
+    ) {
+      for (let element = target.element.parentElement; element; element = element.parentElement) {
+        if (element.hasAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE)) {
+          break;
+        }
+        const layout = this.layouts.get(element);
+        const gap = layout && resolveLayoutGap(layout, point, hit, target);
+        const separateLocalBoundary =
+          gap?.region?.kind === "gap" &&
+          gap.indicator &&
+          !continuesDropOutline(gap.region.previous.element) &&
+          gap.region.previous.element.contains(target.element) &&
+          target.destination.parentId === gap.region.previous.element.dataset.blockId &&
+          Math.abs(gap.indicator.top - target.indicator.top) > 1;
+        // A deeper destination can share the same physical seam without being the
+        // ancestor gap's canonical destination; borrow its line, not its destination.
+        if (
+          gap?.region?.kind === "gap" &&
+          !separateLocalBoundary &&
+          (sameOutlineBoundary(gap.destination, target.destination) ||
+            (gap.region.previous.element.contains(target.element) &&
+              Math.abs(
+                gap.region.previous.element.getBoundingClientRect().bottom -
+                  target.element.getBoundingClientRect().bottom,
+              ) <= 1))
+        ) {
+          target = { ...target, indicator: gap.indicator };
+          break;
+        }
+        if (element === root) {
+          break;
+        }
+      }
+    }
+    return target;
+  }
+
+  /**
+   * Extends a shared outline seam through its mounted terminal descendants.
+   * The next sibling can own the native hit below a seam, so its preceding
+   * anchor must supply the same descendant depth choices as the upper edge.
+   * Only ordinary outline child lists ending at that physical seam participate.
+   * The last mounted child must also be the last canonical child; an unmounted
+   * terminal child cannot supply a depth choice. Each eligible descendant uses
+   * the pointer's horizontal position, while the shared line keeps its vertical
+   * position. Local child scopes and other layout axes retain their own behavior.
+   *
+   * @param target - Locally resolved boundary and its shared line.
+   * @param point - Viewport pointer selecting the outline depth.
+   * @returns The deepest eligible depth choice with the original seam position.
+   */
+  private normalizeTerminalDepth(
+    target: ResolvedBlockDropTarget,
+    point: BlockDropPoint,
+  ): ResolvedBlockDropTarget {
+    let candidate = target;
+    if (target.region?.kind === "gap" && target.region.axis === "vertical" && target.indicator) {
+      let entry = target.region.previous;
+
+      let seam: number | undefined;
+      while (true) {
+        // Follow registered child lists only; local layouts do not continue the outline.
+        const id = entry.element.dataset.blockId;
+        const children = id && this.regions.get(id, "children", entry.element);
+        const layout = children && this.layouts.get(children);
+        if (!layout || layout.axis !== "vertical" || !continuesDropOutline(entry.element)) {
+          break;
+        }
+        const items = layout.getItems();
+        const child = items?.[items.length - 1];
+        if (!child) {
+          break;
+        }
+        seam ??= entry.element.getBoundingClientRect().bottom;
+        const geometry = readDropGeometry(child.element);
+        const region = child
+          .getRegions()
+          .find(
+            (candidate) =>
+              candidate.kind === "edge" && candidate.side === "block-end" && candidate.depth,
+          );
+        // A mounted last item is insufficient if another canonical child follows it.
+        // The one-pixel tolerance accommodates fractional layout measurements.
+        if (
+          !region ||
+          region.kind !== "edge" ||
+          region.destination.kind !== "between" ||
+          region.destination.nextId !== null ||
+          Math.abs(geometry.rect.bottom - seam) > 1
+        ) {
+          break;
+        }
+        const bounds = dropEdgeRect(region, geometry);
+        // Do not promote a descendant whose depth bands do not cover the pointer.
+        if (point.x < bounds.left || point.x > bounds.right) {
+          break;
+        }
+        const descendant = dropRegionTarget(child, region, geometry, point);
+        if (descendant.indicator) {
+          // Keep the descendant's destination and indentation on the shared seam.
+          candidate = {
+            ...descendant,
+            indicator: { ...descendant.indicator, top: target.indicator.top },
+          };
+        }
+        entry = child;
+      }
+    }
+    return candidate;
+  }
+
+  /**
+   * Validates a candidate against live actual children rather than displayed roots or CSS.
+   *
+   * @param destination - Candidate owned by a mounted region.
+   * @param excluded - Captured roots omitted from neighbors after checking the original gap.
+   * @returns Current destination with moving roots omitted, or undefined for a stale parent or gap.
+   * @throws Propagates delegated node-read failures.
+   */
+  private currentDestination(
+    destination: BlockDropDestination,
+    excluded?: ReadonlySet<string>,
+  ): BlockDropDestination | undefined {
+    // Walk only the destination's ancestry to reject a drop inside a moving subtree.
+    if (excluded?.size) {
+      for (
+        let parent = destination.parentId;
+        parent !== null;
+        parent = this.blocks.getParentId(parent) ?? null
+      ) {
+        if (excluded.has(parent)) {
+          return undefined;
+        }
+      }
+    }
+    const childIds =
+      destination.parentId === null
+        ? this.blocks.getRootIds()
+        : this.blocks.getBlockNode(destination.parentId)?.childIds;
+    if (!childIds) {
+      return undefined;
+    }
+    if (destination.kind === "between") {
+      // Validate the physical gap against live siblings before omitting moving neighbors.
+      const index =
+        destination.nextId === null ? childIds.length : childIds.indexOf(destination.nextId);
+      if (index < 0 || (childIds[index - 1] ?? null) !== destination.previousId) {
+        return undefined;
+      }
+      if (excluded?.size) {
+        let previous = index - 1;
+        let next = index;
+        while (previous >= 0 && excluded.has(childIds[previous]!)) {
+          previous--;
+        }
+        while (next < childIds.length && excluded.has(childIds[next]!)) {
+          next++;
+        }
+        destination = {
+          ...destination,
+          previousId: childIds[previous] ?? null,
+          nextId: childIds[next] ?? null,
+        };
+      }
+    }
+    return destination;
   }
 
   /**
@@ -582,26 +654,9 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       ? this.regions.get(blockId, "children", element as HTMLElement)
       : undefined;
     const layout = children && this.layouts.get(children);
-    if (this.canUseOwnerBounds(layout)) {
+    if (layout && layout.axis !== "grid" && layout.gaps && (layout.gutterSize ?? "row") === "row") {
       return { ...layout, element: element as HTMLElement };
     }
-  }
-
-  /**
-   * Identifies child lists whose row continuation includes the owner's free space.
-   *
-   * Numeric and disabled gutters retain their own distance bounds; grid layouts
-   * keep their wrapping background rather than borrowing the whole owner shell.
-   *
-   * @param layout - Owned child registration, absent when its host is not mounted.
-   * @returns True for a linear list with enabled gaps and full-row continuation.
-   */
-  private canUseOwnerBounds(
-    layout: BlockDropLayoutRegistration | undefined,
-  ): layout is BlockDropLayoutRegistration {
-    return Boolean(
-      layout && layout.axis !== "grid" && layout.gaps && (layout.gutterSize ?? "row") === "row",
-    );
   }
 
   /**
@@ -624,7 +679,7 @@ export class BlockDropTargets implements BlockDropTargetsApi {
     for (const entry of entries) {
       for (const region of entry.getRegions()) {
         const regionRank = dropRegionRank(region);
-        if (this.isShadowedRegion(entry.priority, regionRank, priority, rank)) {
+        if (entry.priority < priority || (entry.priority === priority && regionRank <= rank)) {
           continue;
         }
         if (!containsDropRegion(entry.element, region, geometry, point, hit)) {
@@ -636,147 +691,5 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       }
     }
     return selected;
-  }
-
-  /**
-   * Validates a candidate against live actual children rather than displayed roots or CSS.
-   *
-   * @param destination - Candidate owned by a mounted region.
-   * @param excluded - Captured roots omitted from neighbors after checking the original gap.
-   * @returns Current destination with moving roots omitted, or undefined for a stale parent or gap.
-   * @throws Propagates delegated node-read failures.
-   */
-  private currentDestination(
-    destination: BlockDropDestination,
-    excluded?: ReadonlySet<string>,
-  ): BlockDropDestination | undefined {
-    if (this.isMovingSubtree(destination.parentId, excluded)) {
-      return;
-    }
-    const childIds =
-      destination.parentId === null
-        ? this.blocks.getRootIds()
-        : this.blocks.getBlockNode(destination.parentId)?.childIds;
-    if (!childIds) {
-      return;
-    }
-    if (destination.kind === "inside") {
-      return destination;
-    }
-    const index =
-      destination.nextId === null ? childIds.length : childIds.indexOf(destination.nextId);
-    if (index < 0 || (childIds[index - 1] ?? null) !== destination.previousId) {
-      return;
-    }
-    if (!excluded?.size) {
-      return destination;
-    }
-    // Validate the declared physical seam before omitting any moving neighbors.
-    return this.omitMovingNeighbors(destination, childIds, index, excluded);
-  }
-
-  /**
-   * Detects destinations inside a captured moving root through live parent links.
-   *
-   * @param parentId - Receiving parent, or null for document roots.
-   * @param excluded - Captured moving roots; absent or empty skips all parent reads.
-   * @returns True when this parent or one of its ancestors belongs to the moving group.
-   * @throws Propagates delegated parent-read failures.
-   */
-  private isMovingSubtree(parentId: string | null, excluded?: ReadonlySet<string>): boolean {
-    if (!excluded?.size) {
-      return false;
-    }
-    for (let parent = parentId; parent !== null; parent = this.blocks.getParentId(parent) ?? null) {
-      if (excluded.has(parent)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Removes contiguous moving neighbors from an already validated canonical gap.
-   *
-   * Feedback remains at the original physical seam; only destination IDs change.
-   *
-   * @param destination - Gap whose original neighbors were checked against childIds.
-   * @param childIds - Live ordered children of the receiving parent.
-   * @param index - Position of the gap's original next child, or childIds.length at the end.
-   * @param excluded - Nonempty captured moving roots to skip on both sides.
-   * @returns A new gap bounded by the nearest stationary children or null endpoints.
-   */
-  private omitMovingNeighbors(
-    destination: BetweenBlockDropDestination,
-    childIds: readonly string[],
-    index: number,
-    excluded: ReadonlySet<string>,
-  ): BetweenBlockDropDestination {
-    let previous = index - 1;
-    let next = index;
-    while (previous >= 0 && excluded.has(childIds[previous]!)) {
-      previous -= 1;
-    }
-    while (next < childIds.length && excluded.has(childIds[next]!)) {
-      next += 1;
-    }
-    return {
-      kind: "between",
-      parentId: destination.parentId,
-      previousId: childIds[previous] ?? null,
-      nextId: childIds[next] ?? null,
-    };
-  }
-
-  /**
-   * Recognizes a matched edge whose selected destination sorts canonical siblings.
-   *
-   * @param target - Current ancestor candidate, possibly absent or an inside area.
-   * @returns True for an explicit edge selecting a between destination.
-   */
-  private isSiblingEdge(
-    target: ResolvedBlockDropTarget | undefined,
-  ): target is ResolvedBlockDropTarget {
-    return target?.region?.kind === "edge" && target.destination.kind === "between";
-  }
-
-  /**
-   * Preserves the selected region against lower priority or later equal-rank declarations.
-   *
-   * Priority precedes axis rank. Equal priority and rank retain registration order.
-   *
-   * @param priority - Finite priority of the registration currently being tested.
-   * @param rank - Axis rank of its live region.
-   * @param selectedPriority - Winning priority, or negative infinity before any match.
-   * @param selectedRank - Winning rank, or negative one before any match.
-   * @returns True when the tested region cannot replace the current selection.
-   */
-  private isShadowedRegion(
-    priority: number,
-    rank: number,
-    selectedPriority: number,
-    selectedRank: number,
-  ): boolean {
-    return priority < selectedPriority || (priority === selectedPriority && rank <= selectedRank);
-  }
-
-  /**
-   * Adds complete hierarchy feedback to an accepted body or background destination.
-   *
-   * Boundary-derived inside destinations keep their insertion line. Missing shells
-   * retain anchor feedback; document-root append has no parent hierarchy outline.
-   *
-   * @param target - Geometry winner after live destination and source-policy checks.
-   * @returns The original boundary target, or an inside target with its registered shell.
-   */
-  private withInsideOutline(target: ResolvedBlockDropTarget): ResolvedBlockDropTarget {
-    if (target.destination.kind !== "inside" || target.indicator) {
-      return target;
-    }
-    const parentId = target.destination.parentId;
-    return {
-      ...target,
-      outlineElement: parentId === null ? undefined : this.regions.get(parentId, "shell"),
-    };
   }
 }

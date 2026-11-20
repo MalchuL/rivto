@@ -695,7 +695,12 @@ for (const mode of ["block", "edgeless"] as const) {
         }
       }
     }
-    await page.mouse.move(box.x + box.width - 20, box.y + box.height * 0.25);
+    // The side strips above can select a sibling seam. Commit inside the parent
+    // row, whose height stays independent of the tile's nested children.
+    const parentRow = (await page
+      .locator('[data-block-id="first"] > .rivto-block-row')
+      .boundingBox())!;
+    await page.mouse.move(parentRow.x + parentRow.width - 20, parentRow.y + parentRow.height / 2);
     await expect(page.locator('[data-block-id="first"]')).toHaveAttribute(
       "data-block-drop-active",
       "true",

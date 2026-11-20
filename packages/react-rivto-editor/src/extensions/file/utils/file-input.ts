@@ -115,14 +115,13 @@ export function findLocalFileUris(text: string): string[] {
 }
 
 /**
- * Reads local paths exposed by the clipboard, preferring URI-list data.
+ * Reads local paths exposed by the clipboard as URI-list data.
  *
  * @param data - Clipboard data, or null when unavailable.
  * @returns Local paths in source order, or an empty array when none are available.
  */
 export function findTransferredLocalFileUris(data: Pick<DataTransfer, "getData"> | null): string[] {
-  const uris = findLocalFileUris(data?.getData("text/uri-list") ?? "");
-  return uris.length ? uris : findLocalFileUris(data?.getData("text/plain") ?? "");
+  return findLocalFileUris(data?.getData("text/uri-list") ?? "");
 }
 
 /**

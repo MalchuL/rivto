@@ -16,6 +16,7 @@ import {
   blockTypeSelector,
 } from "./dom-markers";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+import type { ReactEditor } from "@chulane/rivto-react";
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
 const MARKDOWN_CODE_EDITOR_CLASS = "markdown-code-editor";
@@ -402,6 +403,48 @@ test("filters typo queries, converts in place, and undoes query removal with con
   await expect(converted.locator("[data-block-content]")).toHaveText(`${initial}/sloder`);
 });
 
+test("updates slash search after a second slash", async ({ page }) => {
+  const content = page.locator('[data-journal-document="today"] [data-block-content]').last();
+  await content.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("//text");
+  const menu = page.locator("[data-slash-menu]");
+  await expect(menu.locator('[data-slash-command="type.paragraph"]')).toHaveAttribute(
+    "data-active",
+    "true",
+  );
+  await expect(menu.locator('[data-slash-command="type.demo.slider"]')).toHaveCount(0);
+});
+
+test("refreshes content-dependent slash availability while typing", async ({ page }) => {
+  const id = await page.evaluate(() => {
+    const { editor, reactEditor } = (
+      window as unknown as {
+        __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditor };
+      }
+    ).__rivtoDemo;
+    reactEditor.slashCommands.register({
+      id: "test.empty-content",
+      title: "Empty content",
+      isAvailable: ({ blockId, reactPanel }) => {
+        const content = reactPanel.blocks.getBlockNode(blockId)?.content;
+        return content !== undefined && /^\/[a-z]*$/.test(content);
+      },
+      execute: () => {},
+    });
+    return editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
+  });
+  const content = page.locator(blockIdSelector(id)).locator("[data-block-content]");
+  await content.click();
+  await page.keyboard.type("/");
+  const command = page.locator('[data-slash-command="test.empty-content"]');
+  await expect(command).toBeVisible();
+  await page.keyboard.type("/");
+  await expect(command).toHaveCount(0);
+  await page.keyboard.press("Backspace");
+  await expect(command).toBeVisible();
+});
+
 test("keeps a filtered slash menu beside the caret when it opens upward", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 600 });
   const id = await page.evaluate(() => {
@@ -576,4 +619,73 @@ test("Slider commits a drag as one history step", async ({ page }) => {
   await expect(slider).toHaveValue(String(dragged));
   await page.keyboard.press("Control+z");
   await expect(slider).toHaveValue("35");
+});
+
+test("aligns the drag handle with the first rendered Markdown line after changes", async ({
+  page,
+}) => {
+  const id = await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    return editor.blocks.insertBlock({ type: "paragraph", content: "# Heading\n\nMore text" }).id;
+  });
+  const block = page.locator(blockIdSelector(id));
+  const handle = block.locator(":scope > .rivto-block-row .block-handle");
+  const check = async () => {
+    await block.locator(":scope > .rivto-block-row").hover();
+    await expect
+      .poll(() =>
+        block.evaluate((element) => {
+          const handle = element.querySelector<HTMLElement>(
+            ":scope > .rivto-block-row .block-handle",
+          )!;
+          const text = element.querySelector<HTMLElement>(".markdown-preview > :first-child")!;
+          const handleBox = handle.getBoundingClientRect();
+          const range = document.createRange();
+          range.selectNodeContents(text.firstChild!);
+          const textBox = range.getClientRects()[0]!;
+          return Math.abs(
+            handleBox.top + handleBox.height / 2 - (textBox.top + textBox.height / 2),
+          );
+        }),
+      )
+      .toBeLessThan(2);
+  };
+  await expect(handle).toHaveCount(1);
+  await check();
+  await page.evaluate((blockId) => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    editor.blocks.updateBlock(blockId, { content: "Small text" });
+  }, id);
+  await expect(block.locator(".markdown-preview p")).toHaveText("Small text");
+  await check();
+});
+
+test("aligns the drag handle with text from a custom block", async ({ page }) => {
+  const id = await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    return editor.blocks.insertBlock({ type: "demo.counter", content: "" }).id;
+  });
+  const block = page.locator(blockIdSelector(id));
+  const text = block.locator(".custom-counter-block");
+  await text.evaluate((element) => {
+    element.style.fontSize = "36px";
+  });
+  await block.locator(":scope > .rivto-block-row").hover();
+  await expect
+    .poll(() =>
+      block.evaluate((element) => {
+        const handle = element
+          .querySelector<HTMLElement>(":scope > .rivto-block-row .block-handle")!
+          .getBoundingClientRect();
+        const text = element.querySelector(".custom-counter-block")!.firstChild!;
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        const line = range.getBoundingClientRect();
+        return Math.abs(handle.top + handle.height / 2 - line.top - line.height / 2);
+      }),
+    )
+    .toBeLessThan(2);
 });

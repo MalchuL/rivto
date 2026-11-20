@@ -1,6 +1,5 @@
 import { useContext } from "react";
-import { EditorRootContext } from "../../components/editor-panel/editor-root-context";
-import type { EditorRootContextValue } from "../../components/editor-panel/types";
+import { EditorRootContext, type EditorRootContextValue } from "../../panels/editor-root-context";
 
 /**
  * Reads the DOM-root context shared by an EditorPanel subtree.

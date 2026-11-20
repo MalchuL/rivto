@@ -1,12 +1,24 @@
 import { Listeners } from "@chulane/rivto-utils";
 import { YjsDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl, type DocumentModel } from "@chulane/document-model";
-import { createDocumentEditor } from "@chulane/rivto";
-import { BlockReferenceResolver } from "@chulane/rivto";
+import {
+  BlockReferenceResolver,
+  createDocumentEditor,
+  waitWithAbort,
+  type DocumentEditorAPI,
+} from "@chulane/rivto";
 import { createReactEditor } from "./react-editor";
-import type { EditorAcquisition, EditorStorageOptions, Entry, ReactEditorApi } from "./types";
-import { waitWithAbort } from "@chulane/rivto";
+import type { EditorAcquisition, EditorStorageOptions, ReactEditorApi } from "./types";
 export type { BlockReference, BlockResolution } from "@chulane/rivto";
+
+/** One open or closing document and the consumers sharing its runtime. */
+type EditorStorageEntry = {
+  consumers: number;
+  pending: Promise<ReactEditorApi>;
+  editor?: ReactEditorApi;
+  core?: DocumentEditorAPI;
+  closing?: Promise<void>;
+};
 
 /**
  * Loads documents and shares one React runtime and core editor for each document ID.
@@ -21,13 +33,14 @@ export type { BlockReference, BlockResolution } from "@chulane/rivto";
  * A document closes when its final consumer releases it, or on destroy().
  * Concurrent opens share the same pending load, and a failed load can be retried.
  *
- * blockReferences resolves embedding sources from loaded documents and application
+ * blockReferences resolves block references from loaded documents and application
  * metadata without opening candidate documents or incrementing their consumer count.
+ * It is shared by consumers of this storage and destroyed with the storage.
  */
 export class EditorStorage {
-  /** Resolves embedding sources without acquiring candidate documents. */
+  /** Resolves block references without acquiring candidate documents. */
   readonly blockReferences: BlockReferenceResolver<DocumentModel, ReactEditorApi>;
-  private readonly entries = new Map<string, Entry>();
+  private readonly entries = new Map<string, EditorStorageEntry>();
   private readonly documentListeners = new Listeners<{ changed: void }>();
   private destroyed = false;
   private destruction?: Promise<void>;
@@ -35,7 +48,11 @@ export class EditorStorage {
   private readonly createEditor: NonNullable<EditorStorageOptions["createEditor"]>;
   private readonly unsubscribeRegistry?: () => void;
 
-  /** @param options - Optional document loader, editor factory, and embedding lookup policy. */
+  /**
+   * Configures document loading and listens for changes to the host's document registry.
+   *
+   * @param options - Optional document loader, editor factory, and block reference lookup policy.
+   */
   constructor(private readonly options: EditorStorageOptions = {}) {
     this.blockReferences = new BlockReferenceResolver(this, options);
     this.openDocument =
@@ -102,7 +119,7 @@ export class EditorStorage {
       this.assertActive();
       return { editor, document: editor.getDocument(), release };
     } catch (error) {
-      void release().catch((failure) => this.reportError(failure));
+      void release().catch((failure) => (this.options.onError ?? console.error)(failure));
       throw error;
     }
   }
@@ -130,8 +147,18 @@ export class EditorStorage {
     return this.destruction;
   }
 
-  /** Finds a shared opening entry, waiting for final teardown before reopening. */
-  private async getEntry(id: string): Promise<Entry> {
+  /**
+   * Finds or creates the shared load for one document identity.
+   *
+   * A closing entry must finish teardown before another editor can open its document.
+   * A new entry is published before invoking the factory. Its pending promise releases
+   * partially initialized resources on failure so a subsequent acquisition can retry.
+   *
+   * @param id - Nonempty document identity shared by concurrent consumers.
+   * @returns The current entry after any previous teardown, while loading may still be pending.
+   * @throws If storage is inactive, the identity is blank, or previous teardown fails.
+   */
+  private async getEntry(id: string): Promise<EditorStorageEntry> {
     this.assertActive();
     if (!id.trim()) {
       throw new Error("Document ID is required");
@@ -142,7 +169,48 @@ export class EditorStorage {
       return this.getEntry(id);
     }
     if (!entry) {
-      entry = { consumers: 0, pending: Promise.resolve().then(() => this.load(id, entry!)) };
+      // Publish the entry before starting its asynchronous load so concurrent acquisitions share it.
+      const loadingEntry: EditorStorageEntry = {
+        consumers: 0,
+        pending: Promise.resolve().then(async () => {
+          let document: DocumentModel | undefined;
+          let editor: ReactEditorApi | undefined;
+          try {
+            document = await this.openDocument(id);
+            if (document.id !== id) {
+              throw new Error(`Expected document ${id}, received ${document.id}`);
+            }
+            this.assertActive();
+            loadingEntry.core = createDocumentEditor({ document });
+            editor = this.createEditor(loadingEntry.core);
+            loadingEntry.editor = editor;
+            if (editor.getDocument() !== document || editor.blocks !== loadingEntry.core.blocks) {
+              throw new Error("Editor factory must bind the supplied core");
+            }
+            this.notifyDocuments();
+            return editor;
+          } catch (error) {
+            loadingEntry.editor = undefined;
+            const errors: unknown[] = [error];
+            for (const cleanup of [
+              () => editor?.destroy(),
+              () => loadingEntry.core?.destroy(),
+              () => document?.destroy(),
+            ]) {
+              try {
+                await cleanup();
+              } catch (failure) {
+                errors.push(failure);
+              }
+            }
+            if (errors.length > 1) {
+              throw new AggregateError(errors, "Editor setup and cleanup failed");
+            }
+            throw error;
+          }
+        }),
+      };
+      entry = loadingEntry;
       this.entries.set(id, entry);
       void entry.pending.catch(() => {
         if (this.entries.get(id) === entry && !entry?.closing) {
@@ -153,47 +221,18 @@ export class EditorStorage {
     return entry;
   }
 
-  /** Transfers the loaded model into a fixed core; setup failures dispose every created resource. */
-  private async load(id: string, entry: Entry): Promise<ReactEditorApi> {
-    let document: DocumentModel | undefined;
-    let editor: ReactEditorApi | undefined;
-    try {
-      document = await this.openDocument(id);
-      if (document.id !== id) {
-        throw new Error(`Expected document ${id}, received ${document.id}`);
-      }
-      this.assertActive();
-      entry.core = createDocumentEditor({ document });
-      editor = this.createEditor(entry.core);
-      entry.editor = editor;
-      if (editor.getDocument() !== document || editor.blocks !== entry.core.blocks) {
-        throw new Error("Editor factory must bind the supplied core");
-      }
-      this.notifyDocuments();
-      return editor;
-    } catch (error) {
-      entry.editor = undefined;
-      const errors: unknown[] = [error];
-      for (const cleanup of [
-        () => editor?.destroy(),
-        () => entry.core?.destroy(),
-        () => document?.destroy(),
-      ]) {
-        try {
-          await cleanup();
-        } catch (failure) {
-          errors.push(failure);
-        }
-      }
-      if (errors.length > 1) {
-        throw new AggregateError(errors, "Editor setup and cleanup failed");
-      }
-      throw error;
-    }
-  }
-
-  /** Closes an entry once, including a pending load, and removes it after disposal. */
-  private close(id: string, entry: Entry): Promise<void> {
+  /**
+   * Waits for the pending load and disposes the runtime, core and model in order.
+   *
+   * Concurrent closes share a promise. Even if disposal fails, a replacement
+   * entry for the same document keeps its place in the registry.
+   *
+   * @param id - Document identity whose registry entry may be removed.
+   * @param entry - Acquisition state that owns the pending or loaded runtime.
+   * @returns A promise that settles after disposal and registry notification.
+   * @throws Rejects with the collected errors when one or more cleanup operations fail.
+   */
+  private close(id: string, entry: EditorStorageEntry): Promise<void> {
     if (entry.closing) {
       return entry.closing;
     }
@@ -239,9 +278,5 @@ export class EditorStorage {
     if (this.destroyed) {
       throw new Error("Editor storage is destroyed");
     }
-  }
-  /** Reports asynchronous view release failures. */
-  private reportError(error: unknown): void {
-    (this.options.onError ?? console.error)(error);
   }
 }

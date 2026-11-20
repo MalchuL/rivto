@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 import type { ReactEditorApi } from "@chulane/rivto-react";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 type Host = {
-  __rivtoDemo: { reactEditor: ReactEditorApi };
+  __rivtoDemo: { reactEditor: ReactEditorApi; editor: DocumentEditorAPI };
   parentOutlineCalls: Array<{ parent: string; ids: readonly string[] }>;
 };
 
@@ -26,14 +27,14 @@ for (const mode of ["block", "edgeless"] as const) {
         });
         editor.load({ ...editor.dump(), blocks: [parent], elements: [], rootElementIds: [] });
         host.parentOutlineCalls = [];
-        editor.blockBehaviors.register({
+        host.__rivtoDemo.editor.blockRegistry.registerBehavior({
           /**
            * Selects only the seeded parent, independently of native block type.
            *
            * @param context - Current candidate block fields.
            * @returns Whether the candidate is the seeded parent.
            */
-          isAvailable: ({ block }) => block.id === parent.id,
+          isAvailable: (block) => block.id === parent.id,
           /**
            * Records and rejects the complete group before child indent runs.
            *

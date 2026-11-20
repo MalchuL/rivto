@@ -9,7 +9,12 @@ import type {
 } from "@chulane/rivto-edgeless";
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import type { ReactPanelApi } from "../../panels/types";
-import { EDITOR_CONTROL_SELECTOR } from "../../constants";
+import {
+  EDGELESS_ROOT_SELECTOR,
+  EDGELESS_OBJECT_KIND_SELECTOR,
+  EDGELESS_UI_SELECTOR,
+  EDITOR_CONTROL_SELECTOR,
+} from "../../constants";
 import { focusBlock } from "../../managers";
 import {
   EDGELESS_BLOCK_ELEMENT_TYPE,
@@ -74,9 +79,10 @@ export class EdgelessSurfaceController {
     if (root.dataset.edgelessPanTool === "true" || root.dataset.edgelessCaptureTool === "true") {
       return;
     }
+    // Ignore card, object, UI and editor-control hits, as well as active drawing capture.
     if (
       target.closest(
-        `[data-edgeless-root], [data-edgeless-object-kind], [data-edgeless-ui], ${EDITOR_CONTROL_SELECTOR}`,
+        `${EDGELESS_ROOT_SELECTOR}, ${EDGELESS_OBJECT_KIND_SELECTOR}, ${EDGELESS_UI_SELECTOR}, ${EDITOR_CONTROL_SELECTOR}`,
       ) ||
       target.closest(".edgeless-drawing-capture[data-active]")
     ) {

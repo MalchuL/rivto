@@ -43,7 +43,10 @@
   min-height: 192px;
   overflow-x: auto;
   border-radius: 16px;
-  background: var(--rivto-block-selection-fill, var(--rivto-kanban-board-background));
+  background: var(
+    --rivto-block-selection-fill,
+    var(--rivto-block-own-background, var(--rivto-kanban-board-background))
+  );
   scrollbar-width: thin;
 }
 .rivto-kanban-columns > .rivto-block {
@@ -54,6 +57,28 @@
   flex-direction: column;
   border-radius: 12px;
   box-shadow: inset 0 0 0 1px var(--rivto-border);
+}
+.rivto-kanban-columns > .rivto-block[data-block-width] {
+  flex: 0 0
+    clamp(
+      var(--rivto-kanban-min-width),
+      var(--rivto-block-own-width),
+      var(--rivto-kanban-max-width)
+    );
+}
+.rivto-kanban-columns > .rivto-block[data-block-width-policy="grow"] {
+  flex-basis: max-content;
+  min-width: clamp(
+    var(--rivto-kanban-min-width),
+    var(--rivto-block-own-width),
+    var(--rivto-kanban-max-width)
+  );
+  max-width: var(--rivto-kanban-max-width);
+}
+.rivto-kanban-columns > .rivto-block[data-width-resizing] {
+  z-index: 8;
+  overflow: visible;
+  transition: none;
 }
 .rivto-kanban-lane-header {
   padding: 0 0 10px;
@@ -118,4 +143,8 @@
 .rivto-kanban-add-column > svg {
   width: 28px;
   height: 28px;
+}
+
+.rivto-block[data-block-type="kanban"] {
+  --rivto-block-shell-background: transparent;
 }
