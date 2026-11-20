@@ -1,5 +1,5 @@
 import { BLOCK_TEXT_METADATA_KEY } from "../../../../managers/selection/block-text-metadata";
-import type { ReactEditorApi } from "../../../../editor/types";
+import type { ReactEditorExtensionApi } from "../../../../editor/types";
 /**
  * Runtime registration for the host-provided default writing block.
  *
@@ -20,7 +20,7 @@ import type { DefaultWritingBlockOptions } from "./types";
  * @returns Cleanup for every installed writing-block facility.
  */
 export function registerDefaultWritingBlock(
-  reactEditor: ReactEditorApi,
+  reactEditor: ReactEditorExtensionApi,
   options: DefaultWritingBlockOptions,
 ): () => void {
   const type = options.type ?? DEFAULT_WRITING_BLOCK_TYPE;

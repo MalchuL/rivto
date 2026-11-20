@@ -1,5 +1,10 @@
 # Курс: plugins в Rivto
 
+> Исторический курс: главы 00–02 и 04, а также схема ниже описывают прежний
+> `RivtoPlugin`/`PluginManager`. Не используйте их как текущий API reference.
+> [Глава 03](./03-event-routing.md) обновлена для текущих Host, Page и Canvas.
+> Прежняя глава про `EventRouter` сохранена [в архиве](./historical/03-event-router.md).
+
 ## Для кого этот курс
 
 Курс объясняет plugin system разработчику, который знает объекты, функции и
@@ -17,13 +22,13 @@ React-компоненты, но ещё не проектировал расши
 
 ## Порядок чтения
 
-| Глава                                | Содержание                                   | Главные файлы                   |
-| ------------------------------------ | -------------------------------------------- | ------------------------------- |
-| [00](./00-extension-model.md)        | Mental model и полный контракт `RivtoPlugin` | `plugin-manager.ts`             |
-| [01](./01-installation-lifecycle.md) | Atomic install, rollback, unuse и destroy    | `plugin-manager.ts`, registries |
-| [02](./02-contributions.md)          | Blocks, commands, events, slash и UI         | managers и `types.ts`           |
-| [03](./03-event-routing.md)          | Global → block → fallback и short-circuit    | `event-router.ts`               |
-| [04](./04-building-and-testing.md)   | Построение plugin, slash example, тесты      | `slash-menu-plugin.ts`, demo    |
+| Глава                                | Содержание                                     | Главные файлы                                       |
+| ------------------------------------ | ---------------------------------------------- | --------------------------------------------------- |
+| [00](./00-extension-model.md)        | Mental model и полный контракт `RivtoPlugin`   | `plugin-manager.ts`                                 |
+| [01](./01-installation-lifecycle.md) | Atomic install, rollback, unuse и destroy      | `plugin-manager.ts`, registries                     |
+| [02](./02-contributions.md)          | Blocks, commands, events, slash и UI           | managers и `types.ts`                               |
+| [03](./03-event-routing.md)          | Текущие Host, Page, Canvas: routing и lifetime | `EventManager`, `BlockEditorEvents`, `CanvasEvents` |
+| [04](./04-building-and-testing.md)   | Построение plugin, slash example, тесты        | `slash-menu-plugin.ts`, demo                        |
 
 ## Одна мысль заранее
 

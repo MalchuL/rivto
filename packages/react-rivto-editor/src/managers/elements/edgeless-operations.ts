@@ -8,7 +8,7 @@ import {
 } from "@chulane/rivto";
 import type { CreateElementInput } from "./types";
 import type { ReactPanelApi } from "../../panels/types";
-import type { ReactEditorApi } from "../../editor/types";
+import type { ReactEditorExtensionApi } from "../../editor/types";
 import { blockIdsOf } from "../../elements/block-element-projection";
 import { EdgelessSelectionRuntime } from "../../extensions/built-ins/selection/edgeless-runtime";
 import type { EdgelessSelectionRef } from "../../extensions/built-ins/selection/types";
@@ -65,7 +65,7 @@ export class EdgelessOperations {
    * @throws If the panel belongs to another React editor.
    */
   constructor(
-    readonly runtime: ReactEditorApi,
+    readonly runtime: ReactEditorExtensionApi,
     readonly reactPanel?: ReactPanelApi,
     private readonly creationDefaults = new EdgelessCreationDefaults(runtime),
   ) {

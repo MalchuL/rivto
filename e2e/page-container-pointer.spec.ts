@@ -162,7 +162,9 @@ for (const type of ["kanban", "columns"]) {
     await source.locator(":scope > .rivto-block-row").hover();
     await page.locator('[data-block-id="second"]').evaluate((lane) => {
       const host = lane.parentElement!;
-      host.scrollLeft += lane.getBoundingClientRect().left - host.getBoundingClientRect().left - 32;
+      // Keep the intended gap outside the auto-scroll edge while the pointer travels.
+      host.scrollLeft +=
+        lane.getBoundingClientRect().left - host.getBoundingClientRect().left - 128;
     });
     const from = (await source.locator(".block-handle").first().boundingBox())!;
     const second = (await page.locator('[data-block-id="second"]').boundingBox())!;

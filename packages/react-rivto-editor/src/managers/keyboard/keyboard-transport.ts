@@ -1,17 +1,18 @@
+import { getBrowserPrimaryModifier } from "@chulane/rivto-root/browser";
 import type {
   KeyboardTransport,
   KeyboardBindingSnapshot as RuntimeSnapshot,
-} from "@chulane/rivto-keyboard";
+} from "@chulane/rivto-root";
 import type { EditorMode } from "@chulane/rivto";
 import type { EventManager } from "../events/event-manager";
 import { KeyboardEditorEvent } from "./keyboard-editor-event";
-import { shortcutFromKeyboardEvent } from "./shortcut";
-import type { KeyboardDOMEvent } from "./types";
+import { formatKeyboardShortcut } from "./shortcut";
 import type {
+  KeyboardDOMEvent,
   KeyboardEventDefinition,
   KeyboardBindingSnapshot,
   KeyboardEventPhase,
-} from "./keyboard-types";
+} from "./types";
 
 /** Adapts React panel input and filters to the independent keyboard runtime. */
 export class ReactKeyboardTransport implements KeyboardTransport<
@@ -20,6 +21,7 @@ export class ReactKeyboardTransport implements KeyboardTransport<
   KeyboardBindingSnapshot
 > {
   readonly defaultTarget = "surface";
+  readonly primaryModifier = getBrowserPrimaryModifier();
 
   /**
    * Borrows event registration without taking ownership of the event manager.
@@ -136,9 +138,23 @@ export class ReactKeyboardTransport implements KeyboardTransport<
    * @returns Shared normalized keyboard context.
    */
   private createEvent(event: KeyboardDOMEvent, phase: KeyboardEventPhase): KeyboardEditorEvent {
+    if (!event.keyboardInput || !event.keyboardTarget) {
+      throw new Error("Keyboard delivery is missing its input context");
+    }
     return new KeyboardEditorEvent({
-      ...event,
-      shortcut: shortcutFromKeyboardEvent(event.raw),
+      reactPanel: event.reactPanel,
+      inputRoot: event.inputRoot,
+      inputRegistration: event.inputRegistration,
+      mode: event.mode,
+      selection: event.selection,
+      eventTarget: event.eventTarget,
+      insideRoot: event.insideRoot,
+      insideBlock: event.insideBlock,
+      insideContent: event.insideContent,
+      blockId: event.blockId,
+      keyboardInput: event.keyboardInput,
+      keyboardTarget: event.keyboardTarget,
+      shortcut: formatKeyboardShortcut(event.keyboardInput, this.primaryModifier),
       phase,
     });
   }

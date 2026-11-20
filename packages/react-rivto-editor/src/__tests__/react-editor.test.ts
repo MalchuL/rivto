@@ -1,4 +1,6 @@
 import { BlockEditor } from "@chulane/rivto-page";
+import { BrowserInputRoot } from "@chulane/rivto-root/browser";
+import type { KeyboardTarget } from "@chulane/rivto-root";
 import {
   PageTextSelectionBoundary,
   PageBlockSelectionBoundary,
@@ -18,7 +20,7 @@ import { EmbeddingPanel } from "@chulane/rivto";
 import { EditorStorage } from "../editor/editor-storage";
 import { EditorStorageContext } from "../editor/editor-storage-context";
 import { createReactEditor as createRuntime } from "../editor/react-editor";
-import type { ReactEditorApi } from "../editor/types";
+import type { ReactEditorExtensionApi } from "../editor/types";
 import { pageDragExtension } from "../extensions/block-drag";
 import { standardPreset, trailingBlockExtension } from "../extensions/built-ins/built-ins";
 import { edgelessPreset } from "../extensions/edgeless";
@@ -298,7 +300,7 @@ describe("ReactPanelApi", () => {
 
   test("passes the complete ReactPanelApi runtime directly to extension setup", async () => {
     const editor = await createEditor();
-    let received: ReactEditorApi | undefined;
+    let received: ReactEditorExtensionApi | undefined;
     const reactEditor = createRuntime({
       editor,
       extensions: [
@@ -623,7 +625,7 @@ describe("ReactPanelApi", () => {
 
   test("rolls back partial extension presentation setup", async () => {
     const editor = await createEditor();
-    let failedRuntime: ReactEditorApi | undefined;
+    let failedRuntime: ReactEditorExtensionApi | undefined;
 
     expect(() =>
       createReactEditor({
@@ -772,7 +774,7 @@ describe("ReactPanelApi", () => {
 
   test("rolls back registrations when a duplicate surface fails setup", async () => {
     const editor = await createEditor();
-    let failedRuntime: ReactEditorApi | undefined;
+    let failedRuntime: ReactEditorExtensionApi | undefined;
 
     expect(() =>
       createReactEditor({
@@ -804,7 +806,7 @@ describe("ReactPanelApi", () => {
 
   test("destroys event registrations when a duplicate binding fails setup", async () => {
     const editor = await createEditor();
-    let failedRuntime: ReactEditorApi | undefined;
+    let failedRuntime: ReactEditorExtensionApi | undefined;
 
     expect(() =>
       createReactEditor({
@@ -1123,8 +1125,11 @@ describe("delegated events", () => {
     expect(calls).toEqual(["Tab"]);
     expect(handlerEvent).toBe(predicateEvent);
     expect(handlerEvent).toBeInstanceOf(KeyboardEditorEvent);
-    expect(handlerEvent).toBeInstanceOf(EditorEvent);
-    expect(handlerEvent?.raw).toBe(event);
+    expect(handlerEvent).not.toBeInstanceOf(EditorEvent);
+    expect(handlerEvent).not.toHaveProperty("raw");
+    expect(handlerEvent).not.toHaveProperty("blockElement");
+    expect(handlerEvent).not.toHaveProperty("contentElement");
+    expect(handlerEvent?.keyboard.key).toBe("Tab");
     expect(handlerEvent?.phase).toBe("keydown");
     expect(event.defaultPrevented).toBe(true);
     reactPanel.editor.destroy();
@@ -1443,7 +1448,7 @@ describe("delegated events", () => {
     expect(calls).toEqual(["claimed"]);
     expect(handlerEvent).toBe(predicateEvent);
     expect(handlerEvent).toBeInstanceOf(EditorEvent);
-    expect(handlerEvent?.raw).toBe(event);
+    expect(handlerEvent).not.toHaveProperty("raw");
     expect(nativeEvent.defaultPrevented).toBe(true);
     reactPanel.editor.destroy();
     editor.destroy();
@@ -1455,30 +1460,52 @@ describe("delegated events", () => {
     const { root } = realm();
     const surface = root as unknown as HTMLElement;
     const raw = keyboardEvent(root, "Enter");
+    const inputRoot = new BrowserInputRoot(surface);
+    let keyboardTarget: KeyboardTarget | undefined;
+    const detachInput = inputRoot.observeInput("keydown", (input) => {
+      keyboardTarget = input.keyboardTarget;
+    });
+    root.emit("keydown", raw);
+    detachInput?.();
+    if (!keyboardTarget) {
+      throw new Error("Keyboard target was not delivered");
+    }
     const selection = reactPanel.selection.get();
     const base = {
-      raw,
       reactPanel,
-      root: surface,
+      inputRoot,
+      inputRegistration: { isCurrent: () => inputRoot.isAttached() },
       mode: reactPanel.mode.get(),
       selection,
       eventTarget: "surface" as const,
       insideRoot: true,
-      blockElement: null,
+      insideBlock: false,
       blockId: undefined,
-      contentElement: null,
+      insideContent: false,
     };
     const event = new EditorEvent(base);
     const keyboardEventValue = new KeyboardEditorEvent({
       ...base,
+      keyboardTarget,
+      keyboardInput: {
+        key: raw.key,
+        code: raw.code,
+        ctrlKey: raw.ctrlKey,
+        metaKey: raw.metaKey,
+        altKey: raw.altKey,
+        shiftKey: raw.shiftKey,
+        isComposing: raw.isComposing,
+      },
       shortcut: "Enter",
       phase: "keydown",
     });
 
-    expect(event.raw).toBe(raw);
+    expect(event).not.toHaveProperty("raw");
     expect(event.selection).toBe(selection);
-    expect(keyboardEventValue).toBeInstanceOf(EditorEvent);
+    expect(keyboardEventValue).not.toBeInstanceOf(EditorEvent);
+    expect(keyboardEventValue).not.toHaveProperty("raw");
     expect(keyboardEventValue.shortcut).toBe("Enter");
+    inputRoot.detach();
     reactPanel.editor.destroy();
     editor.destroy();
   });

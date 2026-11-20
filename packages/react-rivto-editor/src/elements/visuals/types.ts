@@ -1,4 +1,11 @@
 import type { EditorElementNode } from "@chulane/rivto";
+import type { Point } from "@chulane/rivto-edgeless";
+import type { InputRegion, InputRoot, KeyInput, PointerInput } from "@chulane/rivto-root";
+import type { ComponentType, Dispatch, RefCallback, RefObject, SetStateAction } from "react";
+import type { EdgelessOperations } from "../../managers/elements/edgeless-operations";
+import type { ElementRenderProps } from "../../managers/elements/types";
+import type { ReactPanelApi } from "../../panels/types";
+import type { EditableLabelFocusPoint } from "../../components";
 import type { EdgelessSelectionRef } from "../../extensions/built-ins/selection/types";
 
 export type { EdgelessSelectionRef } from "../../extensions/built-ins/selection/types";
@@ -45,6 +52,127 @@ export interface ConnectorEndpoint {
   elementId?: string;
   anchor: { x: number; y: number };
   position: { x: number; y: number };
+}
+
+/** Connector reconnection hit testing and attachment feedback for one canvas. */
+export interface ConnectorInteraction {
+  /** Current panel input Root, absent while the occurrence is unavailable. */
+  readonly inputRoot: Pick<InputRoot, "isAttached" | "captureRegionByIdentity"> | undefined;
+  /**
+   * Resolves client coordinates to a connector attachment or free endpoint.
+   *
+   * @param point - Pointer position in client CSS pixels.
+   * @returns Endpoint at the pointer's current position, or undefined when the
+   * captured canvas attachment is unavailable.
+   */
+  resolveEndpoint(point: Point): ConnectorEndpoint | undefined;
+  /**
+   * Updates the reconnect hover target, or clears it when the pointer is absent.
+   *
+   * @param point - Pointer position in client CSS pixels, or null to clear feedback.
+   * @returns Updates or clears panel-local attachment feedback without document writes.
+   */
+  onReconnectHover(point: Point | null): void;
+}
+
+/** Pointer and attachment-specific interaction retained for one reconnect gesture. */
+export interface ConnectorGesture {
+  readonly pointerId: number;
+  readonly interaction: ConnectorInteraction;
+  /** Releases the capture owned by this exact gesture. */
+  readonly releasePointer: () => void;
+}
+
+/** Pointer delivery for one of a connector's mounted endpoint controls. */
+export type ConnectorEndpointKey = "source" | "target";
+
+/** React mounting callbacks for the two reconnect controls. */
+export type ConnectorEndpointRefs = Record<ConnectorEndpointKey, RefCallback<HTMLButtonElement>>;
+
+/** Pointer capture retained while adjusting a rectangle's corner radius. */
+export interface RectangleRadiusGesture {
+  readonly pointerId: number;
+  readonly releasePointer: () => void;
+}
+
+/** Live renderer state borrowed for one radius input delivery. */
+export interface RectangleRadiusState {
+  readonly elementId: string;
+  readonly saved: number;
+  readonly maximum: number;
+  readonly radius: number;
+  readonly offset: number;
+  readonly draft: number | null;
+  readonly gesture: RefObject<RectangleRadiusGesture | null>;
+  readonly setDraft: Dispatch<SetStateAction<number | null>>;
+  readonly operations: Pick<EdgelessOperations, "updateProperties">;
+}
+
+/** Rectangle rendering inputs including resolved stroke and fill. */
+export interface RectangleShapeProps extends ElementRenderProps {
+  readonly fill: string;
+  readonly stroke: string;
+  readonly strokeWidth: number;
+}
+
+/** Content rendered inside a visual host when its panel and renderer are available. */
+export interface VisualElementContentProps extends Omit<
+  ElementRenderProps,
+  "preview" | "reactPanel"
+> {
+  readonly Renderer: ComponentType<ElementRenderProps> | undefined;
+  readonly reactPanel: ReactPanelApi | undefined;
+}
+
+/** Local editing and requested caret state for one visual label. */
+export interface VisualLabelEditing {
+  readonly editing: boolean;
+  readonly setEditing: Dispatch<SetStateAction<boolean>>;
+  readonly focusPointRef: RefObject<EditableLabelFocusPoint | null>;
+  /**
+   * Starts editing at the input's viewport position.
+   *
+   * @param point - Viewport point used for initial caret placement.
+   * @returns The visual enters editing with the point retained for its label.
+   */
+  startEditing(point: EditableLabelFocusPoint): void;
+}
+
+/** Visual placement and mounted identity of the radius slider. */
+export interface RectangleRadiusHandleProps {
+  readonly handle: RefObject<SVGCircleElement | null>;
+  readonly radius: number;
+  readonly maximum: number;
+  readonly offset: number;
+  readonly scale: number;
+}
+
+/** Rectangle-owned policy invoked by a mounted radius handle's Root input. */
+export interface RectangleRadiusInputHandlers {
+  /**
+   * Applies normalized pointer input to the current radius gesture.
+   *
+   * @param input - Pointer delivery for the handle.
+   * @param region - Captured handle geometry for this Root attachment.
+   * @returns The gesture has been started, updated, finished, or cancelled.
+   * @throws Propagates capture, geometry, and document update failures.
+   */
+  onPointer(input: PointerInput, region: Pick<InputRegion, "clientToSvgPoint">): void;
+  /**
+   * Applies a normalized keyboard action to the radius.
+   *
+   * @param input - Key delivered to the focused handle.
+   * @returns A recognized key has updated or cancelled the radius.
+   * @throws Propagates document update failures.
+   */
+  onKey(input: KeyInput): void;
+  /**
+   * Cancels the current radius gesture when the handle loses its attachment.
+   *
+   * @returns Capture and local preview are released without committing.
+   * @throws Propagates capture cleanup failures.
+   */
+  cancel(): void;
 }
 
 /** Horizontal placement of text inside a frame or label. */

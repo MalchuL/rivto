@@ -375,8 +375,13 @@ Canonical parent and neighbor IDs come from the shared iterator, including after
 reordering and filtering. Both sides of a hidden canonical sibling retain their own
 destination; the nearer visible anchor owns its half of a physical gap. Source
 exclusion adjusts canonical neighbors without moving the physical indicator.
-Wrappers compose BlockItem for ref forwarding and one sibling counter, retain the
-existing subtree, and do not create another BlockNode or choose renderers.
+Wrappers compose BlockItem for opaque identity ref forwarding and one sibling
+counter, retain the existing subtree, and do not create another BlockNode or choose
+renderers. Use the owning Root for geometry or other operations on that identity.
+`BlockRow`, `BlockChildren`, `BlockItem`, and `BlockDropWrapper` all forward
+`RegionIdentity` refs; callbacks receive null on unmount unless they returned a
+cleanup, in which case that cleanup is called instead. `BlockDropTarget` and
+`BlockDropLayout` compose these refs as well as ordinary DOM child refs.
 A wrapper without canonical child placement throws instead of inventing a parent.
 
 Refs/effects release registrations on replacement, collapse and unmount, including
@@ -408,17 +413,19 @@ The generic BlockWrapper pipeline has no CSS geometry or drag-and-drop policy.
 `BlockDropWrapper` is the separate concrete insertion frame used by tile layouts.
 
 A decorator may provide React context or wrap children in its own element. It owns
-that element's React event handlers, local ref, native listeners, and cleanup. Events
-bubble/capture through nested wrappers normally. The editor API is available through
+that element's registration and cleanup. For a `BlockItem`, `bindInput` installs
+normalized input and its ref supplies an opaque identity; nested subscriptions retain
+browser capture and bubble order. Decorators creating their own DOM elements remain
+responsible for their own handlers and refs. The editor API is available through
 useBlockEditorController when needed; no shared reference to BlockView is supplied.
-BlockView retains its ordinary explicit ref for direct consumers.
+BlockView retains an explicit ref that supplies its opaque identity.
 
 Use `BlockItem block={block}` when a decorator needs a counter-aware element
 outside BlockChildren.item. The borrowed snapshot supplies identity/list decoration without a second subscription.
 The outermost item for a block owns its sibling counter; nested items for the same
 ID and the inner BlockView do not count again. Canonical drop destinations still
 require the actual BlockChildren placement. See demo/demo-wrapper.tsx for a wrapper
-owning its element and pointer-capture handler without a shared-ref provider.
+owning its element and normalized pointer-capture subscription without a shared-ref provider.
 
 Registry snapshots retain identity until registration changes; observing them does
 not subscribe to document data. View detach/remount retains installed wrappers.
@@ -429,11 +436,15 @@ preserve existing counters/placement rather than creating a second block identit
 
 ## Input and optional selection
 
-`editor.events.register(id, definition, handler)` registers typed native input.
+`editor.events.register(id, definition, handler)` registers typed browser input.
 Definitions require a finite `priority`; optional `target` is `root` (default),
 `document`, or `window`. `scope` filters occurrence-owned block/content/anchor
 context. A handler returning `"handled"` claims this input for this editor; it must
-call `event.raw.preventDefault()` explicitly. DOM propagation is unchanged.
+call `event.preventDefault()` explicitly. DOM propagation is unchanged unless the
+handler explicitly calls `event.stopPropagation()`. The callback receives copied
+data through `event.input`, the occurrence-local `blockId`, and `targetIsRoot`,
+not a native event or element; synchronous capabilities apply only to the current
+delivery.
 Handlers return `"continue"` when leaving input available.
 `editor.events.observe` registers non-consuming observers, delivered before handlers
 in the same queue even when another queue already claimed the event.
@@ -443,7 +454,7 @@ acquire the parent's block context. `on("focus" | "blur", observer)` remains a
 separate observation API; `onDetach` releases pending gestures and timers.
 
 The host creates and owns `BlockEditorController`. Its `keyboard` manager uses
-`@chulane/rivto-keyboard`; borrowed APIs exclude destruction and transport
+`@chulane/rivto-root`; borrowed APIs exclude destruction and transport
 attachment. Registrations survive view remounts. Register default keys in the
 host, and replace them through `setKeymapOverride` or `replaceKeymap`.
 
@@ -463,6 +474,11 @@ for (const feature of ["native", "click", "toggle", "range", "pointer", "feedbac
 // The host retains editor and calls editor.destroy() after unmounting the view.
 <BlockEditor editor={editor} />;
 ```
+
+Keyboard action callbacks receive copied key and target data, including
+`targetIsRoot` and `blockId`, plus `preventDefault()` and `stopPropagation()`
+capabilities for the current delivery. They do not receive browser events or DOM
+elements. Returning a handled action also prevents the browser default.
 
 Each selection feature is independently disposable and installs once per editor.
 One `BlockSelectionExtensions` coordinates their gesture state independently for
@@ -600,11 +616,12 @@ no keyboard move command or permission-specific feedback.
 
 ## Host selection and navigation bridges
 
-`BlockDOMSelection` converts native ranges using the adapter's displayed block
-order and text metadata, including unmounted contentless blocks. Its restoration
-method expects the host to mount surface-specific endpoints first.
+The Page occurrence's `browserSelection` converts native ranges using the
+adapter's displayed block order and text metadata, including unmounted
+contentless blocks. Its restoration method expects the host to mount
+surface-specific endpoints first.
 `BlockSelectionEndpoints.resolve` recovers directed text endpoints without a
-second host implementation. Neither class owns document selection or subscriptions.
+second host implementation. These operations do not own document selection or subscriptions.
 
 `BlockNavigation` resolves adjacent and first/last displayed roots from borrowed
 hierarchy and selection reads. A host subclass implements synchronous `mountBlocks`;
@@ -618,6 +635,10 @@ inside it, or set `exclude` on an existing `BlockDropTarget`. Both retain the ex
 child refs and ordinary event handlers. They prevent fallback to an enclosing target.
 A matching nested drop region remains eligible; another exclusion below it blocks that portion again. On the same element,
 exclusion wins over its target registration.
+
+Put presentation attributes, refs, and any React handlers on the existing child.
+The drop declarations accept only their configuration and the child; editor input
+behavior can also be registered through the normalized event API.
 
 ```tsx
 <BlockDropExclude asChild>

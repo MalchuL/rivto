@@ -1,16 +1,7 @@
-import type { BlockPointerSelectionFeature } from "./block-pointer-selection";
-import type { BlockEditorApi } from "../block-editor-api";
+import type { BlockSelectionBindings, BlockSelectionFeature } from "./types";
+import type { BlockEditorApi } from "../types";
 import type { BlockEditorExtension } from "../extensions/types";
 import { BlockSelectionController } from "./block-selection-controller";
-
-/** Independently installable pointer-selection capabilities sharing one gesture state. */
-export type BlockSelectionFeature = BlockPointerSelectionFeature | "native" | "feedback";
-/** Host semantic binding identities; Page supplies no default key assignments. */
-export interface BlockSelectionBindings {
-  readonly toggle: string;
-  readonly range: string;
-  readonly exact: string;
-}
 
 /** Creates optional selection extensions with gesture coordination scoped to each editor. */
 export class BlockSelectionExtensions {

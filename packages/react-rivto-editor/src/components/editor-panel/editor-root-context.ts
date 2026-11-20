@@ -8,3 +8,6 @@ import type { EditorRootContextValue } from "./types";
  * editor runtime or pretending that a DOM element is collaborative state.
  */
 export const EditorRootContext = createContext<EditorRootContextValue | null>(null);
+
+/** Native host retained only for React's browser portal adapters. */
+export const EditorPortalHostContext = createContext<HTMLElement | null>(null);

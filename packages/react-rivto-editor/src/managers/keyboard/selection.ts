@@ -9,7 +9,6 @@ import type { Selection } from "@chulane/rivto";
 import { createCaretSelection, isCaretSelection } from "@chulane/rivto";
 import type { PanelSelectionApi } from "../selection/api";
 import type { BlocksApi } from "../blocks/blocks-api";
-import { findBlockFromEvent, focusBlock } from "../../blocks/block-dom";
 
 /** One block target resolved from the current selection for a keyboard command. */
 export interface KeyboardSelectionTarget {
@@ -66,7 +65,7 @@ export function shouldDeleteSelection(selection: Selection | undefined): boolean
  * @returns Current selection suitable for a keyboard command.
  */
 export function readKeyboardSelection(
-  selectionManager: PanelSelectionApi,
+  selectionManager: Pick<PanelSelectionApi, "get" | "set" | "readDOM">,
   blocks: Pick<BlocksApi, "getBlockNode">,
   emptyBlockId?: string,
 ): Selection | undefined {
@@ -83,15 +82,21 @@ export function readKeyboardSelection(
   return current ?? selectionManager.get();
 }
 
-export function isEditableKeyboardEvent(event: Event): boolean {
-  return Boolean(findBlockFromEvent(event));
-}
-
-/** Restores the native caret represented by current editor selection state. */
+/**
+ * Requests browser focus for the current collapsed model selection.
+ *
+ * Expanded or absent selection has no single caret and leaves focus unchanged.
+ * The panel selection capability mounts missing content when its surface supports it.
+ *
+ * @param selectionManager - Current panel selection and occurrence-bound caret focus.
+ * @returns True when a collapsed caret's content host was found and focus requested.
+ * @throws Propagates synchronous mounting, browser focus, and range failures.
+ */
 export function focusSelectionCaret(
-  root: HTMLElement,
-  selectionManager: PanelSelectionApi,
+  selectionManager: Pick<PanelSelectionApi, "get" | "focusBlock">,
 ): boolean {
   const target = firstKeyboardTarget(selectionManager.get());
-  return Boolean(target?.collapsed && focusBlock(root, target.blockId, target.offset ?? 0));
+  return Boolean(
+    target?.collapsed && selectionManager.focusBlock(target.blockId, target.offset ?? 0),
+  );
 }

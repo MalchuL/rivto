@@ -61,8 +61,8 @@ export class DemoSession {
          * @param input - Keyboard event; toolbar controls and editable text keep native Tab behavior.
          * @returns Whether a model move occurred and the shortcut should be claimed.
          */
-        ({ raw, root }) => {
-          if (raw.target !== root) {
+        ({ targetIsRoot }) => {
+          if (!targetIsRoot) {
             return false;
           }
           return this.adapter.changeSelectionIndent(outdent);
@@ -70,6 +70,8 @@ export class DemoSession {
       );
     }
     this.editor.extensions.register("block-drag", new BlockDragExtension(this.adapter));
+    // The demo host borrows the current Root and owns its presentation marker.
+    const hostEditor = this.editor;
     this.editor.extensions.register("demo-block-presentation", {
       /**
        * Installs demo presentation and whole-editor focus observation.
@@ -85,10 +87,29 @@ export class DemoSession {
         editor.renderers.register("demo-bento", { content: ContainerTitle, layout: BentoLayout });
         editor.slots.register({ position: "start", component: BlockListSlot, priority: 300 });
         editor.slots.register({ position: "start", component: BlockCollapseSlot, priority: 200 });
-        editor.events.on("focus", () =>
-          editor.getRoot()?.setAttribute("data-demo-focused", "true"),
-        );
-        editor.events.on("blur", () => editor.getRoot()?.removeAttribute("data-demo-focused"));
+        let releaseFocus: (() => void) | undefined;
+        /**
+         * Releases the focus marker owned by the last attached occurrence.
+         *
+         * @returns The demo no longer marks that occurrence as focused.
+         */
+        const clearFocus = () => {
+          const release = releaseFocus;
+          releaseFocus = undefined;
+          release?.();
+        };
+        editor.events.on("focus", () => {
+          clearFocus();
+          const root = hostEditor.inputRoot;
+          const identity = root?.getElementIdentity?.();
+          if (identity) {
+            const region = root?.captureRegionByIdentity(identity);
+            releaseFocus = region?.setTemporaryAttribute("data-demo-focused", "true");
+          }
+        });
+        editor.events.on("blur", clearFocus);
+        editor.events.onDetach(clearFocus);
+        return clearFocus;
       },
     });
   }

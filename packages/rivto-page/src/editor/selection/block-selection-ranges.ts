@@ -2,20 +2,83 @@ import type {
   BlockSelectionRange as BlockRange,
   BlockSelectionPosition as EditorPosition,
   BlockSelectionSnapshot as Selection,
+  ResolvedBlockRange,
+  SelectionTextBlock,
 } from "./types";
-/** Live offsets after resolving stored coverage against current text length. */
-interface ResolvedBlockRange {
-  readonly startOffset: number;
-  readonly endOffset: number;
-  readonly invalid: boolean;
-}
-/** Visible block identity with its host-owned UTF-16 text length. */
-interface SelectionTextBlock {
-  readonly id: string;
-  readonly length: number;
-}
+import type { BlockEditorSelection } from "../../adapter/types";
 /** Constructs portable selection ranges without document-model dependencies. */
 export class BlockSelectionRanges {
+  /**
+   * Creates one inclusive whole-block range in visible order.
+   *
+   * @param blockIds - Candidate block IDs already in visible document order.
+   * @param anchorBlockId - Block where the gesture began.
+   * @param focusBlockId - Block where the gesture currently ends.
+   * @returns A structural selection, or undefined when either endpoint is unknown.
+   */
+  static createVisibleStructuralSelection(
+    blockIds: readonly string[],
+    anchorBlockId: string,
+    focusBlockId: string,
+  ): Selection | undefined {
+    const anchorIndex = blockIds.indexOf(anchorBlockId);
+    const focusIndex = blockIds.indexOf(focusBlockId);
+    if (anchorIndex < 0 || focusIndex < 0) {
+      return undefined;
+    }
+    return this.createStructuralSelection(
+      blockIds.slice(Math.min(anchorIndex, focusIndex), Math.max(anchorIndex, focusIndex) + 1),
+      anchorBlockId,
+      focusBlockId,
+    );
+  }
+  /**
+   * Builds a portable selection from two editor positions using the host's
+   * selectable order, including unmounted blocks.
+   *
+   * Only the covered interval reads text lengths. Undefined lengths identify
+   * contentless blocks even when they have no DOM; zero still denotes editable
+   * empty text. Contentless ranges use whole-block markers, while text ranges
+   * retain concrete offsets and directed endpoints. Mounted renderer availability
+   * does not alter coverage, so windowing never changes the stored selection.
+   *
+   * @param selection - Borrowed visible ordering and live text-length queries.
+   * @param anchor - Fixed position where the gesture began.
+   * @param head - Moving position where the gesture currently ends.
+   * @returns Directed text coverage with structural markers for contentless blocks, or undefined when an endpoint is absent.
+   */
+  static createFromPositions(
+    selection: Pick<BlockEditorSelection, "getSelectableBlockIds" | "getTextLength">,
+    anchor: EditorPosition,
+    head: EditorPosition,
+  ): Selection | undefined {
+    const ids = selection.getSelectableBlockIds();
+    const anchorIndex = ids.indexOf(anchor.blockId);
+    const headIndex = ids.indexOf(head.blockId);
+    if (anchorIndex < 0 || headIndex < 0) {
+      return undefined;
+    }
+    const contentless = new Set<string>();
+    const ordered = ids
+      .slice(Math.min(anchorIndex, headIndex), Math.max(anchorIndex, headIndex) + 1)
+      .map((id) => {
+        const length = selection.getTextLength(id);
+        if (length === undefined) {
+          contentless.add(id);
+        }
+        return { id, length: length ?? 0 };
+      });
+    const result = this.createTextSelection(ordered, anchor, head);
+    if (!result) {
+      return undefined;
+    }
+    return {
+      ...result,
+      blocks: result.blocks.map((block) =>
+        contentless.has(block.id) ? { id: block.id, start: 0, end: -1 } : block,
+      ),
+    };
+  }
   /**
    * Creates one structural selection covering the given IDs.
    * @param ids - Selected IDs already in visible document order.

@@ -9,11 +9,10 @@ import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../../constants";
 import type { ReactPanelApi } from "../../../panels/types";
+import type { SeparatorInsertionPanel } from "./types";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
-  focusBlock,
-  isEditableKeyboardEvent,
   KEYBOARD_BINDING_IDS,
   type ReactEditorExtension,
 } from "../../../managers";
@@ -73,7 +72,7 @@ export function SeparatorBlock() {
  * @returns Complete new writing block, or undefined when the active block is missing.
  */
 function insertSeparator(
-  reactPanel: ReactPanelApi,
+  reactPanel: SeparatorInsertionPanel,
   blockId: string,
   separatorBlockFactory: BlockFactory,
   defaultWritingBlockFactory: BlockFactory,
@@ -122,6 +121,16 @@ function insertSeparator(
 export const separatorBlockExtension = (): ReactEditorExtension => ({
   id: "block.separator",
   setup: (reactEditor) => {
+    /**
+     * Inserts a separator and schedules focus for its writing continuation.
+     *
+     * Newer input, selection changes, and surface teardown cancel pending focus.
+     *
+     * @param reactPanel - Occurrence receiving the insertion and focus request.
+     * @param blockId - Existing block after which the separator is inserted.
+     * @returns The insertion is applied and eligible caret focus is scheduled.
+     * @throws Propagates insertion or selection scheduling failures.
+     */
     const focusInserted = (reactPanel: ReactPanelApi, blockId: string): void => {
       const writing = insertSeparator(
         reactPanel,
@@ -129,9 +138,10 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         separatorBlockFactory,
         reactEditor.defaultWritingBlockFactory,
       );
-      const root = reactPanel.getRoot();
-      if (writing && root) {
-        requestAnimationFrame(() => focusBlock(root, writing.id, 0));
+      if (writing) {
+        reactPanel.selection.scheduleIfSelectionUnchanged(() =>
+          reactPanel.selection.focusBlock(writing.id, 0),
+        );
       }
     };
     const disposers = [
@@ -161,9 +171,9 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         {
           id: KEYBOARD_BINDING_IDS.blockSeparatorCreate,
           keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSeparatorCreate],
-          when: ({ raw: event }) => isEditableKeyboardEvent(event),
+          when: ({ isBlockContentTarget }) => isBlockContentTarget(),
         },
-        ({ reactPanel, root }) => {
+        ({ reactPanel }) => {
           const nativeSelection = reactPanel.selection.readDOM();
           if (nativeSelection) {
             reactPanel.selection.set(nativeSelection);
@@ -181,7 +191,9 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
           if (!writing) {
             return false;
           }
-          requestAnimationFrame(() => focusBlock(root, writing.id, 0));
+          reactPanel.selection.scheduleIfSelectionUnchanged(() =>
+            reactPanel.selection.focusBlock(writing.id, 0),
+          );
           return true;
         },
       ),

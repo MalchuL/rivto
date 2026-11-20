@@ -33,7 +33,7 @@ import {
   type ReactNode,
 } from "react";
 import { z } from "zod";
-import { createBlockBehaviorContext } from "../../block-behaviors/utils/context";
+import { createBlockSnapshotContext } from "../../block-behaviors/utils/context";
 import { ContainerBlockBehavior } from "../../block-behaviors";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
@@ -44,7 +44,6 @@ import {
   useBlock,
   useBlockNode,
   useBlockSelectionAnchor,
-  useEditorRoot,
   useReactPanel,
   usePanel,
   usePreventTextEditing,
@@ -582,7 +581,6 @@ function TodoStorageItem({ blockId, children }: BlockChildrenItemProps) {
  */
 function TodoStorageEmpty({ blockId }: TodoStorageComponentProps) {
   const reactPanel = useReactPanel();
-  const { element: root } = useEditorRoot();
   const { block } = useBlockNode(blockId);
   const preventTextEditingAttributes = usePreventTextEditing();
   const childIds = block?.childIds ?? [];
@@ -593,11 +591,12 @@ function TodoStorageEmpty({ blockId }: TodoStorageComponentProps) {
     }
     event.preventDefault();
     event.stopPropagation();
-    const behaviorContext = root
-      ? createBlockBehaviorContext(reactPanel, blockId, root)
+    const inputRoot = reactPanel.inputRoot;
+    const behaviorContext = inputRoot?.isAttached()
+      ? createBlockSnapshotContext(reactPanel, blockId, undefined)
       : undefined;
-    if (behaviorContext) {
-      todoStorageBehavior.appendWritingBlock(behaviorContext);
+    if (behaviorContext && inputRoot) {
+      todoStorageBehavior.appendWritingBlock({ ...behaviorContext, inputRoot });
     }
   };
 

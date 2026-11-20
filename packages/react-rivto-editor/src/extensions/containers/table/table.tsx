@@ -1,4 +1,9 @@
 import { TableResizeController } from "./table-resize-controller";
+import { attachTableResizeInput } from "./browser/table-resize-input";
+import { TableBlockBoundary } from "./browser/table-block-boundary";
+import { getBrowserElementIdentity } from "@chulane/rivto-root/browser";
+import type { TableResizeHandleProps } from "./types";
+import { useReactPanelContext } from "../../../hooks/editor/use-react-panel-context";
 import {
   columnWidth,
   TABLE_DEFAULT_COLUMN_WIDTH,
@@ -6,6 +11,7 @@ import {
   MAX_COLUMN_WIDTH,
   COLUMN_WIDTH_PROPERTY,
   CELL_ITEM_ATTRIBUTE,
+  TABLE_RESIZE_HANDLE_ATTRIBUTE,
 } from "./table-column-width";
 export { setTableColumnWidth, TABLE_DEFAULT_COLUMN_WIDTH } from "./table-column-width";
 import type { CSSProperties } from "react";
@@ -27,15 +33,7 @@ import {
 } from "@chulane/rivto-page";
 import { type EditorBlock, type EditorBlockInput } from "@chulane/rivto";
 import { PlusIcon } from "lucide-react";
-import {
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type RefObject,
-} from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { convertLeafToContainer } from "../convert-leaf-to-container";
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
@@ -43,13 +41,7 @@ import { MarkdownContent } from "../../../blocks/markdown/markdown";
 import { Button } from "../../../components/ui/button";
 import { editorControlProps } from "../../../constants";
 import type { ReactPanelApi } from "../../../panels/types";
-import {
-  useBlockNode,
-  useBlockSelectionAnchor,
-  useEditorRoot,
-  useReactPanel,
-  usePanel,
-} from "../../../hooks";
+import { useBlockNode, useBlockSelectionAnchor, useReactPanel, usePanel } from "../../../hooks";
 import { type ReactEditorExtension } from "../../../managers";
 import {
   TABLE_BLOCK_TYPE,
@@ -147,23 +139,6 @@ export function createTableBlockInput(
       createTableRowInput(widths),
     ),
   };
-}
-
-/**
- * Locates the current block shell so boundary controls can anchor to the entire
- * row or cell, including recursively rendered child blocks.
- * @returns A marker ref and the nearest owning block shell once mounted.
- */
-function useBlockHost(): {
-  readonly marker: RefObject<HTMLDivElement | null>;
-  readonly host: HTMLElement | null;
-} {
-  const marker = useRef<HTMLDivElement>(null);
-  const [host, setHost] = useState<HTMLElement | null>(null);
-  useLayoutEffect(() => {
-    setHost(marker.current?.closest<HTMLElement>("[data-block-id]") ?? null);
-  }, []);
-  return { marker, host };
 }
 
 /**
@@ -371,26 +346,23 @@ export function Table({ blockId }: { readonly blockId: string }) {
  */
 function TableRow({ blockId }: { readonly blockId: string }) {
   const reactPanel = useReactPanel();
-  const { marker, host } = useBlockHost();
   return (
-    <>
-      <div ref={marker} className={ROW_CLASS} />
-      {host &&
-        createPortal(
-          <Button
-            {...editorControlProps}
-            variant="outline"
-            size="icon-xs"
-            className={`${ADD_ROW_CLASS} ${BOUNDARY_BUTTON_CLASS}`}
-            type="button"
-            aria-label="Add table row below"
-            onClick={() => insertTableRow(reactPanel, blockId)}
-          >
-            <PlusIcon />
-          </Button>,
-          host,
-        )}
-    </>
+    <TableBlockBoundary
+      className={ROW_CLASS}
+      controls={
+        <Button
+          {...editorControlProps}
+          variant="outline"
+          size="icon-xs"
+          className={`${ADD_ROW_CLASS} ${BOUNDARY_BUTTON_CLASS}`}
+          type="button"
+          aria-label="Add table row below"
+          onClick={() => insertTableRow(reactPanel, blockId)}
+        >
+          <PlusIcon />
+        </Button>
+      }
+    />
   );
 }
 
@@ -412,26 +384,18 @@ interface TableCellRendererProps {
  * @returns Editable cell and boundary control portal.
  */
 function TableCell({ blockId }: TableCellRendererProps) {
-  const reactPanel = useReactPanel();
-  const { element: root } = useEditorRoot();
-  const { marker, host } = useBlockHost();
-  const controller = useRef<TableResizeController | null>(null);
-  useLayoutEffect(() => {
-    const resize = new TableResizeController(reactPanel, blockId, root);
-    controller.current = resize;
-    return () => {
-      controller.current = null;
-      resize.cancel();
-    };
-  }, [reactPanel, blockId, root]);
+  const { reactPanel } = useReactPanelContext();
+  const controller = useMemo(
+    () => new TableResizeController(reactPanel, blockId),
+    [reactPanel, blockId],
+  );
+  useLayoutEffect(() => () => controller.cancel(), [controller]);
   const currentWidth = columnWidth(reactPanel.blocks.getBlockNode(blockId)?.props.tableColumnWidth);
   return (
-    <>
-      <div ref={marker} className={CELL_CLASS}>
-        <MarkdownContent blockId={blockId} />
-      </div>
-      {host &&
-        createPortal(
+    <TableBlockBoundary
+      className={CELL_CLASS}
+      controls={
+        <>
           <Button
             {...editorControlProps}
             variant="outline"
@@ -442,33 +406,61 @@ function TableCell({ blockId }: TableCellRendererProps) {
             onClick={() => insertTableColumn(reactPanel, blockId)}
           >
             <PlusIcon />
-          </Button>,
-          host,
-        )}
-      {host &&
-        createPortal(
-          <div
-            {...editorControlProps}
-            className={RESIZE_COLUMN_CLASS}
-            role="separator"
-            tabIndex={0}
-            aria-label="Resize table column"
-            aria-orientation="vertical"
-            aria-valuemin={MIN_COLUMN_WIDTH}
-            aria-valuemax={MAX_COLUMN_WIDTH}
-            aria-valuenow={currentWidth}
-            onPointerDown={(event) =>
-              controller.current?.start(event.nativeEvent, event.currentTarget)
-            }
-            onPointerMove={(event) => controller.current?.move(event.nativeEvent)}
-            onPointerUp={(event) => controller.current?.finish(event.nativeEvent, true)}
-            onPointerCancel={(event) => controller.current?.finish(event.nativeEvent, false)}
-            onLostPointerCapture={(event) => controller.current?.finish(event.nativeEvent, false)}
-            onKeyDown={(event) => controller.current?.resizeWithKeyboard(event.nativeEvent)}
-          />,
-          host,
-        )}
-    </>
+          </Button>
+          <TableResizeHandle controller={controller} width={currentWidth} />
+        </>
+      }
+    >
+      <MarkdownContent blockId={blockId} />
+    </TableBlockBoundary>
+  );
+}
+
+/**
+ * Mounts an accessible column separator and attaches its normalized input.
+ *
+ * @param props - Current width and resize operations owned by the cell.
+ * @param props.controller - Borrowed pointer and keyboard resize operations.
+ * @param props.width - Persisted column width in CSS pixels.
+ * @returns A separator whose input listeners are released on unmount.
+ * @throws Propagates input attachment and cleanup failures.
+ */
+function TableResizeHandle({ controller, width }: TableResizeHandleProps) {
+  const { reactPanel } = useReactPanelContext();
+  const handle = useRef<HTMLDivElement>(null);
+  const subscribe = useCallback(
+    (listener: () => void) => reactPanel.subscribeAvailability(listener),
+    [reactPanel],
+  );
+  const root = useSyncExternalStore(
+    subscribe,
+    () => reactPanel.inputRoot,
+    () => undefined,
+  );
+  useLayoutEffect(() => {
+    if (handle.current && root) {
+      return attachTableResizeInput(
+        getBrowserElementIdentity(handle.current),
+        controller,
+        root,
+        () => reactPanel.inputRoot === root,
+      );
+    }
+  }, [controller, root, reactPanel]);
+  return (
+    <div
+      ref={handle}
+      {...editorControlProps}
+      {...{ [TABLE_RESIZE_HANDLE_ATTRIBUTE]: "" }}
+      className={RESIZE_COLUMN_CLASS}
+      role="separator"
+      tabIndex={0}
+      aria-label="Resize table column"
+      aria-orientation="vertical"
+      aria-valuemin={MIN_COLUMN_WIDTH}
+      aria-valuemax={MAX_COLUMN_WIDTH}
+      aria-valuenow={width}
+    />
   );
 }
 

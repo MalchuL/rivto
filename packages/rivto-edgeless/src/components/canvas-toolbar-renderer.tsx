@@ -87,15 +87,13 @@ export class CanvasToolbarRenderer<
     };
   }
   /**
-   * Renders one member with application bindings and shared activation behavior.
+   * Renders one member with registered presentation and shared activation behavior.
    *
    * @param item - Registered member and its current activation state.
    * @param children - Button contents, defaulting to the registration title.
    * @returns The application button with shared activation and menu dismissal.
    */
   renderTool = (item: CanvasToolbarItem<Registration>, children: ReactNode = item.tool.title) => {
-    const instance = this.props.tools.getTool(item.tool.id);
-    const bindings = this.props.getButtonProps?.(item.tool, instance);
     const Button = this.props.Button ?? CanvasToolButton;
     return (
       <Button
@@ -103,12 +101,10 @@ export class CanvasToolbarRenderer<
         label={item.tool.title}
         icon={item.tool.icon}
         pressed={item.active}
-        {...bindings}
-        onClick={(event) => {
-          bindings?.onClick?.(event);
-          if (!event.defaultPrevented) {
-            item.activate();
-          }
+        className={item.tool.className}
+        toolId={item.tool.id}
+        onActivate={() => {
+          item.activate();
           if (!item.tool.group) {
             this.setMenu(null);
           }
@@ -135,11 +131,10 @@ export class CanvasToolbarRenderer<
         key={`group:${group.id}`}
         label={group.title}
         icon={last?.icon ?? group.icon}
-        aria-haspopup="dialog"
-        aria-controls={open ? this.popoverId : undefined}
-        aria-expanded={open}
+        menuId={open ? this.popoverId : undefined}
+        menuOpen={open}
         pressed={active || open}
-        onClick={() => {
+        onActivate={() => {
           if (open) {
             this.setMenu(null);
             return;

@@ -1,5 +1,7 @@
 import { flushSync } from "react-dom";
 import type { Canvas } from "../core/canvas";
+import type { MouseInput } from "@chulane/rivto-root";
+import type { CanvasTransformInput } from "./types";
 import type { CanvasControlsAdapter, CanvasControlHandle, ControlPreview } from "../types/controls";
 import type { TransformChange, TransformKind } from "../types/canvas";
 
@@ -12,7 +14,7 @@ export class CanvasTransformAdapter implements CanvasControlsAdapter {
    * Binds a scene and its geometry hosts without installing listeners.
    *
    * @param canvas - Scene owning selection and temporary transformations.
-   * @param plane - World layer containing this scene's mounted targets.
+   * @param input - Mounted-world target lookup and focus, borrowed without attachment ownership.
    */
   constructor(
     private readonly canvas: Pick<
@@ -26,7 +28,7 @@ export class CanvasTransformAdapter implements CanvasControlsAdapter {
       | "selection"
       | "transform"
     >,
-    private readonly plane: HTMLElement,
+    private readonly input: CanvasTransformInput,
   ) {}
 
   /**
@@ -36,25 +38,6 @@ export class CanvasTransformAdapter implements CanvasControlsAdapter {
    */
   getTargetIds() {
     return this.canvas.selection.get();
-  }
-  /**
-   * Resolves selected mounted geometry hosts.
-   *
-   * @returns Unique targets inside this world layer.
-   */
-  getTargets(): HTMLElement[] {
-    return [...this.plane.querySelectorAll<HTMLElement>("[data-canvas-element]")].filter((host) =>
-      this.canvas.selection.get().includes(this.targetId(host)),
-    );
-  }
-  /**
-   * Reads the independent canvas identity marker.
-   *
-   * @param target - A registered geometry host.
-   * @returns Its consumer ID.
-   */
-  targetId(target: HTMLElement | SVGElement) {
-    return target.dataset.canvasElement!;
   }
   /**
    * Retains the live library controller until unmount.
@@ -154,27 +137,30 @@ export class CanvasTransformAdapter implements CanvasControlsAdapter {
   /**
    * Starts a move from a selected or newly selected non-interactive target.
    *
-   * @param event - Native mouse input used by the transform library.
-   * @param root - Focusable viewport that owns this adapter.
+   * @param event - Normalized mouse input and occurrence-scoped target capabilities.
    * @returns An admitted move starts tracking after selection is painted.
+   * @throws Propagates target lookup, selection, focus or transform-control failures.
    */
-  startDrag(event: MouseEvent, root: HTMLElement): void {
+  startDrag(event: MouseInput<"mousedown">): void {
     if (
       event.button !== 0 ||
       event.ctrlKey ||
       event.metaKey ||
-      !(event.target instanceof Element) ||
-      event.target.closest(
+      !event.target ||
+      event.target.hasAncestor(
         "input,textarea,button,[contenteditable]:not([contenteditable=false]),[data-canvas-control]",
       )
     ) {
       return;
     }
-    const host = event.target.closest<HTMLElement>("[data-canvas-element]");
-    if (!host || !root.contains(host)) {
+    const id = this.input.worldRegion.ancestorAttribute(
+      event.target,
+      "[data-canvas-element]",
+      "data-canvas-element",
+    );
+    if (id === undefined) {
       return;
     }
-    const id = host.dataset.canvasElement!;
     flushSync(() => {
       if (!this.canvas.selection.get().includes(id)) {
         this.canvas.select([id]);
@@ -183,8 +169,8 @@ export class CanvasTransformAdapter implements CanvasControlsAdapter {
     if (!this.begin("move")) {
       return;
     }
-    root.focus({ preventScroll: true });
-    this.controls?.prepareDrag(this.getTargets());
-    this.controls?.dragStart(event);
+    this.input.focus();
+    this.controls?.prepareDrag(this.getTargetIds());
+    this.controls?.dragStart();
   }
 }

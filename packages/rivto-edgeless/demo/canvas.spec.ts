@@ -206,17 +206,19 @@ test("pointer cancellation restores a default transform without committing", asy
   await element.click();
   const original = (await element.boundingBox())!;
   await page.mouse.move(original.x + 70, original.y + 40);
-  const pointer = page.evaluate(
-    () =>
-      new Promise<number>((resolve) => {
-        window.addEventListener("pointerdown", (event) => resolve(event.pointerId), {
-          once: true,
-          capture: true,
-        });
-      }),
-  );
+  await page.evaluate(() => {
+    const state = window as unknown as { pointerDown: Promise<number> };
+    state.pointerDown = new Promise<number>((resolve) => {
+      window.addEventListener("pointerdown", (event) => resolve(event.pointerId), {
+        once: true,
+        capture: true,
+      });
+    });
+  });
   await page.mouse.down();
-  const pointerId = await pointer;
+  const pointerId = await page.evaluate(
+    () => (window as unknown as { pointerDown: Promise<number> }).pointerDown,
+  );
   await page.mouse.move(original.x + 170, original.y + 100, { steps: 4 });
   const preview = (await element.boundingBox())!;
   expect(preview.x).not.toBe(original.x);

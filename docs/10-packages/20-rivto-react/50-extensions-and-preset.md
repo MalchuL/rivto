@@ -57,7 +57,7 @@ Properties options:
 - `factory.createEmptyBlock()` используется для Enter/trailing/separator, а clipboard сохраняет прежнее использование только типа;
 - `factory.isEmptyBlock()` используется для reset/outdent behavior;
 - `factory.isBlock()` распознаёт native type независимо от пустоты;
-- `onMarkdownLinkClick({ blockId, href, event })` для host routing.
+- `onMarkdownLinkClick({ blockId, href, preventDefault })` для host routing.
 
 ## Individual built-ins
 

@@ -2,6 +2,7 @@ import { PAGE_SELECTION_BINDINGS } from "../surfaces/page/page-selection-extensi
 import { PageNavigationController } from "../surfaces/page/page-navigation-controller";
 import { PanelBlockContextMenuManager } from "../managers/block-context-menu/panel-manager";
 import { BlockEditorController, BlockSelectionExtensions } from "@chulane/rivto-page";
+import { BrowserInputRoot, getBrowserElementIdentity } from "@chulane/rivto-root/browser";
 import { PageBlocks } from "../surfaces/page/page-blocks";
 import { PageSelection } from "../surfaces/page/page-selection";
 import { PageSurfaceRegistrations } from "../surfaces/page/page-surface-registrations";
@@ -14,7 +15,7 @@ import {
   type ModeManagerApi,
   type EditorMode,
 } from "@chulane/rivto";
-import type { ReactEditorApi } from "../editor/types";
+import type { ReactEditorApi, ReactEditorPanelApi } from "../editor/types";
 import { PanelClipboardManager } from "../managers/clipboard/panel-clipboard-manager";
 import { PANEL_ATTRIBUTE } from "./panel-dom";
 import { PanelEventManager } from "../managers/events/panel-event-manager";
@@ -22,7 +23,13 @@ import { PanelKeyboardManager } from "../managers/keyboard/panel-keyboard-manage
 import type { PanelSelectionApi } from "../managers/selection/api";
 import { PanelSelectionManager } from "../managers/selection/panel-selection-manager";
 import { PanelSlashCommandManager } from "../managers/slash/panel-slash-command-manager";
-import type { PanelOptions, PanelSnapshot, ReactPanelApi } from "./types";
+import type {
+  PanelInputRegistration,
+  PanelInputRoot,
+  PanelOptions,
+  PanelSnapshot,
+  ReactPanelApi,
+} from "./types";
 
 /**
  * Connects one EditorPanel or EditorEmbed component to its document, DOM root, and local managers.
@@ -59,13 +66,16 @@ import type { PanelOptions, PanelSnapshot, ReactPanelApi } from "./types";
  * Construction connects local resources; destroy() releases them permanently.
  * A destroyed instance is never reused by a later mount of the hook.
  */
-export class ReactPanel implements ReactPanelApi {
+export class ReactPanel<
+  Editor extends ReactEditorPanelApi = ReactEditorApi,
+> implements ReactPanelApi {
   /** Occurrence-owned Page runtime; the mounted surface borrows only its attachment. */
   readonly page: BlockEditorController;
   /** Optional feature coordinator shared by this occurrence's independent selection extensions. */
   readonly pageSelectionFeatures = new BlockSelectionExtensions(PAGE_SELECTION_BINDINGS);
   private readonly pageSelection: PageSelection;
-  private readonly pageNavigation: PageNavigationController;
+  /** Internal navigation owner shared with this panel's mounted surface. */
+  readonly pageNavigation: PageNavigationController;
   private readonly pageRegistrations: PageSurfaceRegistrations;
   readonly mode: ModeManagerApi;
   readonly events: PanelEventManager;
@@ -76,13 +86,31 @@ export class ReactPanel implements ReactPanelApi {
   readonly slashCommands: PanelSlashCommandManager;
   readonly id = crypto.randomUUID();
   private selectionManager: PanelSelectionManager;
-  private root: HTMLElement | null = null;
-  private enabled = true;
+  /** Surface identity remains assigned during synchronous Root cleanup. */
+  private rootIdentity: object | undefined;
+  /** Mounted occurrence capability owned independently of routing. */
+  mountedRoot: BrowserInputRoot | undefined;
+  /**
+   * Supplies the mounted Root to direct control actions during panel registration.
+   *
+   * @returns The borrowed Root, or undefined before registration, after displacement
+   * by another panel on the same element, or after the mount has been released.
+   */
+  get inputRoot(): PanelInputRoot | undefined {
+    const root = this.mountedRoot;
+    return root && this.inputRegistration?.isCurrent(root) ? root : undefined;
+  }
+  /** Routing lifetime borrowed by controls tied to the current registration. */
+  inputRegistration: PanelInputRegistration | undefined;
+  /** Whether the mounted occurrence currently accepts interaction. */
+  enabled = true;
   private snapshot: PanelSnapshot = { status: "loading" };
   private readonly listeners = new Set<() => void>();
   private readonly deactivationListeners = new Set<() => void>();
   private readonly registrations = new Set<() => void>();
   private unregisterRoot: (() => void) | undefined;
+  /** Releases Page input and selection for the currently registered surface. */
+  private detachPage: (() => void) | undefined;
   private unsubscribeBlock: (() => void) | undefined;
   private unsubscribeMode: (() => void) | undefined;
   private destroyed = false;
@@ -101,7 +129,7 @@ export class ReactPanel implements ReactPanelApi {
    * @throws If the core panel belongs to another editor, the shared editor is destroyed, or resource setup fails.
    */
   constructor(
-    readonly editor: ReactEditorApi,
+    readonly editor: Editor,
     private readonly corePanel: PanelAPI,
     options: PanelOptions = {},
   ) {
@@ -125,7 +153,11 @@ export class ReactPanel implements ReactPanelApi {
         adapter: { blocks, selection: this.pageSelection },
         fallbackRenderer: editor.renderers.fallback ?? UnknownBlock,
       });
-      this.pageNavigation = new PageNavigationController(this.page.adapter);
+      this.pageNavigation = new PageNavigationController(
+        this.page.adapter,
+        this.page.browserSelection,
+        this.page.virtualization,
+      );
       this.pageRegistrations = new PageSurfaceRegistrations(
         editor.surfaces,
         editor.renderers,
@@ -209,11 +241,16 @@ export class ReactPanel implements ReactPanelApi {
   readonly getSnapshot = (): PanelSnapshot => this.snapshot;
 
   /**
-   * Returns the DOM root currently available to this panel's interaction handlers.
+   * Checks whether this panel currently exposes a surface for interaction.
    *
-   * @returns The assigned root, or null when no root is assigned or the panel is disabled.
+   * The assigned surface remains visible to this check during its synchronous
+   * release, until the panel clears or replaces it or disables interaction.
+   *
+   * @returns True when a surface is assigned and the panel is enabled.
    */
-  readonly getRoot = (): HTMLElement | null => (this.enabled ? this.root : null);
+  hasInteractiveRoot(): boolean {
+    return this.enabled && this.rootIdentity !== undefined;
+  }
 
   /**
    * Reads the rendered surface of this panel without changing shared document mode.
@@ -224,15 +261,22 @@ export class ReactPanel implements ReactPanelApi {
    * snapshot. Use this method for panel-specific commands outside event handlers,
    * and the core mode manager for document-wide presentation choices.
    *
-   * @returns Mounted panel's surface type, or the panel's declared mode when unmounted.
-   * Unrecognized mounted roots use the registry's panel-mode fallback.
+   * @returns Mounted panel's surface type, or the panel's declared mode when unmounted,
+   * disabled, or its Root is being released. Unrecognized mounted roots use the
+   * registry's panel-mode fallback.
+   * @throws Propagates Root ownership and browser attribute-read failures.
    */
   getSurfaceType(): EditorMode {
-    const root = this.getRoot();
+    const root = this.enabled ? this.mountedRoot : undefined;
     return root ? this.editor.panels.getSurfaceType(root) : this.mode.get();
   }
 
-  /** Observes availability changes. @param listener - Loading-state observer. @returns Unsubscribe callback. */
+  /**
+   * Observes availability and input Root changes.
+   *
+   * @param listener - Called synchronously after the observed state changes.
+   * @returns Disposer that removes this listener.
+   */
   readonly subscribeAvailability = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
     return () => {
@@ -243,30 +287,66 @@ export class ReactPanel implements ReactPanelApi {
   /**
    * Replaces the DOM root used by this panel's events and selection operations.
    *
-   * The old root is unregistered first, cancelling its pending selection work.
+   * The old root is unregistered and its Page attachment released first, cancelling
+   * pending selection work. A block-editor root attaches Page before this method
+   * returns; standalone Page views may instead own their own attachment.
    * A new root receives the document-panel attribute and reflects the enabled state
    * through inert. Subtree roots also receive the block-editor accessibility label.
    * The root is registered for events when the panel has a document and is enabled.
    * @param nextRoot - Surface element supplied by useEditorRoot, or null when detached.
    * @returns Nothing; other panels keep their own roots and registrations.
+   * @throws If panel registration, Page attachment, or root cleanup fails; rollback
+   * failures are retained together with the attachment failure.
    */
   readonly setRoot = (nextRoot: HTMLElement | null): void => {
-    if (nextRoot === this.root) {
+    const nextIdentity = nextRoot ? getBrowserElementIdentity(nextRoot) : undefined;
+    if (nextIdentity === this.rootIdentity) {
       return;
     }
-    this.unregisterRoot?.();
-    this.unregisterRoot = undefined;
-    this.root = nextRoot;
-    this.pageNavigation.setRoot(nextRoot);
-    if (this.root) {
-      this.root.inert = !this.enabled;
-      this.root.setAttribute(PANEL_ATTRIBUTE, "");
-      if (this.corePanel.rootBlockId) {
-        this.root.setAttribute("role", "region");
-        this.root.setAttribute("aria-label", "Block editor");
+    const previousInputRegistration = this.inputRegistration;
+    const previousMountedRoot = this.mountedRoot;
+    try {
+      try {
+        this.releaseRoot();
+      } catch (error) {
+        this.rootIdentity = undefined;
+        this.pageNavigation.setRoot(null);
+        throw error;
+      }
+      this.rootIdentity = nextIdentity;
+      this.mountedRoot = nextRoot ? new BrowserInputRoot(nextRoot) : undefined;
+      this.pageNavigation.setRoot(this.mountedRoot ?? null);
+      if (this.mountedRoot) {
+        this.mountedRoot.setInert(!this.enabled);
+        this.mountedRoot.setAttribute(PANEL_ATTRIBUTE, "");
+        if (this.corePanel.rootBlockId) {
+          this.mountedRoot.setAttribute("role", "region");
+          this.mountedRoot.setAttribute("aria-label", "Block editor");
+        }
+      }
+      try {
+        this.registerCurrentDOMRoot();
+        if (this.mountedRoot?.readAttribute("data-rivto-block-editor") !== undefined) {
+          this.detachPage = this.page.attach(this.mountedRoot);
+        }
+      } catch (error) {
+        this.rootIdentity = undefined;
+        this.pageNavigation.setRoot(null);
+        try {
+          this.releaseRoot();
+        } catch (cleanupError) {
+          throw new AggregateError([error, cleanupError], "Page attachment rollback failed");
+        }
+        throw error;
+      }
+    } finally {
+      if (
+        this.inputRegistration !== previousInputRegistration ||
+        this.mountedRoot !== previousMountedRoot
+      ) {
+        this.listeners.forEach((listener) => listener());
       }
     }
-    this.registerCurrentDOMRoot();
   };
 
   /** @param listener - Closes transient UI when another panel becomes active. @returns Unsubscribe callback. */
@@ -334,13 +414,15 @@ export class ReactPanel implements ReactPanelApi {
       this.unsubscribeMode,
       this.unsubscribeBlock,
       this.unregisterRoot,
+      () => this.mountedRoot?.detach(),
       () => this.selectionManager.destroy(),
       ...this.registrations,
     ];
     this.unsubscribeMode = undefined;
     this.unsubscribeBlock = undefined;
     this.unregisterRoot = undefined;
-    this.root = null;
+    this.detachPage = undefined;
+    this.rootIdentity = undefined;
     for (const cleanup of cleanups) {
       try {
         cleanup?.();
@@ -348,6 +430,8 @@ export class ReactPanel implements ReactPanelApi {
         errors.push(error);
       }
     }
+    this.inputRegistration = undefined;
+    this.mountedRoot = undefined;
     this.registrations.clear();
     this.deactivationListeners.clear();
     try {
@@ -373,16 +457,23 @@ export class ReactPanel implements ReactPanelApi {
     if (nextEnabled === this.enabled) {
       return;
     }
-    this.enabled = nextEnabled;
-    if (this.root) {
-      this.root.inert = !this.enabled;
-    }
-    if (!this.enabled) {
-      this.unregisterRoot?.();
-      this.unregisterRoot = undefined;
-      this.deactivate();
-    } else {
-      this.registerCurrentDOMRoot();
+    const previousInputRegistration = this.inputRegistration;
+    try {
+      this.enabled = nextEnabled;
+      this.mountedRoot?.setInert(!this.enabled);
+      if (!this.enabled) {
+        const unregisterRoot = this.unregisterRoot;
+        this.unregisterRoot = undefined;
+        this.inputRegistration = undefined;
+        unregisterRoot?.();
+        this.deactivate();
+      } else {
+        this.registerCurrentDOMRoot();
+      }
+    } finally {
+      if (this.inputRegistration !== previousInputRegistration) {
+        this.listeners.forEach((listener) => listener());
+      }
     }
   };
 
@@ -390,6 +481,32 @@ export class ReactPanel implements ReactPanelApi {
   private readonly deactivate = (): void => {
     this.deactivationListeners.forEach((listener) => listener());
   };
+
+  /**
+   * Releases the current panel registration and Page attachment independently.
+   *
+   * @returns Both resources have been released and cannot be released again here.
+   * @throws AggregateError after attempting both cleanups if either fails.
+   */
+  private releaseRoot(): void {
+    const mountedRoot = this.mountedRoot;
+    const cleanups = [this.unregisterRoot, this.detachPage, () => mountedRoot?.detach()];
+    this.unregisterRoot = undefined;
+    this.detachPage = undefined;
+    this.inputRegistration = undefined;
+    this.mountedRoot = undefined;
+    const errors: unknown[] = [];
+    for (const cleanup of cleanups) {
+      try {
+        cleanup?.();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length) {
+      throw new AggregateError(errors, "Panel root cleanup failed");
+    }
+  }
 
   /**
    * Registers the current DOM surface for panel event routing and focus tracking.
@@ -414,22 +531,34 @@ export class ReactPanel implements ReactPanelApi {
     if (
       this.destroyed ||
       !this.enabled ||
-      !this.root ||
+      !this.mountedRoot ||
       !this.snapshot.document ||
       this.unregisterRoot
     ) {
       return;
     }
     // Route events to this occurrence and retain cleanup for root replacement, deactivation, or unmount.
-    this.unregisterRoot = this.editor.panels.registerPanel(
-      this.root,
-      this.snapshot.document,
-      this.corePanel.rootBlockId,
-      this.snapshot.api,
-      this.deactivate,
-      // Cancels pending caret work for this occurrence, including runtime shutdown and root removal.
-      () => this.selectionManager.destroy(),
-    );
+    let stagedRegistration: PanelInputRegistration | undefined;
+    try {
+      this.unregisterRoot = this.editor.panels.registerPanel(
+        this.mountedRoot,
+        this.snapshot.document,
+        this.corePanel.rootBlockId,
+        this.snapshot.api,
+        this.deactivate,
+        // Cancels pending caret work for this occurrence, including runtime shutdown and root removal.
+        () => this.selectionManager.destroy(),
+        (inputRegistration) => {
+          stagedRegistration = inputRegistration;
+          this.inputRegistration = inputRegistration;
+        },
+      );
+    } catch (error) {
+      if (this.inputRegistration === stagedRegistration) {
+        this.inputRegistration = undefined;
+      }
+      throw error;
+    }
   };
 
   /**
@@ -439,7 +568,8 @@ export class ReactPanel implements ReactPanelApi {
    * If that root later disappears, the state becomes missing so the document can stay
    * retained and undo can restore the block. A full-document panel is always available
    * once its document is supplied. Subscribers are notified only when the document,
-   * status, or retention flag changes; ordinary content edits use block subscriptions.
+   * status, or retention flag changes; the same subscribers are also notified when
+   * the input Root or its routing lifetime changes. Ordinary content edits use block subscriptions.
    *
    * @param document - The document already supplied by the runtime or its acquisition.
    * @param retained - Whether this mount has installed its local bindings; defaults to false.

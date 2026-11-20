@@ -1,7 +1,2 @@
-export {
-  EditableLabel,
-  type EditableLabelFocusPoint,
-  type EditableLabelHandle,
-  type EditableLabelProps,
-} from "./editable-label";
-export { placeCaretAtPoint } from "./place-caret-at-point";
+export { EditableLabel } from "./editable-label";
+export type { EditableLabelFocusPoint, EditableLabelHandle, EditableLabelProps } from "./types";

@@ -1,45 +1,19 @@
-import { DragHandle, type DragHandleProps } from "@chulane/rivto-page";
+import type { RegionIdentity } from "@chulane/rivto-root";
+import { DragHandle, type DragHandleBinding } from "@chulane/rivto-page";
 import { BLOCK_HANDLE_CLASS } from "./constants";
-import { createContext, useContext, useRef, useState, type ReactNode } from "react";
-import type { EditorBlockNode } from "@chulane/rivto";
-import type { BlockSlotProps } from "../../managers";
+import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { useReactPanel } from "../../hooks";
 import { editorControlProps } from "../../constants";
 import { PageDragContext } from "../../surfaces/page/page-drag-context";
 import { blockMenuTargets } from "../../managers/block-context-menu/targets";
-import type { BlockContextMenuContext } from "../../managers/block-context-menu/types";
+import type { BlockHandleMenuState, BlockHandleOptions, BlockHandleProps } from "./types";
+
+export type { BlockHandleOptions } from "./types";
+import { restoreBlockHandleFocus } from "./block-handle-focus";
 import { BlockContextMenu } from "./menu";
 
-/** Application-owned navigation and optional handle artwork; no persisted icon state is introduced. */
-export interface BlockHandleOptions extends Pick<DragHandleProps, "clickMovementThreshold"> {
-  /**
-   * Requests host navigation when the handle receives an eligible pointer or keyboard click.
-   *
-   * A component callback takes precedence over the context callback. When neither
-   * is provided, clicking does not navigate; menus and optional dragging still work.
-   *
-   * @param blockId - Stable document-local ID of the clicked block.
-   * @returns No value; the host decides how and where to open the block.
-   */
-  readonly onOpen?: (blockId: string) => void;
-  /**
-   * Provides host artwork for the handle without persisting icon state.
-   *
-   * A component renderer takes precedence over the context renderer. Omission or
-   * a nullish result uses the default four-dot grip. Artwork is decorative and
-   * rendered inside an aria-hidden wrapper; it must not contain interactive controls.
-   *
-   * @param block - Current detached block snapshot supplied by the rendered slot.
-   * @param collapsed - Whether the block's collapsed list property is true.
-   * @returns Decorative React content, or null/undefined to use the default grip.
-   */
-  readonly renderIcon?: (block: EditorBlockNode, collapsed: boolean) => ReactNode;
-}
 /** Supplies navigation and artwork to handles within this application view. */
 export const BlockHandleContext = createContext<BlockHandleOptions>({});
-
-/** Slot snapshot and application overrides consumed by one shared handle. */
-interface BlockHandleProps extends BlockSlotProps, BlockHandleOptions {}
 
 /**
  * One accessible control for opening, dragging, and block-local extension actions.
@@ -72,8 +46,16 @@ export function BlockHandle({
   const options = useContext(BlockHandleContext);
   const pageDragEnabled = useContext(PageDragContext);
   const reactPanel = useReactPanel();
-  const button = useRef<HTMLButtonElement>(null);
-  const [menu, setMenu] = useState<{ context: BlockContextMenuContext; x: number; y: number }>();
+  const [menu, setMenu] = useState<BlockHandleMenuState>();
+  const handleIdentity = useRef<RegionIdentity | undefined>(undefined);
+  const bindHandle = useCallback<DragHandleBinding>((identity) => {
+    handleIdentity.current = identity;
+    return () => {
+      if (handleIdentity.current === identity) {
+        handleIdentity.current = undefined;
+      }
+    };
+  }, []);
   /**
    * Captures structural selection targets before mounting the menu at an anchor.
    *
@@ -82,14 +64,25 @@ export function BlockHandle({
    * @returns No value after the captured menu state has been scheduled for rendering.
    */
   const openMenu = (x: number, y: number) => {
-    setMenu({ context: blockMenuTargets(reactPanel, block.id), x, y });
+    const identity = handleIdentity.current;
+    if (!identity) {
+      return;
+    }
+    const inputRoot = reactPanel.inputRoot;
+    setMenu({
+      context: blockMenuTargets(reactPanel, block.id),
+      x,
+      y,
+      identity,
+      inputRoot,
+    });
   };
   const collapsed = block.listProps.collapsed === true;
   return (
     <>
       <DragHandle
         {...editorControlProps}
-        ref={button}
+        bindHandle={bindHandle}
         type="button"
         className={BLOCK_HANDLE_CLASS}
         contentEditable={false}
@@ -107,7 +100,13 @@ export function BlockHandle({
         {(renderIcon ?? options.renderIcon)?.(block, collapsed)}
       </DragHandle>
       {menu && (
-        <BlockContextMenu {...menu} close={() => setMenu(undefined)} handle={button.current} />
+        <BlockContextMenu
+          context={menu.context}
+          x={menu.x}
+          y={menu.y}
+          close={() => setMenu(undefined)}
+          restoreFocus={() => restoreBlockHandleFocus(reactPanel, menu)}
+        />
       )}
     </>
   );

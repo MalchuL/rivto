@@ -1,7 +1,7 @@
 import type { ExtensionComponent, ExtensionMountPosition, ReactEditorExtension } from "./types";
 
 /** Extension installation, mounted components, and revision subscriptions. */
-export interface ExtensionsApi {
+export interface ExtensionsApi<CustomEvents extends object = object> {
   /**
    * Adds cleanup to the runtime and, during setup, to the active extension.
    * Extension cleanup runs before its registrations; remaining registrations
@@ -38,7 +38,7 @@ export interface ExtensionsApi {
    * @throws If inactive, the ID is invalid/duplicate, setup returns invalid cleanup,
    * or setup/rollback fails. Removal throws cleanup failures; multiple failures are aggregated.
    */
-  install(extension: ReactEditorExtension): () => void;
+  install(extension: ReactEditorExtension<CustomEvents>): () => void;
   readonly revision: number;
   /**
    * Observes extension component mount changes.

@@ -94,9 +94,13 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("../packages/rivto-page/src/index.ts", import.meta.url)),
       },
       {
-        find: /^@chulane\/rivto-keyboard$/,
+        find: "@chulane/rivto-root/browser",
+        replacement: fileURLToPath(new URL("../packages/rivto-root/src/browser.ts", import.meta.url)),
+      },
+      {
+        find: /^@chulane\/rivto-root$/,
         replacement: fileURLToPath(
-          new URL("../packages/rivto-keyboard/src/index.ts", import.meta.url),
+          new URL("../packages/rivto-root/src/index.ts", import.meta.url),
         ),
       },
       {

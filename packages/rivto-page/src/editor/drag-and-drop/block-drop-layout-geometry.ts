@@ -1,14 +1,11 @@
+import type { RegionIdentity } from "@chulane/rivto-root";
 import {
   dropBounds,
   dropEdgeRect,
   containsDropPoint,
   containsDropCrossAxisPoint,
-  continuesDropOutline,
   dropRegionTarget,
-  isDropBackground,
-  readDropGeometry,
 } from "./block-drop-region-geometry";
-import type { BlockDropBounds, BlockDropGeometry } from "./block-drop-region-geometry";
 import type {
   BlockDropDestination,
   BlockDropEdgeRegion,
@@ -17,7 +14,10 @@ import type {
   BlockDropRegion,
   BlockDropGapRegion,
   BlockDropTargetRegistration,
-  ResolvedBlockDropTarget,
+  BlockDropGeometryTarget,
+  BlockDropBounds,
+  BlockDropGeometry,
+  BlockDropGeometryReader,
 } from "./types";
 
 /**
@@ -69,7 +69,7 @@ function upperBound(
  *
  * @param layout - Mounted list and explicit axis/gap policy.
  * @param point - Current viewport pointer.
- * @param hit - Native hit, used to restrict gaps to their background or adjacent anchors.
+ * @param measurements - Query-local Root measurements for list hosts and anchors.
  * @param edge - Nearest declared edge, optionally normalized to its shared boundary.
  * @returns Physical gap target, or undefined for background, virtual holes or absent neighbors.
  * @throws If a measured edge thickness or numeric gutter extent is negative or nonfinite.
@@ -77,9 +77,9 @@ function upperBound(
 export function resolveLayoutGap(
   layout: BlockDropLayoutRegistration,
   point: BlockDropPoint,
-  hit: Element,
-  edge?: ResolvedBlockDropTarget,
-): ResolvedBlockDropTarget | undefined {
+  measurements: BlockDropGeometryReader,
+  edge?: BlockDropGeometryTarget,
+): BlockDropGeometryTarget | undefined {
   if (!layout.gaps) {
     return;
   }
@@ -91,15 +91,20 @@ export function resolveLayoutGap(
   const read = (item: BlockDropTargetRegistration) => {
     let value = cache.get(item);
     if (!value) {
-      value = readDropGeometry(item.element);
+      value = measurements.read(item.identity);
       cache.set(item, value);
     }
     return value;
   };
-  const rtl =
-    layout.element.ownerDocument.defaultView!.getComputedStyle(layout.element).direction === "rtl";
+  const rtl = measurements.readDirection(layout.identity) === "rtl";
+  if (!measurements.isCurrent()) {
+    return undefined;
+  }
   // Free endpoint space shares the endpoint's line, including explicit root areas.
-  const outer = resolveListEndGap(layout, items, point, hit, read, rtl);
+  const outer = resolveListEndGap(layout, items, point, read, measurements, rtl);
+  if (!measurements.isCurrent()) {
+    return undefined;
+  }
   if (outer && (!edge || matchesEndpointBoundary(outer, edge))) {
     return outer;
   }
@@ -107,15 +112,21 @@ export function resolveLayoutGap(
     return;
   }
   // Real neighbor seams precede inferred gutter continuation.
-  const pair = resolveGapPairs(layout, items, point, hit, read, rtl, edge);
+  const pair = resolveGapPairs(layout, items, point, read, measurements, rtl, edge);
+  if (!measurements.isCurrent()) {
+    return undefined;
+  }
   if (pair || edge) {
     return pair;
   }
-  const gutter = resolveLayoutGutter(layout, items, point, hit, read, rtl);
+  const gutter = resolveLayoutGutter(layout, items, point, read, measurements, rtl);
+  if (!measurements.isCurrent()) {
+    return undefined;
+  }
   if (!gutter) {
     return;
   }
-  return resolveGapPairs(layout, items, point, hit, read, rtl, gutter) ?? gutter;
+  return resolveGapPairs(layout, items, point, read, measurements, rtl, gutter) ?? gutter;
 }
 
 /**
@@ -169,7 +180,7 @@ function hasStationaryDropNeighbors(
  * @param target - Nearest resolved region, or undefined outside its declaration.
  * @returns True for an edge that stays local rather than selecting an ancestor parent.
  */
-export function isLocalOutlineEdge(target: ResolvedBlockDropTarget | undefined): boolean {
+export function isLocalOutlineEdge(target: BlockDropGeometryTarget | undefined): boolean {
   return (
     target?.region?.kind === "edge" &&
     (target.destination.kind !== "between" ||
@@ -185,16 +196,18 @@ export function isLocalOutlineEdge(target: ResolvedBlockDropTarget | undefined):
  *
  * @param outer - Matched ancestor anchor, destination and edge declaration.
  * @param inner - Nearer explicit edge whose declaration overlaps the ancestor rim.
+ * @param measurements - Attachment-bound access to the anchor's child scope.
  * @param excluded - Captured moving roots used to identify stationary neighbors.
  * @returns True when the ancestor's local sibling seam wins this overlap.
  */
 export function prefersOuterSiblingEdge(
-  outer: Pick<ResolvedBlockDropTarget, "element" | "destination" | "region">,
-  inner: Pick<ResolvedBlockDropTarget, "region">,
+  outer: Pick<BlockDropGeometryTarget, "identity" | "destination" | "region">,
+  inner: Pick<BlockDropGeometryTarget, "region">,
+  measurements: Pick<BlockDropGeometryReader, "continuesOutline">,
   excluded?: ReadonlySet<string>,
 ): boolean {
   if (
-    continuesDropOutline(outer.element) ||
+    measurements.continuesOutline(outer.identity) ||
     !hasStationaryDropNeighbors(outer.destination, excluded)
   ) {
     return false;
@@ -223,7 +236,7 @@ export function prefersOuterSiblingEdge(
  * @param layout - Nearest mounted list under the ancestor edge.
  * @param ancestor - Ancestor boundary's receiving parent and registered anchor; its own local child scope retains its external sibling rim.
  * @param point - Native viewport pointer.
- * @param hit - Native hit used to reject occupied or excluded background.
+ * @param measurements - Query-local Root measurements for list hosts and anchors.
  * @param perpendicular - Whether a containing linear layout uses the other axis.
  * @param excluded - Moving roots whose adjacent boundary is not a shared seam between two stationary neighbors.
  * @returns The preferred inner gap, or undefined for grid flow, occupied space,
@@ -231,21 +244,21 @@ export function prefersOuterSiblingEdge(
  */
 export function resolveInnerLayoutGap(
   layout: BlockDropLayoutRegistration,
-  ancestor: Pick<ResolvedBlockDropTarget, "destination" | "element" | "region">,
+  ancestor: Pick<BlockDropGeometryTarget, "destination" | "identity" | "region">,
   point: BlockDropPoint,
-  hit: Element,
+  measurements: BlockDropGeometryReader,
   perpendicular: boolean,
   excluded?: ReadonlySet<string>,
-): ResolvedBlockDropTarget | undefined {
+): BlockDropGeometryTarget | undefined {
   const outerRim = isOuterLayoutRim(layout.axis, ancestor.region);
   if (outerRim && hasStationaryDropNeighbors(ancestor.destination, excluded)) {
     return;
   }
-  if (layout.axis === "grid" || !isDropBackground(layout.element, hit, point)) {
+  if (layout.axis === "grid" || !measurements.isBackground(layout.identity, point)) {
     return;
   }
-  const gap = resolveLayoutGap(layout, point, hit);
-  if (isLocalOwnerGap(ancestor.element, gap) && outerRim) {
+  const gap = resolveLayoutGap(layout, point, measurements);
+  if (isLocalOwnerGap(ancestor.identity, gap, measurements) && outerRim) {
     return;
   }
   if (!gap?.indicator || gap.destination.parentId === ancestor.destination.parentId) {
@@ -282,13 +295,20 @@ function isOuterLayoutRim(
  * Such a gap cannot replace that owner's external sibling rim. Ordinary outline
  * owners retain their descendant depth choices.
  *
- * @param element - Ancestor anchor carrying its canonical block or placement identity.
+ * @param regionIdentity - Opaque identity of the ancestor anchor carrying its canonical block or placement identity.
  * @param gap - Nested list candidate, absent when its geometry did not match.
+ * @param measurements - Attachment-bound access to the anchor's identity and child scope.
  * @returns True when outline continuation is disabled and the receiving parent is this owner.
  */
-function isLocalOwnerGap(element: HTMLElement, gap: ResolvedBlockDropTarget | undefined): boolean {
-  const ownerId = element.dataset.blockId ?? element.dataset.blockItemId;
-  return !continuesDropOutline(element) && gap?.destination.parentId === ownerId;
+function isLocalOwnerGap(
+  regionIdentity: RegionIdentity,
+  gap: BlockDropGeometryTarget | undefined,
+  measurements: Pick<BlockDropGeometryReader, "readAttribute" | "continuesOutline">,
+): boolean {
+  const ownerId =
+    measurements.readAttribute(regionIdentity, "data-block-id") ??
+    measurements.readAttribute(regionIdentity, "data-block-item-id");
+  return !measurements.continuesOutline(regionIdentity) && gap?.destination.parentId === ownerId;
 }
 
 /**
@@ -300,8 +320,8 @@ function isLocalOwnerGap(element: HTMLElement, gap: ResolvedBlockDropTarget | un
  * @param layout - Registered layout and feedback policy.
  * @param items - Mounted canonical anchors in flow order.
  * @param point - Native viewport pointer.
- * @param hit - Native visible element restricting occupied and excluded regions.
  * @param read - Shared cached geometry reader.
+ * @param measurements - Root-backed bounds and background measurements.
  * @param rtl - Whether inline order runs right to left.
  * @param edge - Optional edge to normalize against its own canonical neighbor.
  * @returns Matching physical/shared gap, or undefined for an unrelated boundary.
@@ -310,24 +330,27 @@ function resolveGapPairs(
   layout: BlockDropLayoutRegistration,
   items: readonly BlockDropTargetRegistration[],
   point: BlockDropPoint,
-  hit: Element,
   read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  measurements: Pick<
+    BlockDropGeometryReader,
+    "readBounds" | "isBackground" | "containsHit" | "readAncestorAttribute" | "contains"
+  >,
   rtl: boolean,
-  edge?: ResolvedBlockDropTarget,
-): ResolvedBlockDropTarget | undefined {
+  edge?: BlockDropGeometryTarget,
+): BlockDropGeometryTarget | undefined {
   const pairs = layoutPairIndices(items, layout.axis, point, read, rtl, edge?.region);
   for (const pair of pairs) {
     const previous = items[pair - 1]!;
     const next = items[pair]!;
     // Native hit testing may round a fractional gap point onto an adjacent anchor.
     if (
-      !isDropBackground(layout.element, hit, point) &&
-      !previous.element.contains(hit) &&
-      !next.element.contains(hit)
+      !measurements.isBackground(layout.identity, point) &&
+      !measurements.containsHit(previous.identity) &&
+      !measurements.containsHit(next.identity)
     ) {
       continue;
     }
-    const target = resolvePair(layout, previous, next, point, read, rtl, edge);
+    const target = resolvePair(layout, previous, next, point, read, measurements, rtl, edge);
     if (target) {
       return target;
     }
@@ -351,7 +374,7 @@ function layoutPairIndices(
   point: BlockDropPoint,
   read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
   rtl: boolean,
-  edge?: ResolvedBlockDropTarget["region"],
+  edge?: BlockDropGeometryTarget["region"],
 ): number[] {
   const horizontal = axis !== "vertical";
   const [start, end] = layoutRowRange(items, axis, point, read);
@@ -390,6 +413,7 @@ function layoutPairIndices(
  * @param next - Visible following anchor, retaining its own canonical neighbors.
  * @param point - Native viewport position.
  * @param read - Shared query-local geometry reader.
+ * @param measurements - Root-backed bounds for the layout host.
  * @param rtl - Direction of horizontal flow.
  * @param edge - Already selected local edge; only its matching pair can normalize feedback.
  * @returns Target on the chosen side, or undefined for overlap, missing edges or virtual holes.
@@ -400,16 +424,17 @@ function resolvePair(
   next: BlockDropTargetRegistration,
   point: BlockDropPoint,
   read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  measurements: Pick<BlockDropGeometryReader, "readBounds" | "readAncestorAttribute" | "contains">,
   rtl: boolean,
-  edge?: ResolvedBlockDropTarget,
-): ResolvedBlockDropTarget | undefined {
-  if (layout.virtual && !hasConsecutiveIndices(previous.element, next.element)) {
+  edge?: BlockDropGeometryTarget,
+): BlockDropGeometryTarget | undefined {
+  if (layout.virtual && !hasConsecutiveIndices(previous.identity, next.identity, measurements)) {
     return;
   }
   const a = read(previous).rect;
   const b = read(next).rect;
   const horizontal = layout.axis === "horizontal" || (layout.axis === "grid" && a.top === b.top);
-  const host = layout.axis === "grid" ? undefined : layout.element.getBoundingClientRect();
+  const host = layout.axis === "grid" ? undefined : measurements.readBounds(layout.identity);
   const rect = pairBounds(a, b, horizontal, rtl, host);
   const low = horizontal ? rect.left : rect.top;
   const high = horizontal ? rect.right : rect.bottom;
@@ -435,13 +460,14 @@ function resolvePair(
   const merged = mergedTarget(layout, previous, next, point, read, (low + high) / 2, horizontal);
   if (
     edge &&
-    (!merged || !isPairEdge(edge, previous, next, horizontal, rect, merged.destination))
+    (!merged ||
+      !isPairEdge(edge, previous, next, horizontal, rect, merged.destination, measurements))
   ) {
     return;
   }
   return {
     ...(merged ?? target),
-    region: { kind: "gap", previous, next, axis: horizontal ? "horizontal" : "vertical" },
+    region: { kind: "gap", axis: horizontal ? "horizontal" : "vertical" },
   };
 }
 
@@ -557,11 +583,16 @@ function edgeTarget(
  *
  * @param previous - Mounted preceding anchor under an indexed root.
  * @param next - Mounted following anchor under an indexed root.
+ * @param measurements - Attachment-bound access to indexed ancestors.
  * @returns True only when both display indices exist and the second immediately follows the first.
  */
-function hasConsecutiveIndices(previous: HTMLElement, next: HTMLElement): boolean {
-  const a = previous.closest("[data-index]")?.getAttribute("data-index");
-  const b = next.closest("[data-index]")?.getAttribute("data-index");
+function hasConsecutiveIndices(
+  previous: RegionIdentity,
+  next: RegionIdentity,
+  measurements: Pick<BlockDropGeometryReader, "readAncestorAttribute">,
+): boolean {
+  const a = measurements.readAncestorAttribute(previous, "[data-index]", "data-index");
+  const b = measurements.readAncestorAttribute(next, "[data-index]", "data-index");
   return a != null && b != null && Number(b) === Number(a) + 1;
 }
 
@@ -624,8 +655,8 @@ export function sameOutlineBoundary(
  * @returns True when the endpoint declaration describes the explicit area's gap.
  */
 function matchesEndpointBoundary(
-  endpoint: ResolvedBlockDropTarget,
-  edge: ResolvedBlockDropTarget,
+  endpoint: BlockDropGeometryTarget,
+  edge: BlockDropGeometryTarget,
 ): boolean {
   const destination =
     endpoint.region?.kind === "edge" ? endpoint.region.destination : endpoint.destination;
@@ -684,8 +715,8 @@ function containsPairEdge(
  * @param layout - Existing linear list host with registered anchors and continuation policy.
  * @param items - Committed anchors in display order, already known to be nonempty.
  * @param point - Actual viewport pointer; native hit rounding does not change it.
- * @param hit - Native hit used to exclude occupied or unrelated child chrome.
  * @param read - Query-local geometry accessor shared with ordinary sibling gaps.
+ * @param measurements - Root-backed bounds and background measurements.
  * @param rtl - Whether the containing layout's logical inline order runs right to left.
  * @returns Endpoint insertion, or undefined outside free space or at virtual holes.
  */
@@ -693,25 +724,31 @@ function resolveListEndGap(
   layout: BlockDropLayoutRegistration,
   items: readonly BlockDropTargetRegistration[],
   point: BlockDropPoint,
-  hit: Element,
   read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  measurements: Pick<
+    BlockDropGeometryReader,
+    "readBounds" | "isBackground" | "containsHit" | "readAncestorAttribute"
+  >,
   rtl: boolean,
-): ResolvedBlockDropTarget | undefined {
+): BlockDropGeometryTarget | undefined {
   if (layout.axis === "grid") {
     return;
   }
-  if (!containsDropPoint(layout.element.getBoundingClientRect(), point)) {
+  if (!containsDropPoint(measurements.readBounds(layout.identity), point)) {
     return;
   }
-  const endpoint = listEndpoint(layout, items, point, read, rtl);
+  const endpoint = listEndpoint(layout, items, point, read, measurements, rtl);
   if (!endpoint) {
-    return resolveEndpointInset(layout, items, point, hit, read);
+    return resolveEndpointInset(layout, items, point, read, measurements);
   }
   if ((layout.gutterSize ?? "row") !== "row") {
     return;
   }
   const [entry, side] = endpoint;
-  if (!isDropBackground(layout.element, hit, point) && !entry.element.contains(hit)) {
+  if (
+    !measurements.isBackground(layout.identity, point) &&
+    !measurements.containsHit(entry.identity)
+  ) {
     return;
   }
   const region = entry
@@ -765,6 +802,7 @@ function isNearEndpointEdge(
  * @param items - Nonempty mounted anchors in committed logical order.
  * @param point - Pointer in viewport coordinates.
  * @param read - Query-local cached geometry reader.
+ * @param measurements - Root-backed bounds and background measurements.
  * @param rtl - Whether inline flow runs right to left.
  * @returns The endpoint and its declared logical side, or undefined inside the
  * list interval or beyond an incomplete virtual endpoint.
@@ -774,6 +812,7 @@ function listEndpoint(
   items: readonly BlockDropTargetRegistration[],
   point: BlockDropPoint,
   read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  measurements: Pick<BlockDropGeometryReader, "readAncestorAttribute">,
   rtl: boolean,
 ): readonly [BlockDropTargetRegistration, BlockDropEdgeRegion["side"]] | undefined {
   const first = items[0]!;
@@ -792,12 +831,12 @@ function listEndpoint(
     return;
   }
   const entry = leading ? first : last;
-  const indexed = entry.element.closest("[data-index]");
   if (
     layout.virtual &&
     (leading
-      ? indexed?.getAttribute("data-index") !== "0"
-      : !indexed?.hasAttribute("data-virtual-last"))
+      ? measurements.readAncestorAttribute(entry.identity, "[data-index]", "data-index") !== "0"
+      : measurements.readAncestorAttribute(entry.identity, "[data-index]", "data-virtual-last") ===
+        undefined)
   ) {
     return;
   }
@@ -817,18 +856,18 @@ function listEndpoint(
  * @param layout - Owning linear list whose native background was hit.
  * @param items - Nonempty ordered mounted anchors.
  * @param point - Exact viewport pointer, independent of native rounding.
- * @param hit - Native hit used to preserve child and exclusion ownership.
  * @param read - Query-local cached geometry reader.
+ * @param measurements - Root-backed background ownership for this query.
  * @returns The declared endpoint edge, or undefined outside its strip or on occupied content.
  */
 function resolveEndpointInset(
   layout: BlockDropLayoutRegistration,
   items: readonly BlockDropTargetRegistration[],
   point: BlockDropPoint,
-  hit: Element,
   read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
-): ResolvedBlockDropTarget | undefined {
-  if (!isDropBackground(layout.element, hit, point)) {
+  measurements: Pick<BlockDropGeometryReader, "isBackground">,
+): BlockDropGeometryTarget | undefined {
+  if (!measurements.isBackground(layout.identity, point)) {
     return;
   }
   const axis = layout.axis === "horizontal" ? "inline" : "block";
@@ -865,8 +904,8 @@ function resolveEndpointInset(
  * @param layout - Registered list bounding the row gutters in its declared flow.
  * @param items - Committed mounted anchors in display order.
  * @param point - Actual viewport pointer, also used for outline depth selection.
- * @param hit - Native visible hit; occupied/excluded background is not redirected.
  * @param read - Query-local geometry shared with sibling-gap resolution.
+ * @param measurements - Root-backed bounds and background measurements.
  * @param rtl - Whether horizontal item order decreases in viewport X.
  * @returns Existing edge target, or undefined outside a row or for a missing/disabled edge.
  * @throws If a declared edge size or numeric gutter extent is negative or nonfinite.
@@ -875,10 +914,10 @@ function resolveLayoutGutter(
   layout: BlockDropLayoutRegistration,
   items: readonly BlockDropTargetRegistration[],
   point: BlockDropPoint,
-  hit: Element,
   read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  measurements: Pick<BlockDropGeometryReader, "readBounds" | "isBackground">,
   rtl: boolean,
-): ResolvedBlockDropTarget | undefined {
+): BlockDropGeometryTarget | undefined {
   const size = layout.gutterSize ?? "row";
   if (size === 0) {
     return;
@@ -887,8 +926,8 @@ function resolveLayoutGutter(
     throw new Error("Gutter size must be finite and nonnegative");
   }
   if (
-    !isDropBackground(layout.element, hit, point) ||
-    !containsDropPoint(layout.element.getBoundingClientRect(), point)
+    !measurements.isBackground(layout.identity, point) ||
+    !containsDropPoint(measurements.readBounds(layout.identity), point)
   ) {
     return;
   }
@@ -933,8 +972,8 @@ function sizedGutterTarget(
   read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
   rtl: boolean,
   size: number,
-): ResolvedBlockDropTarget | undefined {
-  let selected: ResolvedBlockDropTarget | undefined;
+): BlockDropGeometryTarget | undefined {
+  let selected: BlockDropGeometryTarget | undefined;
   let distance = Infinity;
   for (const index of gutterCandidates(items, layout.axis, point, read, rtl)) {
     const entry = items[index]!;
@@ -1050,7 +1089,7 @@ function gutterTarget(
   geometry: BlockDropGeometry,
   point: BlockDropPoint,
   rtl: boolean,
-): ResolvedBlockDropTarget | undefined {
+): BlockDropGeometryTarget | undefined {
   const horizontal = axis === "horizontal";
   const cursor = horizontal ? point.x : point.y;
   const start = horizontal ? geometry.rect.left : geometry.rect.top;
@@ -1096,15 +1135,17 @@ function gutterTarget(
  * @param horizontal - Whether the pair uses inline rather than block edges.
  * @param bounds - Physical pair interval; a nonpositive cross axis cannot normalize feedback.
  * @param destination - Merged pair's pointer-selected destination, compared without changing the winner.
+ * @param measurements - Attachment-bound containment check for descendant edges.
  * @returns True for that pair's current declaration on the corresponding side.
  */
 function isPairEdge(
-  edge: Pick<ResolvedBlockDropTarget, "element" | "region" | "destination">,
+  edge: Pick<BlockDropGeometryTarget, "identity" | "region" | "destination">,
   previous: BlockDropTargetRegistration,
   next: BlockDropTargetRegistration,
   horizontal: boolean,
   bounds: BlockDropBounds,
   destination: BlockDropDestination,
+  measurements: Pick<BlockDropGeometryReader, "contains">,
 ): boolean {
   if ((horizontal ? bounds.height : bounds.width) <= 0) {
     return false;
@@ -1114,10 +1155,13 @@ function isPairEdge(
     return false;
   }
   const owner = region.side.endsWith("end") ? previous : next;
-  if (owner.element === edge.element) {
+  if (owner.identity === edge.identity) {
     return owner.getRegions().includes(region);
   }
-  return owner.element.contains(edge.element) && sameOutlineBoundary(destination, edge.destination);
+  return (
+    measurements.contains(owner.identity, edge.identity) &&
+    sameOutlineBoundary(destination, edge.destination)
+  );
 }
 
 /**

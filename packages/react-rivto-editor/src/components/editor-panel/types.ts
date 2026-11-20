@@ -1,13 +1,15 @@
+import type { PanelInputRegistration } from "../../panels/types";
 import type { DocumentModel } from "@chulane/document-model";
 import type { ModeManagerApi } from "@chulane/rivto";
 import type { ReactNode, RefCallback } from "react";
-import type { ReactEditorApi } from "../../editor/types";
-import type { ReactPanel } from "../../panels/react-panel";
+import type { InputRoot } from "@chulane/rivto-root";
+import type { ReactEditorPanelApi } from "../../editor/types";
+import type { ReactPanelSurfaceApi } from "../../panels/types";
 
 /** Properties accepted by the React editor boundary. */
 export interface EditorPanelProps {
   /** React runtime owned by useReactEditor or managed EditorStorage; React components must not create instances manually. */
-  readonly editor: ReactEditorApi;
+  readonly editor: ReactEditorPanelApi;
   /** Independent element container; null or omitted selects document element roots. */
   readonly rootElementId?: string | null;
   /** Optional Panel-local presentation mode retained by the host. */
@@ -35,7 +37,7 @@ export interface EditorPanelProps {
  */
 export interface ReactPanelContextValue {
   /** React panel for this occurrence, with the shared React editor available through its editor field. */
-  readonly reactPanel: ReactPanel;
+  readonly reactPanel: ReactPanelSurfaceApi;
   /** Model acquired by this panel; absent while its document is loading. */
   readonly document?: DocumentModel;
   /** Identity used to route mutations to the single editor acquired by this panel. */
@@ -46,10 +48,27 @@ export interface ReactPanelContextValue {
   readonly enabled?: boolean;
 }
 
-/** Internal value connecting one surface DOM root to editor extensions. */
+/** Internal value connecting one mounted surface to editor extensions. */
 export interface EditorRootContextValue {
-  /** Current root element, or null before mount and after unmount. */
-  readonly element: HTMLElement | null;
+  /** Opaque identity of the mounted surface, or undefined when unmounted. */
+  readonly identity: object | undefined;
   /** Stable callback ref used by the active surface to register its root. */
   readonly ref: RefCallback<HTMLElement>;
+  /** Current host-owned occurrence, retained while the surface is disabled. */
+  readonly mountedRoot?: ReactPanelSurfaceApi["mountedRoot"];
+}
+
+/** Portal content owned by one routed editor occurrence. */
+export interface EditorPortalProps {
+  /** Content rendered into the occurrence's document body. */
+  readonly children: ReactNode;
+  /** Routing lifetime that owns the content. */
+  readonly inputRegistration: PanelInputRegistration;
+  /** Mounted Root supplying the portal surface identity. */
+  readonly inputRoot: Pick<InputRoot, "isAttached" | "getElementIdentity">;
+}
+
+/** React content rendered into the currently mounted surface. */
+export interface EditorSurfacePortalProps {
+  readonly children: ReactNode;
 }

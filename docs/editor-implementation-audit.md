@@ -151,7 +151,7 @@ The effect depends only on binding ID and editor; a ref refreshes only `when` an
 
 ### 31. Keyboard docs/types contradict live behavior
 
-`KeymapOverrides` is described as creation-time ([keyboard-types.ts:5](../packages/react-rivto-editor/src/managers/keyboard/keyboard-types.ts#L5)), although runtime replacement is public and tested. Unknown IDs are retained for future registrations, not simply ignored. Update docs and surface orphan/future overrides in the inventory so typos are visible.
+`KeymapOverrides` is described as creation-time ([types.ts](../packages/react-rivto-editor/src/managers/keyboard/types.ts)), although runtime replacement is public and tested. Unknown IDs are retained for future registrations, not simply ignored. Update docs and surface orphan/future overrides in the inventory so typos are visible.
 
 ### 32. Shortcut grammar mishandles plus and duplicate/empty components
 

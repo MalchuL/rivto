@@ -1,3 +1,5 @@
+import type { MouseInput, PointerInput, WheelInput } from "@chulane/rivto-root";
+import type { CanvasViewportApi } from "@chulane/rivto-edgeless/react";
 import { EDGELESS_GRID_SIZE } from "../../elements/visuals/utils/geometry";
 import { createCaretSelection } from "@chulane/rivto";
 import type {
@@ -7,10 +9,14 @@ import type {
   Rect,
   EdgelessSnappingSnapshot,
 } from "@chulane/rivto-edgeless";
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
-import type { ReactPanelApi } from "../../panels/types";
+import type { CSSProperties } from "react";
 import { EDITOR_CONTROL_SELECTOR } from "../../constants";
-import { focusBlock } from "../../managers";
+import type {
+  EdgelessPanAttachment,
+  EdgelessPanMarker,
+  EdgelessPanRoot,
+  EdgelessSurfacePanel,
+} from "./types";
 import {
   EDGELESS_BLOCK_ELEMENT_TYPE,
   EDGELESS_CARD_DEFAULT_FRAME,
@@ -18,46 +24,23 @@ import {
   nonOverlappingBlockFrame,
 } from "../../elements/block-element-projection";
 
-/** Shared block definitions borrowed for new-card creation. */
-interface EdgelessSurfaceDocument {
-  readonly blockTypes: Pick<
-    ReactPanelApi["editor"]["blockTypes"],
-    "separatesBlockElements" | "getDefaultBlockElementSeparatorType"
-  >;
-  readonly defaultWritingBlockFactory: Pick<
-    ReactPanelApi["editor"]["defaultWritingBlockFactory"],
-    "createEmptyBlock"
-  >;
-}
-
-/** Document operations borrowed by viewport gestures without lifecycle ownership. */
-interface EdgelessSurfacePanel extends Pick<ReactPanelApi, "batchUpdates"> {
-  readonly blocks: Pick<
-    ReactPanelApi["blocks"],
-    "getRootIds" | "getBlockNode" | "canRemove" | "insertBlock" | "getInsertionDestinationAfter"
-  >;
-  readonly elements: Pick<ReactPanelApi["elements"], "getElementNodes" | "insertElement">;
-  readonly selection: Pick<ReactPanelApi["selection"], "set">;
-  readonly editor: EdgelessSurfaceDocument;
-}
-
 /** Owns host viewport policy and transactional empty-space card creation. */
 export class EdgelessSurfaceController {
   private static readonly minimumZoom = 0.5;
   /** Strongest background-dot fade at minimum zoom; keeps a faint residual grid. */
   private static readonly maximumGridDotFade = 0.7;
-  viewport: HTMLElement | null = null;
+  private panAttachment?: EdgelessPanAttachment;
   /**
    * Binds the document occurrence and current card-placement configuration.
    *
    * @param panel - Receiving document occurrence and mutation managers.
-   * @param canvas - Scene supplying live world-coordinate conversion.
+   * @param canvas - Scene receiving surface snapping preferences.
    * @param avoidOverlap - Whether new cards are moved away from existing cards.
    * @param cardWidth - Preferred world width; invalid values use the default card width.
    */
   constructor(
     private readonly panel: EdgelessSurfacePanel,
-    private readonly canvas: Pick<Canvas, "toWorld" | "setSnapping">,
+    private readonly canvas: Pick<Canvas, "setSnapping">,
     private readonly avoidOverlap: boolean,
     private readonly cardWidth: number,
   ) {}
@@ -65,36 +48,43 @@ export class EdgelessSurfaceController {
   /**
    * Appends and focuses one default root card at an empty canvas point.
    *
-   * @param event - Double click originating in the receiving viewport.
+   * Deferred focus is cancelled if input, selection, or the panel occurrence
+   * changes before the scheduled frame.
+   *
+   * @param event - Normalized double click originating in the receiving viewport.
+   * @param viewport - Attached occurrence providing client-to-world conversion.
    * @returns One document transaction inserts the card; caret focus follows on the next frame.
    */
-  createBlockAt = (event: ReactMouseEvent<HTMLElement>): void => {
-    const root = this.viewport;
+  createBlockAt(
+    event: MouseInput<"dblclick">,
+    viewport: Pick<CanvasViewportApi, "clientToWorld">,
+  ): void {
     const target = event.target;
-    if (!root || !(target instanceof Element) || event.button !== 0) {
-      return;
-    }
-    if (root.dataset.edgelessPanTool === "true" || root.dataset.edgelessCaptureTool === "true") {
+    if (!target || event.button !== 0) {
       return;
     }
     if (
-      target.closest(
-        `[data-edgeless-root], [data-edgeless-object-kind], [data-edgeless-ui], ${EDITOR_CONTROL_SELECTOR}`,
-      ) ||
-      target.closest(".edgeless-drawing-capture[data-active]")
+      target.hasAncestor('[data-edgeless-pan-tool="true"], [data-edgeless-capture-tool="true"]')
     ) {
       return;
     }
-    const rect = root.getBoundingClientRect();
-    const point = this.canvas.toWorld({
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    });
+    if (
+      target.hasAncestor(
+        `[data-edgeless-root], [data-edgeless-object-kind], [data-edgeless-ui], ${EDITOR_CONTROL_SELECTOR}`,
+      ) ||
+      target.hasAncestor(".edgeless-drawing-capture[data-active]")
+    ) {
+      return;
+    }
+    const point = viewport.clientToWorld({ x: event.clientX, y: event.clientY });
+    if (!point) {
+      return;
+    }
     const frame = this.getCardFrame(point);
     const id = this.insertCard(frame);
     this.panel.selection.set(createCaretSelection(id, 0));
-    requestAnimationFrame(() => focusBlock(root, id, 0));
-  };
+    this.panel.selection.scheduleIfSelectionUnchanged(() => this.panel.selection.focusBlock(id, 0));
+  }
 
   /**
    * Mirrors the surface snapping settings into its independent scene.
@@ -114,17 +104,41 @@ export class EdgelessSurfaceController {
   }
 
   /**
+   * Binds pan markers to one exact mounted Root without owning its lifecycle.
+   *
+   * @param root - Borrowed occurrence whose marker cleanup remains owned here.
+   * @returns Idempotent cleanup restoring markers installed by this attachment, or a no-op after detachment.
+   * @throws If another occurrence is attached or marker cleanup fails.
+   */
+  attachPanRoot(root: EdgelessPanRoot): () => void {
+    if (this.panAttachment) {
+      throw new Error("Pan Root is already attached");
+    }
+    if (!root.isAttached()) {
+      return () => {};
+    }
+    const attachment: EdgelessPanAttachment = { root };
+    this.panAttachment = attachment;
+    return () => this.releasePanAttachment(attachment);
+  }
+
+  /**
    * Supplies document-specific DOM markers, background styling and native input admission.
    *
    * @param camera - Current world-to-screen camera.
    * @param snap - Current surface snapping settings.
+   * @param root - Exact occurrence bound to these pan callbacks, when attached.
    * @returns Props for the generic viewport without exposing document policies to Canvas.
    */
-  getViewportProps(camera: Camera, snap: EdgelessSnappingSnapshot) {
+  getViewportProps(
+    camera: Camera,
+    snap: EdgelessSnappingSnapshot,
+    root: EdgelessPanRoot | undefined,
+  ) {
     return {
-      panEnabled: this.isPanEnabled,
+      panEnabled: () => this.isPanEnabled(root),
       allowCamera: this.allowSurfaceCamera,
-      onPanState: this.updatePanMarkers,
+      onPanState: (ready: boolean, active: boolean) => this.updatePanMarkers(root, ready, active),
       planeProps: { className: "edgeless-plane", "data-edgeless-plane": "true" },
       "data-rivto-surface": "edgeless",
       "data-rivto-block-editor": "true",
@@ -137,7 +151,6 @@ export class EdgelessSurfaceController {
       "data-edgeless-align": snap.alignObjects ? "true" : "false",
       "aria-label": "Edgeless document canvas",
       tabIndex: -1,
-      onDoubleClick: this.createBlockAt,
       style: {
         backgroundPosition: `${camera.x}px ${camera.y}px`,
         backgroundSize: `${EDGELESS_GRID_SIZE * camera.zoom}px ${EDGELESS_GRID_SIZE * camera.zoom}px`,
@@ -210,48 +223,124 @@ export class EdgelessSurfaceController {
   /**
    * Preserves native scrolling inside fixed-height cards and editor controls.
    *
-   * @param event - Native pointer or wheel input inside the viewport.
+   * @param event - Normalized pointer or wheel input inside the viewport.
    * @returns Whether Canvas may consume this sample for camera movement.
    */
-  private readonly allowSurfaceCamera = (event: PointerEvent | WheelEvent): boolean => {
+  private readonly allowSurfaceCamera = (event: PointerInput | WheelInput): boolean => {
     if (event.type !== "wheel" && event.button === 1) {
       return true;
     }
-    if (!(event.target instanceof Element)) {
+    if (!event.target) {
       return true;
     }
-    if (event.target.closest("[data-edgeless-ui]")) {
+    if (event.target.hasAncestor("[data-edgeless-ui]")) {
       return false;
     }
     return (
       event.type !== "wheel" ||
-      !event.target.closest('[data-auto-height="false"] [data-edgeless-card-content]')
+      !event.target.hasAncestor('[data-auto-height="false"] [data-edgeless-card-content]')
     );
   };
 
   /**
    * Publishes camera gesture state for cursor styling and spotlight suppression.
    *
+   * @param root - Exact occurrence that received this callback.
    * @param ready - Whether a pan tool or modifier is active.
    * @param active - Whether a pointer currently owns a camera pan.
    * @returns Stale markers are removed when their state becomes false.
+   * @throws Propagates marker and cleanup failures.
    */
-  private readonly updatePanMarkers = (ready: boolean, active: boolean): void => {
-    const root = this.viewport;
-    if (!root) {
+  private updatePanMarkers(
+    root: EdgelessPanRoot | undefined,
+    ready: boolean,
+    active: boolean,
+  ): void {
+    const attachment = this.panAttachment;
+    if (!root || !attachment || attachment.root !== root || !root.isAttached()) {
       return;
     }
-    if (ready) {
-      root.dataset.panningReady = "true";
-    } else {
-      delete root.dataset.panningReady;
+    try {
+      this.setPanMarker(attachment, "ready", "data-panning-ready", ready);
+      this.setPanMarker(attachment, "active", "data-panning", active);
+    } catch (error) {
+      try {
+        this.releasePanAttachment(attachment);
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Pan marker update failed");
+      }
+      throw error;
     }
-    if (active) {
-      root.dataset.panning = "true";
-    } else {
-      delete root.dataset.panning;
+  }
+
+  /**
+   * Acquires or releases one marker without overwriting a replacement occurrence.
+   *
+   * @param attachment - Captured occurrence that owns the marker.
+   * @param marker - Stored cleanup slot for this marker.
+   * @param name - Presentation attribute to set while the marker is active.
+   * @param enabled - Whether this marker should be present.
+   * @returns The captured marker reflects the requested state when still current.
+   * @throws Propagates marker, ownership, and cleanup failures.
+   */
+  private setPanMarker(
+    attachment: EdgelessPanAttachment,
+    marker: EdgelessPanMarker,
+    name: string,
+    enabled: boolean,
+  ): void {
+    if (!enabled) {
+      const release = attachment[marker];
+      attachment[marker] = undefined;
+      release?.();
+      return;
     }
-  };
+    if (attachment[marker] || this.panAttachment !== attachment || !attachment.root.isAttached()) {
+      return;
+    }
+    const release = attachment.root.setTemporaryAttribute(name, "true");
+    try {
+      if (this.panAttachment === attachment && attachment.root.isAttached()) {
+        attachment[marker] = release;
+      } else {
+        release();
+      }
+    } catch (error) {
+      try {
+        release();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Pan marker setup failed");
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Releases the markers belonging to a captured occurrence.
+   *
+   * @param attachment - Owner whose marker leases must be released.
+   * @returns Both marker leases have been released even after detachment.
+   * @throws AggregateError if any cleanup fails.
+   */
+  private releasePanAttachment(attachment: EdgelessPanAttachment): void {
+    if (this.panAttachment === attachment) {
+      this.panAttachment = undefined;
+    }
+    const releases = [attachment.active, attachment.ready];
+    attachment.active = undefined;
+    attachment.ready = undefined;
+    const errors: unknown[] = [];
+    for (const release of releases) {
+      try {
+        release?.();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length) {
+      throw new AggregateError(errors, "Pan marker cleanup failed");
+    }
+  }
 
   /**
    * Mix amount toward transparent background grid dots at the current zoom.
@@ -270,9 +359,18 @@ export class EdgelessSurfaceController {
   }
 
   /**
-   * Reads live pan-tool state from the mounted viewport.
+   * Reads live pan-tool state from the exact mounted occurrence.
    *
-   * @returns Whether primary-button panning is enabled, or false while detached.
+   * @param root - Occurrence captured when the viewport callbacks were created.
+   * @returns Whether primary-button panning is enabled, or false while detached or replaced.
+   * @throws Propagates occurrence ownership and attribute-read failures.
    */
-  private readonly isPanEnabled = (): boolean => this.viewport?.dataset.edgelessPanTool === "true";
+  private isPanEnabled(root: EdgelessPanRoot | undefined): boolean {
+    const attachment = this.panAttachment;
+    if (!root || !attachment || attachment.root !== root || !root.isAttached()) {
+      return false;
+    }
+    const enabled = root.readAttribute("data-edgeless-pan-tool") === "true";
+    return enabled && this.panAttachment === attachment && root.isAttached();
+  }
 }

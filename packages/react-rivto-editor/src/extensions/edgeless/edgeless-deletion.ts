@@ -1,12 +1,15 @@
 import { isStructuralSelection } from "@chulane/rivto";
-import type { ReactPanelApi } from "../../panels/types";
-import type { ReactEditorApi } from "../../editor/types";
+import type { EdgelessBlockParentPanel } from "./types";
+import type { ReactEditorExtensionApi } from "../../editor/types";
 import { blockIdsOf } from "../../elements/block-element-projection";
-import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS, isHTMLElementNode } from "../../managers";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 
 /** Removes selected descendants whose selected ancestor already owns them. */
-function topLevelSelection(reactPanel: ReactPanelApi, blockIds: readonly string[]): string[] {
+function topLevelSelection(
+  reactPanel: EdgelessBlockParentPanel,
+  blockIds: readonly string[],
+): string[] {
   const selected = new Set(blockIds);
   return blockIds.filter((id) => {
     let parentId = reactPanel.blocks.getParentId(id);
@@ -21,27 +24,26 @@ function topLevelSelection(reactPanel: ReactPanelApi, blockIds: readonly string[
 }
 
 /** Deletes selected blocks, including nested blocks, as one structural transaction. */
-export function registerEdgelessDeletion(reactEditor: ReactEditorApi): void {
+export function registerEdgelessDeletion(reactEditor: ReactEditorExtensionApi): void {
   const selection = getEdgelessRuntime(reactEditor);
   reactEditor.keyboard.register(
     {
       id: KEYBOARD_BINDING_IDS.edgelessSelectionDelete,
       keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessSelectionDelete],
       mode: "edgeless",
-      when: ({ selection: coreSelection, raw: event }) => {
+      when: ({ selection: coreSelection, readTarget }) => {
         const hasCanvas = selection.get().active && selection.get().items.length > 0;
         if (!hasCanvas && !isStructuralSelection(coreSelection)) {
           return false;
         }
-        const target = event.target;
-        return (
-          isHTMLElementNode(target) &&
-          !target.isContentEditable &&
-          !/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName)
-        );
+        const target = readTarget();
+        return Boolean(target && !target.isEditable && !target.isFormControl && !target.isLink);
       },
     },
-    ({ reactPanel, root }) => {
+    ({ reactPanel, inputRoot, inputRegistration }) => {
+      if (!inputRegistration.isCurrent(inputRoot)) {
+        return true;
+      }
       const canvas = selection.get();
       let handled = false;
       if (
@@ -53,7 +55,9 @@ export function registerEdgelessDeletion(reactEditor: ReactEditorApi): void {
           reactPanel,
           payload: { selection: true },
         });
-        root.focus({ preventScroll: true });
+        if (inputRegistration.isCurrent(inputRoot)) {
+          inputRoot.focus();
+        }
         handled = true;
       } else {
         const current = reactPanel.selection.get();
@@ -78,8 +82,16 @@ export function registerEdgelessDeletion(reactEditor: ReactEditorApi): void {
           } else {
             reactPanel.selection.delete();
           }
-          root.focus({ preventScroll: true });
-          requestAnimationFrame(() => root.focus({ preventScroll: true }));
+          if (inputRegistration.isCurrent(inputRoot)) {
+            inputRoot.focus();
+          }
+          if (inputRegistration.isCurrent(inputRoot)) {
+            reactPanel.selection.scheduleIfSelectionUnchanged(() => {
+              if (inputRegistration.isCurrent(inputRoot)) {
+                inputRoot.focus();
+              }
+            });
+          }
           handled = true;
         }
       }

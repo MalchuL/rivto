@@ -1,64 +1,36 @@
 import type { PanelEventsApi } from "../../managers/events/api";
-import { CanvasMarquee, CanvasViewport } from "@chulane/rivto-edgeless/browser";
-import type { ReactPanelApi } from "../../panels/types";
+import type { EditorEvent } from "../../managers/events/editor-event";
+import type { InputRoot, PointerInput } from "@chulane/rivto-root";
+import type { CanvasMarquee } from "@chulane/rivto-edgeless";
 import type { EdgelessSelectionRuntime } from "../built-ins/selection/edgeless-runtime";
+import type { PanelInputRegistration } from "../../panels/types";
 import { BLOCK_CONTENT_SELECTOR, EDITOR_CONTROL_SELECTOR } from "../../constants";
-import { groupParentByChild, outermostGroupId } from "./edgeless-geometry";
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
 const OBJECT_SELECTOR = "[data-edgeless-object-kind][data-edgeless-object-id]";
 const HANDLE_SELECTOR = "[data-edgeless-resize-handle], [data-edgeless-rotation-handle]";
-const RECTANGLE_CLASS = "edgeless-selection-rectangle";
 
 /** Admits host object gestures while the independent canvas owns marquee mechanics. */
 export class EdgelessSelectionController {
-  readonly marquee: CanvasMarquee;
   private readonly releases: Array<() => void> = [];
 
   /**
-   * Creates one host-styled marquee for this mounted occurrence.
+   * Takes ownership of one mounted marquee and borrows canonical selection.
    *
    * The host owns card admission and persisted group semantics. Canvas owns the
    * rectangle and captured gesture state; destruction removes its DOM node.
    *
-   * @param root - Fixed mounted viewport receiving input.
-   * @param elements - Borrowed group records, read once when a marquee crosses slop.
+   * @param marquee - Occurrence-bound marquee owned until controller destruction.
+   * @param inputRoot - Exact originating occurrence borrowed for marker reads.
    * @param selection - Canonical host selection reads and writes, without teardown access.
+   * @param inputRegistration - Routing lifetime that owns this controller.
    */
   constructor(
-    private readonly root: HTMLElement,
-    private readonly elements: Pick<ReactPanelApi["elements"], "getElementNodes">,
+    readonly marquee: Pick<CanvasMarquee, "start" | "move" | "stop" | "destroy">,
+    private readonly inputRoot: Pick<InputRoot, "isAttached" | "readAttribute">,
     private readonly selection: Pick<EdgelessSelectionRuntime, "get" | "set" | "clear">,
-  ) {
-    const rectangle = root.ownerDocument.createElement("div");
-    rectangle.className = RECTANGLE_CLASS;
-    rectangle.dataset.edgelessSelectionRectangle = "true";
-    this.marquee = new CanvasMarquee(rectangle, {
-      /**
-       * Captures canvas bounds and lifts child hits to their persisted outermost group.
-       *
-       * @returns Host selection identities paired with each child's captured bounds.
-       */
-      capture: () => {
-        const canvas = CanvasViewport.forElement(this.root)?.canvas;
-        if (!canvas) {
-          return [];
-        }
-        const parents = groupParentByChild(this.elements.getElementNodes());
-        return CanvasMarquee.snapshot(this.root, canvas).map((hit) => ({
-          ...hit,
-          id: outermostGroupId(hit.id, parents),
-        }));
-      },
-      /**
-       * Commits marquee identities to the panel's authoritative selection.
-       *
-       * @param ids - Distinct base and intersecting object identities.
-       * @returns Host selection and its observers reflect this pointer sample.
-       */
-      select: (ids) => this.selection.set(ids),
-    });
-  }
+    private readonly inputRegistration: PanelInputRegistration,
+  ) {}
 
   /**
    * Registers occurrence-scoped pointer input after the viewport commits.
@@ -77,7 +49,7 @@ export class EdgelessSelectionController {
             capture: true,
             mode: "edgeless",
           },
-          ({ raw }) => this.start(raw),
+          (event) => this.start(event),
         ),
       );
       this.releases.push(
@@ -89,14 +61,22 @@ export class EdgelessSelectionController {
             mode: "edgeless",
             passive: false,
           },
-          ({ raw }) => this.move(raw),
+          (event) => this.move(event),
         ),
       );
       for (const type of ["pointerup", "pointercancel"] as const) {
         this.releases.push(
           events.register(
             { id: `edgeless.selection.${type}`, type, target: "window", mode: "edgeless" },
-            this.marquee.stop,
+            (event) => {
+              if (
+                event.inputRegistration !== this.inputRegistration ||
+                !this.inputRegistration.isCurrent(this.inputRoot)
+              ) {
+                return false;
+              }
+              return this.marquee.stop();
+            },
           ),
         );
       }
@@ -134,44 +114,66 @@ export class EdgelessSelectionController {
   /**
    * Selects host objects or begins a marquee when empty canvas admits the pointer.
    *
-   * @param event - Native primary-button sample before block content handles it.
+   * @param event - Normalized primary-button sample before block content handles it.
    * @returns Whether host object selection consumed the event.
+   * @throws Propagates Root ownership checks and host selection failures.
    */
-  private start(event: PointerEvent): boolean {
-    const target = event.target;
-    const root = this.root;
-    if (event.button !== 0 || !(target instanceof Element)) {
-      return false;
-    }
+  private start(event: EditorEvent<"surface", "pointerdown">): boolean {
+    const input = event.pointerInput;
+    const target = input?.target;
+    const root = this.inputRoot;
     if (
-      root.dataset.panningReady === "true" ||
-      root.dataset.edgelessPanTool === "true" ||
-      target.closest(HANDLE_SELECTOR)
+      event.inputRoot !== root ||
+      event.inputRegistration !== this.inputRegistration ||
+      !this.inputRegistration.isCurrent(root) ||
+      !input ||
+      input.button !== 0 ||
+      !input.isCurrentRealmElement() ||
+      !target ||
+      !root.isAttached()
     ) {
       return false;
     }
-    const card = target.closest<HTMLElement>(ROOT_SELECTOR);
-    const objectId = target.closest<HTMLElement>(OBJECT_SELECTOR)?.dataset.edgelessObjectId;
-    const primary = event.ctrlKey || event.metaKey;
+    if (
+      root.readAttribute("data-panning-ready") === "true" ||
+      root.readAttribute("data-edgeless-pan-tool") === "true" ||
+      !root.isAttached() ||
+      !this.inputRegistration.isCurrent(root) ||
+      target.hasAncestor(HANDLE_SELECTOR)
+    ) {
+      return false;
+    }
+    const card = target.hasAncestor(ROOT_SELECTOR);
+    const objectId = target.ancestorAttribute(OBJECT_SELECTOR, "data-edgeless-object-id");
+    const primary = input.ctrlKey || input.metaKey;
     if (objectId && !card) {
       this.selectObject(objectId, primary);
-      root.ownerDocument.getSelection()?.removeAllRanges();
+      if (!this.inputRegistration.isCurrent(root)) {
+        return true;
+      }
+      event.inputRoot.clearSelection();
       if (primary) {
-        event.stopPropagation();
+        input.stopPropagation();
       }
       return primary;
     }
     if (card) {
-      return this.selectCard(card, target, primary);
+      return this.selectCard(input, event.inputRoot, primary);
     }
-    if (target.closest("[data-edgeless-ui], .edgeless-drawing-capture[data-active]")) {
+    if (target.hasAncestor("[data-edgeless-ui], .edgeless-drawing-capture[data-active]")) {
       return false;
     }
-    root.focus({ preventScroll: true });
+    event.inputRoot.focus();
+    if (!this.inputRegistration.isCurrent(root)) {
+      return false;
+    }
     if (!primary) {
       this.selection.clear();
     }
-    this.marquee.start(event.clientX, event.clientY, primary ? this.selection.get().items : []);
+    if (!this.inputRegistration.isCurrent(root)) {
+      return false;
+    }
+    this.marquee.start(input.clientX, input.clientY, primary ? this.selection.get().items : []);
     return true;
   }
 
@@ -180,9 +182,21 @@ export class EdgelessSelectionController {
    *
    * @param event - Window pointer sample in client coordinates.
    * @returns Whether the marquee consumed this sample.
+   * @throws Propagates Root ownership checks, geometry, and selection failures.
    */
-  private move(event: PointerEvent): boolean {
-    return this.root.dataset.panning !== "true" && this.marquee.move(event.clientX, event.clientY);
+  private move(event: EditorEvent<"window", "pointermove">): boolean {
+    const input = event.pointerInput;
+    return Boolean(
+      input &&
+      event.inputRoot === this.inputRoot &&
+      event.inputRegistration === this.inputRegistration &&
+      this.inputRegistration.isCurrent(this.inputRoot) &&
+      this.inputRoot.isAttached() &&
+      this.inputRoot.readAttribute("data-panning") !== "true" &&
+      this.inputRoot.isAttached() &&
+      this.inputRegistration.isCurrent(this.inputRoot) &&
+      this.marquee.move(input.clientX, input.clientY),
+    );
   }
 
   /**
@@ -207,35 +221,37 @@ export class EdgelessSelectionController {
   /**
    * Selects a card background while preserving native editable content and marked controls.
    *
-   * @param card - Mounted root card that owns the hit.
-   * @param target - Original pointer target used to identify editable content.
+   * Controls retain their ordinary interaction; only a non-interactive card
+   * background changes object selection and receives focus.
+   *
+   * @param input - Normalized pointer input identifying the card and editable content.
+   * @param inputRoot - Occurrence capability used to clear native selection.
    * @param primary - Whether to toggle the card instead of replacing selection.
    * @returns Whether the card background consumed the click.
    */
-  private selectCard(card: HTMLElement, target: Element, primary: boolean): boolean {
-    if (this.isInteractive(target)) {
+  private selectCard(
+    input: PointerInput,
+    inputRoot: Pick<InputRoot, "clearSelection">,
+    primary: boolean,
+  ): boolean {
+    if (input.target?.hasAncestor(`${BLOCK_CONTENT_SELECTOR}, ${EDITOR_CONTROL_SELECTOR}`)) {
       return false;
     }
-    const id = card.dataset.edgelessRoot;
+    const id = input.target?.ancestorAttribute(ROOT_SELECTOR, "data-edgeless-root");
     if (id) {
       this.selectObject(id, primary);
+      if (!this.inputRegistration.isCurrent(this.inputRoot)) {
+        return true;
+      }
       if (primary) {
-        this.root.ownerDocument.getSelection()?.removeAllRanges();
+        inputRoot.clearSelection();
       }
     } else {
       this.selection.set([]);
     }
-    card.focus({ preventScroll: true });
+    if (this.inputRegistration.isCurrent(this.inputRoot)) {
+      input.focusTargetAncestor(ROOT_SELECTOR);
+    }
     return true;
-  }
-
-  /**
-   * Returns true for controls that retain their normal interaction without Primary.
-   *
-   * @param target - Event target under the pointer.
-   * @returns True when the target is editable content or a marked control.
-   */
-  private isInteractive(target: Element): boolean {
-    return Boolean(target.closest(`${BLOCK_CONTENT_SELECTOR}, ${EDITOR_CONTROL_SELECTOR}`));
   }
 }

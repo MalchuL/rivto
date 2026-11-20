@@ -45,10 +45,12 @@ Hook подписывается непосредственно на mode manager
 ### `useEditorRoot()`
 
 - **Аргументы:** отсутствуют.
-- **Возвращает:** `{ element: HTMLElement | null; ref }`.
+- **Возвращает:** `{ ref }` — callback для регистрации DOM-контейнера поверхности.
 - **Исключения:** `Editor root hooks must be used inside EditorPanel`.
 
 Нужен прежде всего custom surface: container назначает `ref` и становится DOM scope.
+Для взаимодействия с поверхностью используйте доступный у панели `inputRoot`;
+сам DOM-элемент остаётся внутри границы монтирования.
 
 ## Document hooks
 
@@ -85,11 +87,15 @@ Detached `block` обновляется по подписке на его subtre
 
 Text selection намеренно возвращает `null`.
 
-### `useBlockEditing(blockId)`
+### `useBlockEditing(blockId, options?)`
 
 - **Аргументы:** `blockId`; хук предназначен для текстового блока.
 - **Возвращает:** block/operations, `attributes`, `preventTextEditingAttributes`. Методы `setProps` и типизированный `setProp` находятся в `operations`.
 - **Исключения:** provider error; setters передают schema/store errors.
+
+`options.runTextInput(apply)` позволяет объединить текстовое изменение с другими
+изменениями в транзакции; `apply` необходимо вызвать синхронно. Обработчики из
+`attributes` передаются React через spread и не предоставляют browser event API.
 
 В рендере читайте `block.props`, а внутри event closures — актуальный `reactPanel.blocks.getBlockNode(blockId)`. `operations.setProp(key, undefined)` удаляет property, если schema разрешает. `preventTextEditingAttributes` назначается nested interactive editor, который не должен активировать raw block editing.
 

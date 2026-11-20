@@ -6,30 +6,11 @@
  *
  * @module
  */
-import { useBlockNode, type UseBlockNodeResult } from "./use-block";
-import { useBlockTextEditing, type BlockTextEditingAttributes } from "./use-block-text-editing";
-import {
-  usePreventTextEditing,
-  type PreventTextEditingAttributes,
-} from "./use-prevent-text-editing";
-
-/**
- * Renderer-facing block state, typed property commands, and text DOM attributes.
- *
- * `block` is the reactive node snapshot from `useBlockNode` and does not include
- * descendants. For callbacks created during an older render, read current values
- * through panel.blocks.getBlockNode(blockId), not the captured snapshot.
- * Current document content excludes uncommitted DOM edits; undefined denotes an
- * unknown/deleted block, while an empty string denotes an existing textless block.
- */
-export interface UseBlockEditingResult<
-  Props extends object = Record<string, unknown>,
-> extends UseBlockNodeResult<Props> {
-  /** DOM props for the single collaborative plain-text editable. */
-  readonly attributes: BlockTextEditingAttributes;
-  /** Props for controls or nested editors that must not activate raw block editing. */
-  readonly preventTextEditingAttributes: PreventTextEditingAttributes;
-}
+import type { UseBlockEditingOptions, UseBlockEditingResult } from "./types";
+export type { UseBlockEditingOptions, UseBlockEditingResult } from "./types";
+import { useBlockNode } from "./use-block";
+import { useBlockTextEditing } from "./use-block-text-editing";
+import { usePreventTextEditing } from "./use-prevent-text-editing";
 
 /**
  * Connects a text renderer to one block's state, commands, and browser interaction.
@@ -62,6 +43,7 @@ export interface UseBlockEditingResult<
  * ```
  *
  * @param blockId - Stable ID bound to returned methods until the ID or editor changes.
+ * @param options - Optional synchronous transaction around text input.
  * @returns Reactive block state, validated property commands, and text DOM attributes.
  * Property writes patch supplied keys without replacing siblings; undefined removes
  * a key when the registered schema permits it. Invalid writes throw without mutation.
@@ -69,9 +51,10 @@ export interface UseBlockEditingResult<
  */
 export function useBlockEditing<Props extends object = Record<string, unknown>>(
   blockId: string,
+  options?: UseBlockEditingOptions,
 ): UseBlockEditingResult<Props> {
   const result = useBlockNode<Props>(blockId);
-  const attributes = useBlockTextEditing(blockId, result.block?.content);
+  const attributes = useBlockTextEditing(blockId, result.block?.content, options?.runTextInput);
   const preventTextEditingAttributes = usePreventTextEditing();
   return { ...result, attributes, preventTextEditingAttributes };
 }

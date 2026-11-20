@@ -21,16 +21,17 @@ import type { BlockListPropsApi } from "../managers/blocks/block-list-props-api"
 import type { BlockTypesApi } from "../managers/blocks/block-types-api";
 import type { RenderersApi } from "../managers/blocks/renderers-api";
 import type { PanelRegistry } from "../panels/panel-registry";
-import type { KeyboardApi } from "../managers/keyboard/keyboard-api";
+import type { ExtensionEventsApi } from "../managers/events/types";
+import type { KeyboardApi } from "../managers/keyboard/types";
 import type { ExtensionsApi } from "../managers/extensions/api";
 import type { SurfacesApi } from "../managers/surfaces/api";
 
 /** Creation options for the React presentation runtime. */
-export interface CreateReactEditorOptions {
+export interface CreateReactEditorOptions<CustomEvents extends object = object> {
   /** Existing fixed document editor; the caller or EditorStorage owns its destruction. */
   readonly editor: DocumentEditorAPI;
   /** Functional extensions installed synchronously in declaration order. */
-  readonly extensions?: readonly ReactEditorExtension[];
+  readonly extensions?: readonly ReactEditorExtension<CustomEvents>[];
   /** Stable binding-ID overrides; empty arrays disable matching bindings. */
   readonly keymap?: KeymapOverrides;
   /** Renderer used for persisted block types unknown to this React runtime. */
@@ -87,7 +88,7 @@ export interface Entry {
  * Guarded mutations and delegated core block operations.
  * Model selection shared by occurrences; DOM adapters belong to each ReactPanelApi.
  */
-export interface ReactEditorApi extends DocumentEditorAPI {
+export interface ReactEditorApi<CustomEvents extends object = object> extends DocumentEditorAPI {
   /**
    * Adds synchronous runtime cleanup without replacing destroy.
    * Remaining callbacks run in reverse registration order even if another fails.
@@ -137,9 +138,9 @@ export interface ReactEditorApi extends DocumentEditorAPI {
   /** Root surfaces and their ordered block/editor wrappers. */
   readonly surfaces: SurfacesApi;
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
-  readonly extensions: ExtensionsApi;
+  readonly extensions: ExtensionsApi<CustomEvents>;
   /** Delegated surface/document/window DOM event runtime. */
-  readonly events: Pick<EventManager, "register" | "delete">;
+  readonly events: Pick<EventManager<CustomEvents>, "register" | "observe" | "delete">;
   /** Mounted occurrences and explicit active/default view lookup. */
   readonly panels: Pick<
     PanelRegistry,
@@ -147,8 +148,9 @@ export interface ReactEditorApi extends DocumentEditorAPI {
     | "getDefault"
     | "registerPanel"
     | "getSurfaceType"
-    | "getActiveRoot"
-    | "getDefaultRoot"
+    | "getActiveInputRoot"
+    | "getDefaultInputRoot"
+    | "hasActivePanel"
   >;
   /** Semantic keyboard bindings and runtime keymap overrides. */
   readonly keyboard: Pick<KeyboardManager, keyof KeyboardApi>;
@@ -182,4 +184,31 @@ export interface ReactEditorApi extends DocumentEditorAPI {
    * @throws Synchronously if cleanup fails, after all React disposers have run.
    */
   destroy(): Promise<void>;
+}
+
+/** Shared editor operations borrowed by extensions without panel or runtime lifecycle ownership. */
+export interface ReactEditorExtensionApi<CustomEvents extends object = object> extends Omit<
+  ReactEditorApi<CustomEvents>,
+  "panels" | "destroy" | "events" | "keyboard"
+> {
+  /** Document event registrations owned by the installing extension. */
+  readonly events: ExtensionEventsApi<CustomEvents>;
+  /** Document keyboard actions and keymap settings used by extensions. */
+  readonly keyboard: KeyboardApi;
+  /** Mounted occurrence queries; registration remains with the panel lifecycle owner. */
+  readonly panels: Omit<ReactEditorApi<CustomEvents>["panels"], "registerPanel">;
+}
+
+/** Editor operations borrowed by the owner of a mounted panel. */
+export type ReactEditorPanelApi<CustomEvents extends object = object> = Omit<
+  ReactEditorApi<CustomEvents>,
+  "destroy"
+>;
+
+/** Host access to custom-event publishing; the hook retains editor lifecycle ownership. */
+export interface ReactEditorHostApi<
+  CustomEvents extends object = object,
+> extends ReactEditorApi<CustomEvents> {
+  /** Registers, observes, removes, and publishes events with the host's custom payload types. */
+  readonly events: Pick<EventManager<CustomEvents>, "register" | "observe" | "delete" | "publish">;
 }

@@ -11,8 +11,8 @@ import {
   usePanel,
   useReactPanel,
 } from "../../../hooks";
-import { focusBlock } from "../../../managers";
 import { KANBAN_COLUMN_BLOCK_TYPE } from "./kanban-behavior";
+import type { KanbanCardPanel, KanbanColumnPanel } from "./types";
 
 /**
  * Reads column and direct-card counts without materializing recursive block trees.
@@ -99,7 +99,7 @@ export function KanbanColumn({ blockId }: BlockLayoutProps) {
  * @returns An accessible add-column control owned by the board layout.
  */
 export function KanbanAddColumn({ blockId }: BlockLayoutProps) {
-  const panel = useReactPanel();
+  const panel: KanbanColumnPanel = useReactPanel();
   /**
    * Creates one column in the current document and schedules occurrence-local focus.
    *
@@ -114,12 +114,14 @@ export function KanbanAddColumn({ blockId }: BlockLayoutProps) {
         { parentId: blockId },
       ).id;
     });
-    requestAnimationFrame(() => {
-      const root = panel.getRoot();
-      if (root) {
-        focusBlock(root, id, 0);
-      }
-    });
+    const inputRoot = panel.inputRoot;
+    if (inputRoot) {
+      panel.selection.scheduleIfSelectionUnchanged(() => {
+        if (panel.inputRoot === inputRoot && inputRoot.isAttached()) {
+          panel.selection.focusBlock(id, 0);
+        }
+      });
+    }
   };
   return (
     <Button
@@ -146,7 +148,7 @@ export function KanbanAddColumn({ blockId }: BlockLayoutProps) {
  * @returns An add-card button which stores the caret and focuses the mounted card.
  */
 export function KanbanAddCard({ blockId }: BlockLayoutProps) {
-  const panel = useReactPanel();
+  const panel: KanbanCardPanel = useReactPanel();
   const { block } = useBlockNode(blockId);
   /**
    * Inserts the configured writing type and places the caret at its beginning.
@@ -161,12 +163,14 @@ export function KanbanAddCard({ blockId }: BlockLayoutProps) {
       }).id;
       panel.selection.set(createCaretSelection(id, 0));
     });
-    requestAnimationFrame(() => {
-      const root = panel.getRoot();
-      if (root) {
-        focusBlock(root, id, 0);
-      }
-    });
+    const inputRoot = panel.inputRoot;
+    if (inputRoot) {
+      panel.selection.scheduleIfSelectionUnchanged(() => {
+        if (panel.inputRoot === inputRoot && inputRoot.isAttached()) {
+          panel.selection.focusBlock(id, 0);
+        }
+      });
+    }
   };
   return (
     <Button

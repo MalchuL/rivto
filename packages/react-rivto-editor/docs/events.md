@@ -5,11 +5,11 @@
 surface/window keydown and keyup transport through the event manager, so both
 follow the active surface's browser realm and share event claiming.
 
-Each native dispatch produces a data-only event value:
+Each native dispatch produces an event value for its registered consumers:
 
 ```text
 EditorEvent
-└── KeyboardEditorEvent
+KeyboardEditorEvent
 ```
 
 The manager—not these values—continues to own registration, ordering,
@@ -60,6 +60,10 @@ browser globals, so iframe editors and multiple documents remain isolated.
 `EditorEvent` includes the core editor, mode, selection snapshot, `root`,
 `insideRoot`, and resolved block/content metadata. Its `raw` property is the
 original typed native event. `when(event)` runs immediately before the handler.
+Its `inputRoot` supplies focus, browser selection clearing and an attachment
+check without passing a browser element to those operations. Event and keyboard
+deliveries for the same mounted panel borrow the same capability; detaching or
+replacing that registration invalidates it, even when the element is reused.
 
 Returning `true` claims the event, prevents its cancelable native default, and
 stops later Rivto handlers. Returning `false` or `undefined` preserves native
@@ -90,15 +94,14 @@ inside extensions:
 
 ```ts
 reactEditor.keyboard.register({
-  id: "block.indent",
+  id: "acme.inspect-key",
   keys: ["Tab"],
   target: "surface",
   scope: "content",
   mode: ["block", "edgeless"],
-  when: ({ selection }) => selection.length > 0,
-}, ({ editor, raw }) => {
-  console.log(raw.key);
-  editor.indentBlock(/* active block */);
+  when: ({ selection }) => Boolean(selection?.blocks.length),
+}, ({ keyboard, reactPanel }) => {
+  console.log(keyboard.key, reactPanel.rootBlockId);
   return true;
 });
 ```
@@ -119,13 +122,16 @@ Composition policies are:
 
 `useKeyboardEvent(definition, handler)` provides the same behavior to
 React-stateful UI components while retaining their latest callback.
-Keyboard handlers receive `KeyboardEditorEvent`, which extends `EditorEvent`
-with `shortcut` and `phase`.
+Keyboard handlers receive a separate `KeyboardEditorEvent` with copied keyboard
+data, `shortcut` and `phase`. It exposes live target checks without exposing the
+native keyboard event or rendered block/content elements. The surface `root`
+remains available to existing commands while their browser operations migrate.
 
-The event classes and their constructor input types are exported for direct
-testing and advanced integrations. `EventManager` constructs `EditorEvent` and
-`KeyboardManager` enriches it as `KeyboardEditorEvent`; semantic actions such
-as indent and delete remain handlers.
+The internal event classes and their constructor input types support direct
+testing. `EventManager` constructs `EditorEvent` and
+the keyboard transport constructs a separate `KeyboardEditorEvent`; semantic
+actions such as indent and delete remain handlers. Its temporary constructor
+still receives native browser context from the transport.
 
 ## Keymap overrides
 

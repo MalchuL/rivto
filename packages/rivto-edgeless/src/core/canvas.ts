@@ -312,15 +312,21 @@ export class Canvas {
    *
    * @param ids - Participants required for focus, measurement or an active gesture.
    * @returns Idempotent release of this pin scope; other scopes remain active.
+   * @throws If updating visibility fails; rollback failures are retained in an AggregateError.
    */
   pin(ids: readonly string[]): () => void {
     const unique = [...new Set(ids)];
     for (const id of unique) {
       this.pins.set(id, (this.pins.get(id) ?? 0) + 1);
     }
-    this.refreshVisible();
     let released = false;
-    return () => {
+    /**
+     * Releases only the pins acquired by this scope and refreshes visibility.
+     *
+     * @returns This scope is released once; other pin scopes remain active.
+     * @throws Propagates visibility update failures after releasing the pins.
+     */
+    const release = () => {
       if (released) {
         return;
       }
@@ -335,6 +341,17 @@ export class Canvas {
       }
       this.refreshVisible();
     };
+    try {
+      this.refreshVisible();
+    } catch (error) {
+      try {
+        release();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Canvas pin rollback failed");
+      }
+      throw error;
+    }
+    return release;
   }
 
   /**

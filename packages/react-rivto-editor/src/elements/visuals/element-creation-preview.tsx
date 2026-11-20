@@ -52,7 +52,7 @@ export function ElementCreationPreview({
   return (
     <div
       ref={(host) => {
-        ref.current = host;
+        ref(host);
         // Set the native attribute directly: React 18 does not support the boolean inert prop.
         host?.setAttribute("inert", "");
       }}

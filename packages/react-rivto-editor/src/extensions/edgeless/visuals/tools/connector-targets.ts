@@ -4,7 +4,7 @@ import type {
   ConnectorRoute,
   VisualFrame,
 } from "../../../../elements/visuals/types";
-import type { CanvasPoint } from "../../../../elements/visuals/utils/canvas-point";
+import type { CanvasPoint } from "../../../../elements/visuals/utils/types";
 import {
   pointInRotatedFrame,
   inflateFrame,

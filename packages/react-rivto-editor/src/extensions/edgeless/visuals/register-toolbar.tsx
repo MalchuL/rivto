@@ -18,13 +18,13 @@ import {
   CONNECTOR_REMEMBERED_PROPERTIES,
   REMEMBERED_FRAME_FIELDS,
 } from "../../../elements/visuals/remembered-properties";
-import type { ReactEditorApi } from "../../../editor/types";
+import type { ReactEditorExtensionApi } from "../../../editor/types";
 import type {
   EdgelessToolbarGroupProps,
   EdgelessToolbarTool,
 } from "../../../managers/edgeless-toolbar/types";
 import type { EdgelessVisualsOptions } from "./types";
-import type { EdgelessToolIcon } from "../../../components/edgeless/tool-button";
+import type { EdgelessToolIcon } from "../../../components/edgeless/types";
 import type { PresetPayload } from "../../../elements/visuals/types";
 import { DEFAULT_FONTS, DEFAULT_STICKERS } from "../../../elements/visuals/presets";
 import {
@@ -51,7 +51,7 @@ const STICKER_SWATCH_CLASS = "edgeless-creation-panel-sticker-swatch";
  * @throws If the owner is inactive or a group/tool ID is already registered.
  */
 export function registerVisualToolbar(
-  editor: ReactEditorApi,
+  editor: ReactEditorExtensionApi,
   options: EdgelessVisualsOptions,
 ): () => void {
   const disposers: Array<() => void> = [];
@@ -88,9 +88,7 @@ export function registerVisualToolbar(
             };
           },
         }),
-      getButtonProps: () => ({
-        className: payload.kind === VISUAL_ELEMENT_TYPES.sticker ? STICKER_PRESET_CLASS : undefined,
-      }),
+      className: payload.kind === VISUAL_ELEMENT_TYPES.sticker ? STICKER_PRESET_CLASS : undefined,
     });
   };
   try {

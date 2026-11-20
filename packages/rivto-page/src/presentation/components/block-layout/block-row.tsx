@@ -1,20 +1,13 @@
-import { forwardRef, useContext, type ReactNode, type HTMLAttributes } from "react";
+import type { BlockRowProps } from "./types";
+import type { RegionIdentity } from "@chulane/rivto-root";
+import { forwardRef, useContext } from "react";
 import { BLOCK_EDITOR_CLASSES } from "../../block-editor-classes";
 import { BlockChildrenControlsContext, BlockItemControlsContext } from "./block-item-context";
 import { BlockSlots } from "../../slots/block-slots";
 import { useBlockLayoutState } from "./block-layout-context";
 import { useBlockRegion } from "./use-block-region";
-import type { BlockEditorTheme } from "../../block-editor-theme";
 
-/** Native row attributes and interior JSX, including an independently placed BlockContent. */
-export interface BlockRowProps extends HTMLAttributes<HTMLDivElement> {
-  /** Native styles and the existing shared geometry/theme tokens. */
-  readonly style?: BlockEditorTheme;
-  /** Automatic contributions by default; manual layouts place BlockSlot explicitly. */
-  readonly slots?: "automatic" | "manual";
-  /** JSX contents arranged by the owning layout; no recursive traversal is performed here. */
-  readonly children?: ReactNode;
-}
+export type { BlockRowProps } from "./types";
 
 /**
  * Positions inline and perimeter contributions around the supplied row contents.
@@ -30,16 +23,17 @@ export interface BlockRowProps extends HTMLAttributes<HTMLDivElement> {
  * @param props.children - JSX arranged by the host layout.
  * @param props.slots - Automatic mounts inline/perimeter contributions; manual renders only supplied JSX.
  * @param props.className - Additional classes appended to the stable row hook.
- * @param ref - Optional reference to this row's actual DOM element.
+ * @param props.bindInput - Optional normalized input setup for this row's mounted identity.
+ * @param ref - Optional ref receiving this row's opaque identity; callback cleanup is retained.
  * @returns One row with its owner-bound slot contributions.
  * @throws If outside a block layout or a contribution fails to render.
  */
-export const BlockRow = forwardRef<HTMLDivElement, BlockRowProps>(function BlockRow(
-  { children, className, slots = "automatic", ...attributes },
+export const BlockRow = forwardRef<RegionIdentity, BlockRowProps>(function BlockRow(
+  { children, className, slots = "automatic", bindInput, ...attributes },
   ref,
 ) {
   const layoutState = useBlockLayoutState();
-  const rowRef = useBlockRegion(layoutState.block.id, "row", ref);
+  const rowRef = useBlockRegion(layoutState.block.id, "row", ref, bindInput);
   const controls = useContext(BlockItemControlsContext);
   const inheritedControls = useContext(BlockChildrenControlsContext);
   const placement =

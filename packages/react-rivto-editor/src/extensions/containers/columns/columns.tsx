@@ -10,7 +10,7 @@ import { type EditorBlockInput } from "@chulane/rivto";
 import { MinusIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { useId, type KeyboardEvent, type MouseEvent } from "react";
 import { z } from "zod";
-import { createBlockBehaviorContext } from "../../../block-behaviors/utils/context";
+import { createBlockSnapshotContext } from "../../../block-behaviors/utils/context";
 import { convertLeafToContainer } from "../convert-leaf-to-container";
 import { Button } from "../../../components/ui/button";
 import { Checkbox } from "../../../components/ui/checkbox";
@@ -18,12 +18,7 @@ import { Label } from "../../../components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover";
 import { editorControlProps } from "../../../constants";
 import type { ReactPanelApi } from "../../../panels/types";
-import {
-  useBlockNode,
-  useBlockSelectionAnchor,
-  useEditorRoot,
-  useReactPanel,
-} from "../../../hooks";
+import { useBlockNode, useBlockSelectionAnchor, useReactPanel } from "../../../hooks";
 import { type BlockSlotProps, type ReactEditorExtension } from "../../../managers";
 import {
   COLUMNS_BLOCK_TYPE,
@@ -138,7 +133,7 @@ export function setColumnsCount(
     }
     const removed = columns.slice(next);
     relocateColumnContents(
-      reactPanel,
+      reactPanel.document,
       removed.map((column) => column.id),
     );
     reactPanel.blocks.removeBlocks(removed.map((column) => column.id));
@@ -198,7 +193,6 @@ export function Columns({ blockId }: { readonly blockId: string }) {
  */
 function ColumnsColumn({ blockId }: { readonly blockId: string }) {
   const reactPanel = useReactPanel();
-  const { element: root } = useEditorRoot();
   const { block } = useBlockNode(blockId);
   const empty = block?.childIds.length === 0;
   const attributes = useBlockSelectionAnchor(blockId);
@@ -216,9 +210,12 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
     }
     event.preventDefault();
     event.stopPropagation();
-    const context = root ? createBlockBehaviorContext(reactPanel, blockId, root) : undefined;
-    if (context) {
-      columnsColumnBehavior.appendWritingBlock(context);
+    const inputRoot = reactPanel.inputRoot;
+    const context = inputRoot?.isAttached()
+      ? createBlockSnapshotContext(reactPanel, blockId, undefined)
+      : undefined;
+    if (context && inputRoot) {
+      columnsColumnBehavior.appendWritingBlock({ ...context, inputRoot });
     }
   };
   return (

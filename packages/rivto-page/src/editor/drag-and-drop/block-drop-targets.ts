@@ -4,7 +4,6 @@ import {
   containsDropRegion,
   dropRegionRank,
   dropRegionTarget,
-  readDropGeometry,
 } from "./block-drop-region-geometry";
 import { BLOCK_DROP_EXCLUDE_ATTRIBUTE } from "./block-drop-attributes";
 import {
@@ -17,40 +16,42 @@ import {
 } from "./block-drop-layout-geometry";
 import type { BlockEditorBlocks } from "../../adapter/types";
 import type { BlockEditorResourceOwner } from "../extensions/block-editor-resource-owner";
+import type { InputDocument, InputRegion, RegionIdentity } from "@chulane/rivto-root";
+import { BlockDropMeasurements, DROP_MEASUREMENT_UNAVAILABLE } from "./block-drop-measurements";
 import type {
   BlockDropLayoutRegistration,
+  BlockDropAttachment,
   BlockDropPoint,
   BlockDropAcceptance,
   BlockDropTargetsApi,
   BlockDropTargetRegistration,
+  BlockDropTargetEntry,
   BlockDropDestination,
   BetweenBlockDropDestination,
   ResolvedBlockDropTarget,
+  BlockDropGeometryTarget,
+  BlockDragHit,
+  BlockDropGeometryReader,
 } from "./types";
 
-/** Captured installation fields; region declarations remain live until this entry is disposed. */
-interface DropTargetEntry extends BlockDropTargetRegistration {
-  readonly priority: number;
-}
-
-/** Editor-owned regions indexed by DOM identity, without a second block tree or geometry cache. */
+/** Editor-owned regions indexed by opaque identity, without a second block tree or geometry cache. */
 export class BlockDropTargets implements BlockDropTargetsApi {
-  private readonly layouts = new Map<HTMLElement, BlockDropLayoutRegistration>();
-  private readonly targets = new Map<HTMLElement, Set<DropTargetEntry>>();
+  private readonly layouts = new Map<object, BlockDropLayoutRegistration>();
+  private readonly targets = new Map<object, Set<BlockDropTargetEntry>>();
 
   /**
    * Borrows the editor's data and current attachment without subscribing or measuring.
    *
    * @param owner - Resource lifecycle capturing synchronous extension registrations.
    * @param blocks - Data source used only to validate candidate parents and neighbors.
-   * @param getRoot - Live attachment lookup; returns null while the view is detached.
+   * @param getAttachment - Live attachment identity; undefined while the view is detached.
    * @param regions - Borrowed occurrence-local lookup of already registered hierarchy shells for inside outlines and owned child hosts for linear-list background scope; no registration or teardown capability is retained.
    */
   constructor(
     private readonly owner: BlockEditorResourceOwner,
     private readonly blocks: Pick<BlockEditorBlocks, "getBlockNode" | "getRootIds" | "getParentId">,
-    private readonly getRoot: () => HTMLElement | null,
-    private readonly regions: Pick<BlockLayoutRegions, "get">,
+    private readonly getAttachment: () => BlockDropAttachment | undefined,
+    private readonly regions: Pick<BlockLayoutRegions, "getIdentities" | "getRegionIdentity">,
   ) {}
 
   /**
@@ -67,16 +68,17 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       throw new Error("Drop target priority must be finite");
     }
     const entry = Object.freeze({ ...registration, priority });
-    let entries = this.targets.get(entry.element);
+    const identity = entry.identity;
+    let entries = this.targets.get(identity);
     if (!entries) {
       entries = new Set();
-      this.targets.set(entry.element, entries);
+      this.targets.set(identity, entries);
     }
     entries.add(entry);
     return this.owner.registerCleanup(() => {
       entries.delete(entry);
       if (entries.size === 0) {
-        this.targets.delete(entry.element);
+        this.targets.delete(identity);
       }
     });
   }
@@ -89,11 +91,13 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * or canonical validation. Body/background destinations outline this hierarchy;
    * boundaries retain their measured line, including indented child append choices.
    * Missing shells retain anchor feedback.
+   * The nearest editor identity must match this occurrence, so hits belonging to
+   * nested editors cannot select its registered ancestors.
    *
    * @param clientX - Viewport X coordinate in CSS pixels.
    * @param clientY - Viewport Y coordinate in CSS pixels.
    * @param excluded - Captured moving roots omitted after validating the registered gap.
-   * @param nativeHit - Connected uncaptured hit from the current native event; omitted to hit-test current geometry.
+   * @param hitHint - Uncaptured hit from the current input; omitted to hit-test current geometry.
    * @param accepts - Optional source policy applied to the winner without searching alternative regions.
    * @returns Highest-priority valid candidate, preserving nearest/earliest tie order,
    * or undefined for detached, clipped, foreign, or invalid destinations.
@@ -103,32 +107,69 @@ export class BlockDropTargets implements BlockDropTargetsApi {
     clientX: number,
     clientY: number,
     excluded?: ReadonlySet<string>,
-    nativeHit?: Element,
+    hitHint?: BlockDragHit,
     accepts?: BlockDropAcceptance,
   ): ResolvedBlockDropTarget | undefined {
     this.owner.assertActive();
-    const root = this.getRoot();
-    if (!root?.isConnected || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+    const attachment = this.getAttachment();
+    if (!attachment || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
       return undefined;
     }
-    const hit =
-      nativeHit?.isConnected && nativeHit.ownerDocument === root.ownerDocument
-        ? nativeHit
-        : root.ownerDocument.elementFromPoint(clientX, clientY);
-    // Geometry chooses exactly one candidate before model and source policy run.
-    const candidate = this.resolvePoint(hit, { x: clientX, y: clientY }, excluded);
-    if (!candidate) {
+    const document = attachment.inputRoot.captureDocument();
+    if (!document) {
       return undefined;
     }
-    const destination = this.currentDestination(candidate.destination, excluded);
-    if (!destination) {
-      return undefined;
+    const capturedHit = document.captureHit(clientX, clientY, hitHint);
+    try {
+      if (!capturedHit || !this.belongsToAttachment(attachment, document, capturedHit)) {
+        return undefined;
+      }
+      const measurements = new BlockDropMeasurements(
+        attachment.inputRoot,
+        () =>
+          this.getAttachment() === attachment &&
+          document.isCurrent() &&
+          this.getAttachment() === attachment,
+        capturedHit,
+        this.regions,
+      );
+      // Geometry chooses exactly one candidate before model and source policy run.
+      const candidate = this.resolvePoint(
+        { x: clientX, y: clientY },
+        attachment.inputRoot.getElementIdentity?.(),
+        measurements,
+        excluded,
+      );
+      if (!candidate || !measurements.isCurrent()) {
+        return undefined;
+      }
+      const destination = this.currentDestination(candidate.destination, excluded);
+      if (!destination) {
+        return undefined;
+      }
+      const target = { ...candidate, destination };
+      if (accepts && !accepts(target.destination)) {
+        return undefined;
+      }
+      if (
+        this.getAttachment() !== attachment ||
+        !attachment.inputRoot.isAttached() ||
+        !document.isCurrent()
+      ) {
+        return undefined;
+      }
+      const resolved = this.withInsideOutline(target, attachment);
+      return document.isCurrent() && this.getAttachment() === attachment ? resolved : undefined;
+    } catch (error) {
+      if (error === DROP_MEASUREMENT_UNAVAILABLE) {
+        return undefined;
+      }
+      throw error;
+    } finally {
+      if (capturedHit !== hitHint) {
+        capturedHit?.release();
+      }
     }
-    const target = { ...candidate, destination };
-    if (accepts && !accepts(target.destination)) {
-      return undefined;
-    }
-    return this.withInsideOutline(target);
   }
 
   /**
@@ -140,12 +181,44 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    */
   registerLayout(registration: BlockDropLayoutRegistration): () => void {
     this.owner.assertActive();
-    this.layouts.set(registration.element, registration);
+    const identity = registration.identity;
+    this.layouts.set(identity, registration);
     return this.owner.registerCleanup(() => {
-      if (this.layouts.get(registration.element) === registration) {
-        this.layouts.delete(registration.element);
+      if (this.layouts.get(identity) === registration) {
+        this.layouts.delete(identity);
       }
     });
+  }
+
+  /**
+   * Checks whether the hit belongs to this exact Page attachment.
+   *
+   * Nested editors have their own boundaries. Ownership is checked again after
+   * browser ancestry lookup because that lookup can synchronously replace Page.
+   *
+   * @param attachment - Page attachment captured at the start of resolution.
+   * @param document - Document capability captured from the same Root.
+   * @param hit - Current opaque hit, if any.
+   * @returns True only while the nearest editor and attachment remain current.
+   * @throws Propagates browser ancestry and ownership-check failures.
+   */
+  private belongsToAttachment(
+    attachment: BlockDropAttachment,
+    document: Pick<InputDocument, "isCurrent">,
+    hit: BlockDragHit | undefined,
+  ): boolean {
+    if (this.getAttachment() !== attachment || !document.isCurrent()) {
+      return false;
+    }
+    const hitOwner = hit?.getNearestAncestorIdentity("[data-rivto-block-editor]");
+    const rootIdentity = attachment.inputRoot.getElementIdentity?.();
+    return Boolean(
+      rootIdentity &&
+      hitOwner === rootIdentity &&
+      this.getAttachment() === attachment &&
+      document.isCurrent() &&
+      this.getAttachment() === attachment,
+    );
   }
 
   /**
@@ -169,25 +242,28 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * block-shell inside hit needs no sibling search because its coordinate is not
    * a gap. Custom inside wrappers can span several anchors and still require it.
    *
-   * @param hit - Connected native hit from the current occurrence.
    * @param point - Current viewport position.
+   * @param rootIdentity - Surface identity already matched to the nearest editor boundary.
+   * @param measurements - Query-local Root measurements for registered geometry.
    * @param excluded - Captured moving roots; their adjacent boundary does not reserve a stationary shared seam.
    * @returns First local winner, or undefined for neutral/occluded/foreign geometry.
    */
   private resolvePoint(
-    hit: Element | null,
     point: BlockDropPoint,
+    rootIdentity: object | undefined,
+    measurements: BlockDropGeometryReader,
     excluded?: ReadonlySet<string>,
-  ): ResolvedBlockDropTarget | undefined {
-    const root = this.getRoot();
-    if (!root || !hit || !this.isEditorHit(root, hit)) {
-      return;
-    }
+  ): BlockDropGeometryTarget | undefined {
     // Reserve shared sibling seams before a nested body or list can consume them.
-    const target =
-      this.resolveNestedBoundary(hit, point, root, excluded) ??
-      this.resolveLocalTarget(hit, point, root);
-    return target && this.normalizeOutlineBoundary(target, point, hit, root);
+    const nested = this.resolveNestedBoundary(point, measurements, excluded);
+    if (!measurements.isCurrent()) {
+      return undefined;
+    }
+    const target = nested ?? this.resolveLocalTarget(point, measurements);
+    if (!target || !measurements.isCurrent()) {
+      return undefined;
+    }
+    return this.normalizeOutlineBoundary(target, point, rootIdentity, measurements);
   }
 
   /**
@@ -203,49 +279,50 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    *
    * @param target - Physical winner before live destination and source-policy checks.
    * @param point - Viewport coordinates selecting the existing outline depth.
-   * @param hit - Native hit already admitted to this editor occurrence.
-   * @param root - Attached editor bounding the ancestor walk.
+   * @param rootIdentity - Identity of the attached editor bounding the ancestor walk.
+   * @param measurements - Query-local Root measurements for registered geometry.
    * @returns Original target with shared line geometry, or unchanged without an equivalent gap.
    */
   private normalizeOutlineBoundary(
-    target: ResolvedBlockDropTarget,
+    target: BlockDropGeometryTarget,
     point: BlockDropPoint,
-    hit: Element,
-    root: HTMLElement,
-  ): ResolvedBlockDropTarget {
+    rootIdentity: object | undefined,
+    measurements: BlockDropGeometryReader,
+  ): BlockDropGeometryTarget {
     if (
-      target.element === root ||
+      target.identity === rootIdentity ||
       !target.indicator ||
       target.region?.kind !== "edge" ||
       !target.region.depth
     ) {
       return target;
     }
-    for (let element = target.element.parentElement; element; element = element.parentElement) {
-      if (element.hasAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE)) {
-        break;
+    let first = true;
+    let normalized = target;
+    measurements.walkAncestors(target.identity, (region) => {
+      if (first) {
+        first = false;
+        return false;
       }
-      const layout = this.layouts.get(element);
-      const gap = layout && resolveLayoutGap(layout, point, hit, target);
+      if (region.readAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE) !== undefined) {
+        return true;
+      }
+      const identity = region.getIdentity();
+      if (!identity) {
+        throw DROP_MEASUREMENT_UNAVAILABLE;
+      }
+      const layout = this.layouts.get(identity);
+      const gap = layout && resolveLayoutGap(layout, point, measurements, target);
+      if (!measurements.isCurrent()) {
+        throw DROP_MEASUREMENT_UNAVAILABLE;
+      }
       if (gap?.region?.kind === "gap" && sameOutlineBoundary(gap.destination, target.destination)) {
-        return { ...target, indicator: gap.indicator };
+        normalized = { ...target, indicator: gap.indicator };
+        return true;
       }
-      if (element === root) {
-        break;
-      }
-    }
-    return target;
-  }
-
-  /**
-   * Checks that a native hit belongs to this occurrence rather than a nested editor.
-   *
-   * @param root - Current editor attachment.
-   * @param hit - Native hit whose registered ancestors may be inspected.
-   * @returns True only for a contained hit whose nearest editor is this attachment.
-   */
-  private isEditorHit(root: HTMLElement, hit: Element): boolean {
-    return root.contains(hit) && hit.closest("[data-rivto-block-editor]") === root;
+      return false;
+    });
+    return normalized;
   }
 
   /**
@@ -255,40 +332,54 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * by its containing list. Inside feedback is retained while looking for that
    * edge. Exclusion stops the walk after any eligible descendant declaration.
    *
-   * @param hit - Native hit already checked against the current editor occurrence.
    * @param point - Viewport coordinates tested against live geometry.
-   * @param root - Attached editor bounding ancestor discovery.
+   * @param measurements - Query-local Root measurements for registered geometry.
    * @returns Nearest target or shared gap, or undefined without a matching declaration.
    */
   private resolveLocalTarget(
-    hit: Element,
     point: BlockDropPoint,
-    root: HTMLElement,
-  ): ResolvedBlockDropTarget | undefined {
-    let inside: ResolvedBlockDropTarget | undefined;
-    let edge: ResolvedBlockDropTarget | undefined;
-    for (let element: Element | null = hit; element; element = element.parentElement) {
-      if (element.hasAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE)) {
-        return edge ?? inside;
+    measurements: BlockDropGeometryReader,
+  ): BlockDropGeometryTarget | undefined {
+    let inside: BlockDropGeometryTarget | undefined;
+    let edge: BlockDropGeometryTarget | undefined;
+    let result: BlockDropGeometryTarget | undefined;
+    measurements.walkHitAncestors((region) => {
+      if (region.readAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE) !== undefined) {
+        result = edge ?? inside;
+        return true;
       }
-      const entries = this.targets.get(element as HTMLElement);
-      const target = !edge && entries ? this.resolveEntries(entries, point, hit) : undefined;
+      const identity = region.getIdentity();
+      if (!identity) {
+        throw DROP_MEASUREMENT_UNAVAILABLE;
+      }
+      const entries = this.targets.get(identity);
+      const target =
+        !edge && entries ? this.resolveEntries(entries, point, measurements) : undefined;
+      if (!measurements.isCurrent()) {
+        throw DROP_MEASUREMENT_UNAVAILABLE;
+      }
       if (target && target.region?.kind !== "inside") {
         edge = target;
       }
       if (target?.region?.kind === "inside") {
         inside ??= target;
       }
-      const layout = edge ? this.layouts.get(element as HTMLElement) : this.readLayout(element);
-      const gap = this.resolveLocalGap(layout, point, hit, edge, inside);
+      const layout = edge ? this.layouts.get(identity) : this.readLayout(region, measurements);
+      const gap = this.resolveLocalGap(layout, point, measurements, edge, inside);
+      if (!measurements.isCurrent()) {
+        throw DROP_MEASUREMENT_UNAVAILABLE;
+      }
       if (gap) {
-        return gap;
+        result = gap;
+        return true;
       }
-      if (element === root || this.stopsLocalSearch(element, layout, point, edge ?? inside)) {
-        return edge ?? inside;
+      if (this.stopsLocalSearch(identity, layout, point, measurements, edge ?? inside)) {
+        result = edge ?? inside;
+        return true;
       }
-    }
-    return edge ?? inside;
+      return false;
+    });
+    return result ?? edge ?? inside;
   }
 
   /**
@@ -299,7 +390,7 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    *
    * @param layout - Registered or owner-bounded list, absent outside list scope.
    * @param point - Viewport coordinates tested by the list resolver.
-   * @param hit - Native hit limiting background and adjacent-anchor ownership.
+   * @param measurements - Query-local Root measurements for registered geometry.
    * @param edge - First matched edge, retained while walking ancestors.
    * @param inside - First matched inside declaration, if any.
    * @returns Matching shared gap, or undefined when the body owns the point or no gap matches.
@@ -307,24 +398,30 @@ export class BlockDropTargets implements BlockDropTargetsApi {
   private resolveLocalGap(
     layout: BlockDropLayoutRegistration | undefined,
     point: BlockDropPoint,
-    hit: Element,
-    edge?: ResolvedBlockDropTarget,
-    inside?: ResolvedBlockDropTarget,
-  ): ResolvedBlockDropTarget | undefined {
+    measurements: BlockDropGeometryReader,
+    edge?: BlockDropGeometryTarget,
+    inside?: BlockDropGeometryTarget,
+  ): BlockDropGeometryTarget | undefined {
     if (!layout) {
       return;
     }
-    const bodyOwnsPoint =
-      inside &&
-      inside.element !== layout.element &&
-      (inside.element.hasAttribute("data-block-id") ||
-        (inside.destination.kind === "inside" &&
-          inside.destination.parentId !== null &&
-          this.regions.get(inside.destination.parentId, "row")?.contains(inside.element)));
+    let bodyOwnsPoint = false;
+    const layoutIdentity = layout.identity;
+    if (inside && inside.identity !== layoutIdentity) {
+      bodyOwnsPoint = measurements.readAttribute(inside.identity, "data-block-id") !== undefined;
+      if (
+        !bodyOwnsPoint &&
+        inside.destination.kind === "inside" &&
+        inside.destination.parentId !== null
+      ) {
+        const row = this.regions.getIdentities(inside.destination.parentId, "row")[0];
+        bodyOwnsPoint = !!row && measurements.contains(row, inside.identity);
+      }
+    }
     if (bodyOwnsPoint && !edge) {
       return;
     }
-    return resolveLayoutGap(layout, point, hit, edge);
+    return resolveLayoutGap(layout, point, measurements, edge);
   }
 
   /**
@@ -334,19 +431,24 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * ancestor's free space. Only occupied layout bounds stop lookup when no target
    * has matched; an already matched target needs no extra rectangle read.
    *
-   * @param element - Current ancestor, also the measured host for this decision.
+   * @param regionIdentity - Opaque identity of the current ancestor, also the measured host for this decision.
    * @param layout - List associated with that ancestor, if any.
    * @param point - Viewport pointer coordinates.
+   * @param measurements - Root-backed measurements for the current query.
    * @param target - First edge or inside declaration retained by the walk.
    * @returns True for a list with a retained target or containing physical bounds.
+   * @throws If an attachment ends during measurement or a browser geometry read fails.
    */
   private stopsLocalSearch(
-    element: Element,
+    regionIdentity: RegionIdentity,
     layout: BlockDropLayoutRegistration | undefined,
     point: BlockDropPoint,
-    target?: ResolvedBlockDropTarget,
+    measurements: Pick<BlockDropGeometryReader, "readBounds">,
+    target?: BlockDropGeometryTarget,
   ): boolean {
-    return Boolean(layout && (target || containsDropPoint(element.getBoundingClientRect(), point)));
+    return Boolean(
+      layout && (target || containsDropPoint(measurements.readBounds(regionIdentity), point)),
+    );
   }
 
   /**
@@ -368,28 +470,31 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * its containing layout, preserving shared feedback and canonical neighbors.
    * Exclusions stop this ancestor lookup before any outer declaration is read.
    *
-   * @param hit - Connected native hit in this editor occurrence.
    * @param point - Viewport pointer tested against existing inset declarations.
-   * @param root - Attached editor bounding the ancestor walk.
+   * @param measurements - Query-local Root measurements for registered geometry.
    * @param excluded - Captured moving roots omitted when classifying shared sibling neighbors.
    * @returns A local row gap, an ancestor sibling edge or its merged gap, or
    * undefined without a matching boundary that needs priority over local resolution.
    */
   private resolveNestedBoundary(
-    hit: Element,
     point: BlockDropPoint,
-    root: HTMLElement,
+    measurements: BlockDropGeometryReader,
     excluded?: ReadonlySet<string>,
-  ): ResolvedBlockDropTarget | undefined {
+  ): BlockDropGeometryTarget | undefined {
     let innerLayout: BlockDropLayoutRegistration | undefined;
-    let ancestorEdge: ResolvedBlockDropTarget | undefined;
-    let nearestOutlineEdge: ResolvedBlockDropTarget | undefined;
+    let ancestorEdge: BlockDropGeometryTarget | undefined;
+    let nearestOutlineEdge: BlockDropGeometryTarget | undefined;
     let hasOuterPerpendicularLayout = false;
-    for (let element: Element | null = hit; element; element = element.parentElement) {
-      if (element.hasAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE)) {
-        return;
+    let result: BlockDropGeometryTarget | undefined;
+    const stopped = measurements.walkHitAncestors((region) => {
+      if (region.readAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE) !== undefined) {
+        return true;
       }
-      const layout = this.layouts.get(element as HTMLElement);
+      const identity = region.getIdentity();
+      if (!identity) {
+        throw DROP_MEASUREMENT_UNAVAILABLE;
+      }
+      const layout = this.layouts.get(identity);
       hasOuterPerpendicularLayout ||= areDropAxesPerpendicular(innerLayout?.axis, layout?.axis);
       // Normalize only after reaching the ancestor edge's containing list.
       if (ancestorEdge && layout && innerLayout) {
@@ -397,14 +502,18 @@ export class BlockDropTargets implements BlockDropTargetsApi {
           innerLayout,
           ancestorEdge,
           point,
-          hit,
+          measurements,
           hasOuterPerpendicularLayout,
           excluded,
         );
-        return gap ?? resolveLayoutGap(layout, point, hit, ancestorEdge) ?? ancestorEdge;
+        result = gap ?? resolveLayoutGap(layout, point, measurements, ancestorEdge) ?? ancestorEdge;
+        return true;
       }
-      const entries = !ancestorEdge && this.targets.get(element as HTMLElement);
-      const target = entries ? this.resolveEntries(entries, point, hit) : undefined;
+      const entries = !ancestorEdge && this.targets.get(identity);
+      const target = entries ? this.resolveEntries(entries, point, measurements) : undefined;
+      if (!measurements.isCurrent()) {
+        throw DROP_MEASUREMENT_UNAVAILABLE;
+      }
       if (!innerLayout && isLocalOutlineEdge(target)) {
         nearestOutlineEdge ??= target;
       }
@@ -413,18 +522,16 @@ export class BlockDropTargets implements BlockDropTargetsApi {
         if (
           nearestOutlineEdge &&
           !sameAppend &&
-          !prefersOuterSiblingEdge(target, nearestOutlineEdge, excluded)
+          !prefersOuterSiblingEdge(target, nearestOutlineEdge, measurements, excluded)
         ) {
-          return;
+          return true;
         }
         ancestorEdge = target;
       }
       innerLayout ??= layout;
-      if (element === root) {
-        return ancestorEdge;
-      }
-    }
-    return ancestorEdge;
+      return false;
+    });
+    return stopped ? result : ancestorEdge;
   }
 
   /**
@@ -439,8 +546,8 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * @returns True for a trailing parent-inside choice matching a terminal child gap.
    */
   private isSameAppendBoundary(
-    outer: ResolvedBlockDropTarget | undefined,
-    inner: ResolvedBlockDropTarget | undefined,
+    outer: BlockDropGeometryTarget | undefined,
+    inner: BlockDropGeometryTarget | undefined,
   ): boolean {
     return (
       outer?.region?.kind === "edge" &&
@@ -463,22 +570,33 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * clipping and distance bounds. This child scope never captures an already
    * selected shell edge: that edge belongs to the shell's containing list.
    *
-   * @param element - Native ancestor inside the attached editor occurrence.
+   * @param element - Ancestor region inside the attached editor occurrence.
+   * @param measurements - Attachment-bound containment checks for registered child hosts.
    * @returns Its registered layout, an owner-bounded linear-list view, or undefined
    * when no enabled owned child layout is registered in this shell.
    */
-  private readLayout(element: Element): BlockDropLayoutRegistration | undefined {
-    const registered = this.layouts.get(element as HTMLElement);
+  private readLayout(
+    element: InputRegion,
+    measurements: BlockDropGeometryReader,
+  ): BlockDropLayoutRegistration | undefined {
+    const identity = element.getIdentity();
+    if (!identity) {
+      throw DROP_MEASUREMENT_UNAVAILABLE;
+    }
+    const registered = this.layouts.get(identity);
     if (registered) {
       return registered;
     }
-    const blockId = element.getAttribute("data-block-id");
-    const children = blockId
-      ? this.regions.get(blockId, "children", element as HTMLElement)
-      : undefined;
-    const layout = children && this.layouts.get(children);
-    if (this.canUseOwnerBounds(layout)) {
-      return { ...layout, element: element as HTMLElement };
+    const blockId = element.readAttribute("data-block-id");
+    for (const child of blockId ? this.regions.getIdentities(blockId, "children") : []) {
+      if (!measurements.containsIdentity(element, child)) {
+        continue;
+      }
+      const layout = this.layouts.get(child);
+      if (this.canUseOwnerBounds(layout)) {
+        return { ...layout, identity };
+      }
+      return undefined;
     }
   }
 
@@ -504,25 +622,28 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    *
    * @param entries - Independent registrations attached to the same existing element.
    * @param point - Viewport pointer position.
-   * @param hit - Native hit used to distinguish unoccupied background from child content.
+   * @param measurements - Query-local Root measurements for registered geometry.
    * @returns Physical winner without permission fallback or canonical mutation.
    */
   private resolveEntries(
-    entries: Set<DropTargetEntry>,
+    entries: Set<BlockDropTargetEntry>,
     point: BlockDropPoint,
-    hit: Element,
-  ): ResolvedBlockDropTarget | undefined {
-    let selected: ResolvedBlockDropTarget | undefined;
+    measurements: BlockDropGeometryReader,
+  ): BlockDropGeometryTarget | undefined {
+    let selected: BlockDropGeometryTarget | undefined;
     let priority = -Infinity;
     let rank = -1;
-    const geometry = readDropGeometry(entries.values().next().value!.element);
+    const geometry = measurements.read(entries.values().next().value!.identity);
+    if (!measurements.isCurrent()) {
+      return undefined;
+    }
     for (const entry of entries) {
       for (const region of entry.getRegions()) {
         const regionRank = dropRegionRank(region);
         if (this.isShadowedRegion(entry.priority, regionRank, priority, rank)) {
           continue;
         }
-        if (!containsDropRegion(entry.element, region, geometry, point, hit)) {
+        if (!containsDropRegion(entry.identity, region, geometry, point, measurements)) {
           continue;
         }
         selected = dropRegionTarget(entry, region, geometry, point);
@@ -630,8 +751,8 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * @returns True for an explicit edge selecting a between destination.
    */
   private isSiblingEdge(
-    target: ResolvedBlockDropTarget | undefined,
-  ): target is ResolvedBlockDropTarget {
+    target: BlockDropGeometryTarget | undefined,
+  ): target is BlockDropGeometryTarget {
     return target?.region?.kind === "edge" && target.destination.kind === "between";
   }
 
@@ -662,16 +783,45 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * retain anchor feedback; document-root append has no parent hierarchy outline.
    *
    * @param target - Geometry winner after live destination and source-policy checks.
-   * @returns The original boundary target, or an inside target with its registered shell.
+   * @param attachment - Exact attachment that resolved the geometry.
+   * @returns A bounded anchor and, for eligible inside targets, its registered shell;
+   * undefined if the attachment or anchor becomes unavailable during capture.
    */
-  private withInsideOutline(target: ResolvedBlockDropTarget): ResolvedBlockDropTarget {
+  private withInsideOutline(
+    target: BlockDropGeometryTarget,
+    attachment: BlockDropAttachment,
+  ): ResolvedBlockDropTarget | undefined {
+    const { identity, ...geometry } = target;
+    /**
+     * Checks that this Page attachment still owns its borrowed Root.
+     *
+     * @returns False if ownership changes during the Root check.
+     * @throws Propagates Root ownership-check failures.
+     */
+    const isAttached = () =>
+      this.getAttachment() === attachment &&
+      attachment.inputRoot.isAttached() &&
+      this.getAttachment() === attachment;
+    const anchor = attachment.inputRoot.captureRegionByIdentity(identity, isAttached);
+    if (!anchor || !isAttached()) {
+      return undefined;
+    }
     if (target.destination.kind !== "inside" || target.indicator) {
-      return target;
+      return { ...geometry, anchor };
     }
     const parentId = target.destination.parentId;
+    const shell = parentId === null ? undefined : this.regions.getIdentities(parentId, "shell")[0];
+    if (!shell) {
+      return isAttached() ? { ...geometry, anchor } : undefined;
+    }
+    const outline = attachment.inputRoot.captureRegionByIdentity(shell, isAttached);
+    if (!isAttached()) {
+      return undefined;
+    }
     return {
-      ...target,
-      outlineElement: parentId === null ? undefined : this.regions.get(parentId, "shell"),
+      ...geometry,
+      anchor,
+      ...(outline ? { outline } : {}),
     };
   }
 }

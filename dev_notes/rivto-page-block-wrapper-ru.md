@@ -121,3 +121,8 @@ No teardown or attachment capability was added to borrowed node or editor APIs.
 Resolver behavior, hierarchy validation, nested editor boundaries, and native browser
 clipping remain unchanged. Actual DnD gestures and production integration were not
 implemented or exercised by this change.
+
+Later Root migration changed the Page placement refs described above: BlockItem
+and BlockDropWrapper now forward opaque region identities, and normalized input
+uses `bindInput`. The wrapper still owns its placement and renders the supplied
+children once; callers use the owning Root for browser operations.

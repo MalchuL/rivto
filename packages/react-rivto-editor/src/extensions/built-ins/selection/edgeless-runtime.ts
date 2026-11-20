@@ -1,5 +1,11 @@
-import type { ReactEditorApi } from "../../../editor/types";
-import type { EdgelessSelectionRef, EdgelessSelectionSnapshot } from "./types";
+import type { ReactEditorExtensionApi } from "../../../editor/types";
+import type {
+  EdgelessSelectionHost,
+  EdgelessSelectionOwner,
+  EdgelessSelectionPanel,
+  EdgelessSelectionRef,
+  EdgelessSelectionSnapshot,
+} from "./types";
 /**
  * Projects the core generic selection into the edgeless selection API.
  *
@@ -61,7 +67,7 @@ export class EdgelessSelectionRuntime {
    * Creates an adapter over one editor's generic selection manager.
    * @param editor - Runtime whose core selection stores element state.
    */
-  constructor(private readonly editor: ReactPanelApi | ReactEditorApi) {}
+  constructor(private readonly editor: EdgelessSelectionHost) {}
 
   /**
    * Reads the selection manager backing this edgeless runtime.
@@ -180,8 +186,8 @@ export class EdgelessSelectionRuntime {
 // Installation belongs to the shared editor; adapters read through each panel's
 // bound selection API so identical element IDs in other panels stay unselected.
 const runtimes = new WeakMap<
-  ReactEditorApi["extensions"],
-  WeakMap<ReactPanelApi | ReactEditorApi, EdgelessSelectionRuntime>
+  object,
+  WeakMap<EdgelessSelectionPanel | EdgelessSelectionOwner, EdgelessSelectionRuntime>
 >();
 
 /**
@@ -189,13 +195,16 @@ const runtimes = new WeakMap<
  * @param editor - Owning React editor instance.
  * @returns Disposer that removes the adapter.
  */
-export function installEdgelessRuntime(editor: ReactPanelApi | ReactEditorApi): () => void {
+export function installEdgelessRuntime(editor: ReactPanelApi | ReactEditorExtensionApi): () => void {
   const documentEditor = "editor" in editor ? editor.editor : editor;
   if (runtimes.has(documentEditor.extensions)) {
     throw new Error("Edgeless selection runtime is already installed");
   }
   const runtime = new EdgelessSelectionRuntime(editor);
-  const adapters = new WeakMap<ReactPanelApi | ReactEditorApi, EdgelessSelectionRuntime>();
+  const adapters = new WeakMap<
+    EdgelessSelectionPanel | EdgelessSelectionOwner,
+    EdgelessSelectionRuntime
+  >();
   adapters.set(editor, runtime);
   runtimes.set(documentEditor.extensions, adapters);
   return () => {
@@ -215,7 +224,7 @@ export function installEdgelessRuntime(editor: ReactPanelApi | ReactEditorApi): 
  * @returns Installed adapter.
  */
 export function getEdgelessRuntime(
-  editor: ReactPanelApi | ReactEditorApi,
+  editor: EdgelessSelectionPanel | EdgelessSelectionOwner,
 ): EdgelessSelectionRuntime {
   const runtime = findEdgelessRuntime(editor);
   if (!runtime) {
@@ -231,7 +240,7 @@ export function getEdgelessRuntime(
  * @returns Installed adapter, or undefined.
  */
 export function findEdgelessRuntime(
-  editor: ReactPanelApi | ReactEditorApi,
+  editor: EdgelessSelectionPanel | EdgelessSelectionOwner,
 ): EdgelessSelectionRuntime | undefined {
   const documentEditor = "editor" in editor ? editor.editor : editor;
   const adapters = runtimes.get(documentEditor.extensions);

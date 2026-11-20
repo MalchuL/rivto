@@ -1,8 +1,17 @@
 import { BlockDropWrapper, type BlockChildrenItemProps } from "@chulane/rivto-page";
-import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { useBlockNode, useReactPanel } from "../../../hooks";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { RegionIdentity } from "@chulane/rivto-root";
+import { getBrowserElementIdentity } from "@chulane/rivto-root/browser";
+import { useBlockNode } from "../../../hooks";
+import { useReactPanelContext } from "../../../hooks/editor/use-react-panel-context";
 import { editorControlProps } from "../../../constants";
 import { BentoResizeController } from "./bento-resize-controller";
+import type {
+  BentoResizeHandleProps,
+  BentoResizeHandlesProps,
+  BentoTilePlacementStyle,
+} from "./types";
+import { attachBentoResizeInput } from "./browser/bento-resize-input";
 import {
   BENTO_WIDTH_PROPERTY,
   BENTO_TILE_ITEM_CLASS,
@@ -11,10 +20,6 @@ import {
   RESIZE_EDGE_ATTRIBUTE,
 } from "./bento-constants";
 
-/** Width is a placement property; the existing child block retains its own layout. */
-interface BentoTilePlacementStyle extends CSSProperties {
-  readonly [BENTO_WIDTH_PROPERTY]: string;
-}
 const RESIZE_HANDLE_CLASS = "rivto-bento-resize";
 
 /**
@@ -35,74 +40,100 @@ const RESIZE_HANDLE_CLASS = "rivto-bento-resize";
  */
 export function BentoTileItem({ blockId, children }: BlockChildrenItemProps) {
   const { block } = useBlockNode(blockId);
-  const [element, setElement] = useState<HTMLDivElement | null>(null);
+  const [mounted, setMounted] = useState(false);
+  /**
+   * Tracks whether the tile's placement is mounted without retaining its element.
+   *
+   * @param identity - Current placement identity, or null after unmount.
+   * @returns Resize handles are scheduled to match placement availability.
+   */
+  const setPlacement = useCallback((identity: RegionIdentity | null) => {
+    setMounted(identity !== null);
+  }, []);
   const style: BentoTilePlacementStyle = {
     [BENTO_WIDTH_PROPERTY]: `${BentoResizeController.getWidth(block?.props.bentoWidth)}px`,
   };
   return (
-    <BlockDropWrapper className={BENTO_TILE_ITEM_CLASS} ref={setElement} style={style}>
+    <BlockDropWrapper className={BENTO_TILE_ITEM_CLASS} ref={setPlacement} style={style}>
       {children}
-      {element && <BentoResizeHandles blockId={blockId} tile={element} />}
+      {mounted && <BentoResizeHandles blockId={blockId} />}
     </BlockDropWrapper>
   );
-}
-
-/** Mounted placement borrowed by the resize controls for one tile. */
-interface BentoResizeHandlesProps {
-  readonly blockId: string;
-  readonly tile: HTMLElement;
 }
 
 /**
  * Left and right separators that preview width on the frozen tile, then commit.
  *
- * @param props - Tile identity and its mounted block shell host.
+ * @param props - Tile identity for the mounted block shell.
  * @param props.blockId - Persisted tile ID receiving `bentoWidth`.
- * @param props.tile - Shell used for freeze, preview, and portal anchoring.
  * @returns Two accessible vertical resize handles.
  */
-function BentoResizeHandles({ blockId, tile }: BentoResizeHandlesProps) {
-  const reactPanel = useReactPanel();
-  const controller = useRef<BentoResizeController | null>(null);
+function BentoResizeHandles({ blockId }: BentoResizeHandlesProps) {
+  const { reactPanel } = useReactPanelContext();
+  const controller = useMemo(
+    () => new BentoResizeController(reactPanel.blocks, blockId),
+    [reactPanel.blocks, blockId],
+  );
   const width = BentoResizeController.getWidth(
     reactPanel.blocks.getBlockNode(blockId)?.props.bentoWidth,
   );
   useLayoutEffect(() => {
-    const resize = new BentoResizeController(reactPanel.blocks, blockId, tile);
-    controller.current = resize;
-    return () => {
-      controller.current = null;
-      resize.cancel();
-    };
-  }, [reactPanel.blocks, blockId, tile]);
+    return () => controller.cancel();
+  }, [controller]);
 
   return (
     <>
       {(["left", "right"] as const).map((edge) => (
-        <div
+        <BentoResizeHandle
           key={edge}
-          {...editorControlProps}
-          className={RESIZE_HANDLE_CLASS}
-          role="separator"
-          tabIndex={0}
-          aria-label={
-            edge === "left" ? "Resize Bento tile from the left" : "Resize Bento tile from the right"
-          }
-          aria-orientation="vertical"
-          aria-valuemin={MIN_TILE_WIDTH}
-          aria-valuemax={MAX_TILE_WIDTH}
-          aria-valuenow={width}
-          {...{ [RESIZE_EDGE_ATTRIBUTE]: edge }}
-          onPointerDown={(event) =>
-            controller.current?.start(edge, event.nativeEvent, event.currentTarget)
-          }
-          onPointerMove={(event) => controller.current?.move(event.nativeEvent)}
-          onPointerUp={(event) => controller.current?.finish(event.nativeEvent, true)}
-          onPointerCancel={(event) => controller.current?.finish(event.nativeEvent, false)}
-          onLostPointerCapture={(event) => controller.current?.finish(event.nativeEvent, false)}
-          onKeyDown={(event) => controller.current?.resizeWithKeyboard(edge, event.nativeEvent)}
+          edge={edge}
+          width={width}
+          controller={controller}
+          panel={reactPanel}
         />
       ))}
     </>
+  );
+}
+
+/**
+ * Attaches normalized input to one accessible resize separator.
+ *
+ * @param props - Edge, current width and shared tile gesture owner.
+ * @param props.edge - Side controlled by this separator.
+ * @param props.width - Current persisted width in CSS pixels.
+ * @param props.controller - Shared gesture owner, retained by the parent.
+ * @param props.panel - Borrowed panel occurrence and availability subscription.
+ * @returns A mounted separator whose listener attachment ends on unmount.
+ * @throws If listener attachment or cleanup fails.
+ */
+function BentoResizeHandle({ edge, width, controller, panel }: BentoResizeHandleProps) {
+  const handle = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (handle.current) {
+      return attachBentoResizeInput(
+        getBrowserElementIdentity(handle.current),
+        edge,
+        controller,
+        panel,
+      );
+    }
+  }, [edge, controller, panel]);
+  return (
+    <div
+      ref={handle}
+      {...editorControlProps}
+      className={RESIZE_HANDLE_CLASS}
+      role="separator"
+      tabIndex={0}
+      aria-label={
+        edge === "left" ? "Resize Bento tile from the left" : "Resize Bento tile from the right"
+      }
+      aria-orientation="vertical"
+      aria-valuemin={MIN_TILE_WIDTH}
+      aria-valuemax={MAX_TILE_WIDTH}
+      aria-valuenow={width}
+      {...{ [RESIZE_EDGE_ATTRIBUTE]: edge }}
+    />
   );
 }

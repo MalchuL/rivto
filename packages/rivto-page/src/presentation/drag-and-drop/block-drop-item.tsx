@@ -6,7 +6,8 @@ import type {
 } from "../../editor/drag-and-drop/types";
 import type { BlockChildPlacement } from "../components/block-layout/block-item-context";
 import { useBlockDropRegions } from "./block-drop-layout";
-import { useBlockEditorController } from "../hooks/use-block-editor-controller";
+import { BlockEditorContext } from "../components/block-editor/block-editor-context";
+import type { BlockLayoutRegions } from "../components/block-layout/block-layout-regions";
 import type { BlockDropRegion } from "../../editor/drag-and-drop/types";
 
 /** Terminal outer-to-inner insertion levels borrowed by an item's child list. */
@@ -43,10 +44,14 @@ export interface BlockDropItemProps {
  */
 export function BlockDropItem({ placement, axis, outline, children }: BlockDropItemProps) {
   const { regions, depth } = useBlockDropEdges({ placement, axis, outline });
-  const editor = useBlockEditorController();
+  const editor = useContext(BlockEditorContext);
+  if (!editor) {
+    throw new Error("Block editor hooks require a BlockEditor");
+  }
+  const layoutRegions: Pick<BlockLayoutRegions, "getIdentities"> = editor.regions;
   const anchor = useCallback(
-    () => editor.regions.get(placement.blockId, "shell") ?? null,
-    [editor, placement.blockId],
+    () => layoutRegions.getIdentities(placement.blockId, "shell")[0] ?? null,
+    [layoutRegions, placement.blockId],
   );
   useBlockDropRegions(anchor, regions, placement.blockId);
   return <BlockDropDepthContext.Provider value={depth}>{children}</BlockDropDepthContext.Provider>;

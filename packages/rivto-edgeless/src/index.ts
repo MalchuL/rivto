@@ -1,4 +1,6 @@
 export { Canvas } from "./core/canvas";
+export { CanvasMarquee } from "./core/canvas-marquee";
+export type { CanvasMarqueeHit, CanvasMarqueeSource } from "./core/types";
 export type { CanvasApi } from "./core/canvas";
 export { elementBounds, intersects } from "./utils/geometry";
 export type {
@@ -36,7 +38,7 @@ export { CanvasPanTool } from "./core/tools/canvas-pan-tool";
 export { RevisionStore } from "./utils/revision-store";
 
 export { CanvasEditor } from "./core/canvas-editor";
-export type { CanvasEditorOptions } from "./core/canvas-editor";
+export type { CanvasEditorOptions } from "./core/types";
 export { CanvasSource } from "./core/canvas-source";
 
 export { EdgelessSnappingStore } from "./snapping/snapping-store";

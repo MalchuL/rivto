@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import type { ReactEditorApi } from "../../editor/types";
+import type { ReactEditorExtensionApi } from "../../editor/types";
 
 /** Idempotent ownership handle returned by every manager registration. */
 export type RegistrationDisposer = () => void;
@@ -11,16 +11,16 @@ export type ExtensionComponent = ComponentType;
 export type ExtensionMountPosition = "beforeSurface" | "afterSurface";
 
 /** Functional extension installed synchronously during ReactEditorApi creation. */
-export interface ReactEditorExtension {
+export interface ReactEditorExtension<CustomEvents extends object = object> {
   /** Stable identity used to reject duplicate installation. */
   readonly id: string;
   /**
-   * Registers behavior through the complete public React runtime.
+   * Registers behavior through the borrowed React runtime's public managers.
    *
-   * @param reactEditor - Runtime and public managers available to the extension.
+   * @param reactEditor - Runtime and public managers available to the extension; panel registration and runtime destruction remain with their owners.
    * @returns Optional cleanup for resources not owned by a React manager.
    */
-  setup(reactEditor: ReactEditorApi): void | (() => void);
+  setup(reactEditor: ReactEditorExtensionApi<CustomEvents>): void | (() => void);
 }
 
 /** Owns registrations and rejects new work after extension teardown begins. */

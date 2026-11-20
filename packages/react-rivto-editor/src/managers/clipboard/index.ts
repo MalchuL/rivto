@@ -5,6 +5,7 @@ export type {
   BlockClipboardFields,
   ElementClipboardFields,
   ClipboardCopyContext,
+  ClipboardPanel,
   ClipboardPasteContext,
   ClipboardContent,
   ClipboardParseContext,

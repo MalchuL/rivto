@@ -42,7 +42,7 @@ export function TestPanel({ panel, children }: { panel: ReactPanel; children?: R
     },
     createElement(
       EditorRootContext.Provider,
-      { value: { element: null, ref: panel.setRoot } },
+      { value: { identity: undefined, ref: panel.setRoot } },
       children,
     ),
   );

@@ -1,4 +1,5 @@
 import { CanvasViewport } from "../browser/canvas-viewport";
+import { canvasViewportAttachment } from "../browser/canvas-viewport-attachment";
 import { CanvasViewportContext } from "./canvas-viewport-context";
 import { useCanvasEditor, useActiveCanvasTool } from "./canvas-editor-provider";
 import { CanvasToolLayer, CanvasToolPreview } from "./canvas-tool-layer";
@@ -11,6 +12,8 @@ import { useCanvasCamera } from "../hooks/use-canvas";
 import { CanvasItems } from "./canvas-items";
 import { useCanvasInput } from "../hooks/use-canvas-input";
 import { DefaultControls } from "./default-controls";
+import { getBrowserElementIdentity } from "@chulane/rivto-root/browser";
+import { observeCanvasViewportSize } from "../browser/canvas-viewport-size";
 
 /**
  * Connects a canvas to a DOM viewport, a transformed world layer and screen overlays.
@@ -20,6 +23,7 @@ import { DefaultControls } from "./default-controls";
  *
  * @param props - Canvas, renderer, overlays and optional browser input policies.
  * @param props.canvas - Independent state owner retained by the consumer.
+ * @param props.inputRoot - Host-owned occurrence, null while awaiting it, or omitted for a standalone view.
  * @param props.renderElement - Stable renderer of a positioned host for each visible element.
  * @param props.children - Additional content in world coordinates.
  * @param props.overlay - Screen-coordinate controls and decorations.
@@ -30,6 +34,7 @@ import { DefaultControls } from "./default-controls";
 export function CanvasView({
   canvas,
   viewportRef,
+  inputRoot,
   renderElement,
   planeProps,
   children,
@@ -44,12 +49,13 @@ export function CanvasView({
   const { root, plane, setPlane, camera, tools, tool, ref, viewport } = useCanvasViewState(
     canvas,
     viewportRef,
+    inputRoot,
   );
   useCanvasInput({
     canvas,
-    root,
+    rootIdentity: root ? getBrowserElementIdentity(root) : undefined,
     interactions,
-    events: viewport.events,
+    viewport,
     allowCamera,
     panEnabled: () => Boolean(tool?.pansViewport || panEnabled?.()),
     onPanState,
@@ -66,12 +72,17 @@ export function CanvasView({
           {renderElement && <CanvasItems canvas={canvas} renderElement={renderElement} />}
           {children}
           {interactions && tool && <CanvasToolPreview tool={tool} zoom={camera.zoom} />}
-          {interactions && root && plane && (
-            <DefaultControls canvas={canvas} root={root} plane={plane} />
-          )}
+          {interactions && root && plane && <DefaultControls canvas={canvas} />}
         </div>
         {interactions && root && tools && tool?.capturesPointer && (
-          <CanvasToolLayer canvas={canvas} root={root} tools={tools} tool={tool} />
+          <CanvasToolLayer
+            canvas={canvas}
+            rootIdentity={getBrowserElementIdentity(root)}
+            viewport={viewport}
+            attachment={canvasViewportAttachment(viewport)}
+            tools={tools}
+            tool={tool}
+          />
         )}
         {overlay}
       </main>
@@ -86,6 +97,7 @@ export function CanvasView({
  * @param root - Current viewport node, absent before mount.
  * @param setRoot - Updates the local viewport identity.
  * @param viewportRef - Optional consumer reference to the same node.
+ * @param viewport - Owner publishing the current occurrence Root.
  * @returns Ref callback; cleanup disconnects observation and cancels active transforms.
  */
 function useViewportSize(
@@ -93,6 +105,7 @@ function useViewportSize(
   root: HTMLElement | null,
   setRoot: (node: HTMLElement | null) => void,
   viewportRef: CanvasViewProps["viewportRef"],
+  viewport: CanvasViewport,
 ) {
   const ref = useCallback(
     (node: HTMLElement | null) => {
@@ -105,23 +118,12 @@ function useViewportSize(
     },
     [viewportRef],
   );
+  useLayoutEffect(() => observeCanvasViewportSize(canvas, viewport), [canvas, viewport]);
   useLayoutEffect(() => {
     if (!root) {
       return;
     }
-    /**
-     * Publishes the current viewport dimensions after native layout changes.
-     *
-     * @returns Camera culling uses the latest CSS-pixel viewport size.
-     */
-    const measure = () => canvas.setViewport(root.clientWidth, root.clientHeight);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(root);
-    return () => {
-      observer.disconnect();
-      canvas.cancelTransform();
-    };
+    return () => canvas.cancelTransform();
   }, [canvas, root]);
   return ref;
 }
@@ -174,6 +176,7 @@ function useViewportAttachment(
   canvas: CanvasApi,
   root: HTMLElement | null,
   plane: HTMLElement | null,
+  inputRoot: CanvasViewProps["inputRoot"],
 ) {
   const shared = useContext(CanvasViewportContext);
   const viewport = useMemo(() => shared ?? new CanvasViewport(canvas), [shared, canvas]);
@@ -181,10 +184,10 @@ function useViewportAttachment(
     throw new Error("Canvas viewport belongs to another scene");
   }
   useLayoutEffect(() => {
-    if (root && plane) {
-      return viewport.attach(root, plane);
+    if (root && plane && inputRoot !== null) {
+      return viewport.attach(root, plane, inputRoot);
     }
-  }, [viewport, root, plane]);
+  }, [viewport, root, plane, inputRoot]);
   return viewport;
 }
 
@@ -193,14 +196,19 @@ function useViewportAttachment(
  *
  * @param canvas - Scene rendered by this viewport.
  * @param viewportRef - Consumer reference receiving the mounted viewport root.
+ * @param inputRoot - Host-owned occurrence, null while awaiting it, or omitted for standalone mounting.
  * @returns Mounted layers, current presentation snapshots and React ref callbacks.
  */
-function useCanvasViewState(canvas: CanvasApi, viewportRef: CanvasViewProps["viewportRef"]) {
+function useCanvasViewState(
+  canvas: CanvasApi,
+  viewportRef: CanvasViewProps["viewportRef"],
+  inputRoot: CanvasViewProps["inputRoot"],
+) {
   const [root, setRoot] = useState<HTMLElement | null>(null);
   const [plane, setPlane] = useState<HTMLDivElement | null>(null);
   const camera = useCanvasCamera(canvas);
   const { tools, tool } = useViewTools(canvas);
-  const ref = useViewportSize(canvas, root, setRoot, viewportRef);
-  const viewport = useViewportAttachment(canvas, root, plane);
+  const viewport = useViewportAttachment(canvas, root, plane, inputRoot);
+  const ref = useViewportSize(canvas, root, setRoot, viewportRef, viewport);
   return { root, plane, setPlane, camera, tools, tool, ref, viewport };
 }

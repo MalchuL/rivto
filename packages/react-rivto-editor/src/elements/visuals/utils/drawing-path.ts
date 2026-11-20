@@ -1,4 +1,4 @@
-import type { CanvasPoint } from "./canvas-point";
+import type { CanvasPoint } from "./types";
 
 /**
  * Rounds freehand samples into a continuous SVG path using quadratic midpoint curves.

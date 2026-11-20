@@ -1,12 +1,13 @@
-import { useLayoutEffect, type ReactNode } from "react";
+import { useLayoutEffect, useSyncExternalStore, type ReactNode } from "react";
 import {
   EdgelessTool,
   type EdgelessToolPointer,
 } from "../../../../managers/edgeless-tools/edgeless-tool";
-import type { CanvasPoint } from "../../../../elements/visuals/utils/canvas-point";
+import type { CanvasPoint } from "../../../../elements/visuals/utils/types";
 import { segmentIntersectsRotatedFrame } from "../../../../elements/visuals/utils/geometry";
-import { useEditorRoot } from "../../../../hooks/editor/use-editor-root";
+import { useReactPanelContext } from "../../../../hooks/editor/use-react-panel-context";
 import { VISUAL_ELEMENT_TYPES } from "../../../../elements/visuals/constants";
+import type { EraseTargetsProps } from "./types";
 
 /** Local erasure targeting with a single deletion command on release. */
 export class EraserTool extends EdgelessTool {
@@ -110,21 +111,65 @@ export class EraserTool extends EdgelessTool {
 /**
  * Applies and removes erasure feedback on hosts inside the receiving editor root.
  *
- * @param props - Current IDs, including selected outermost groups.
- * @returns No additional DOM.
+ * @param props - Erasure feedback for the mounted occurrence.
+ * @param props.ids - Current target IDs, including selected outermost groups.
+ * @returns No additional DOM; marker ownership follows the current Root.
+ * @throws Propagates Root query and marker update failures.
  */
-function EraseTargets({ ids }: { readonly ids: readonly string[] }) {
-  const { element: root } = useEditorRoot();
+export function EraseTargets({ ids }: EraseTargetsProps) {
+  const { reactPanel } = useReactPanelContext();
+  const inputRoot = useSyncExternalStore(
+    reactPanel.subscribeAvailability,
+    () => reactPanel.inputRoot,
+    () => undefined,
+  );
   useLayoutEffect(() => {
-    const marked: HTMLElement[] = [];
-    root?.querySelectorAll<HTMLElement>("[data-edgeless-object-id]").forEach((host) => {
-      if (ids.includes(host.dataset.edgelessObjectId!)) {
-        host.dataset.edgelessEraseTarget = "true";
-        marked.push(host);
+    if (!inputRoot?.isAttached()) {
+      return;
+    }
+    const releases: (() => void)[] = [];
+    /**
+     * Releases every marker even if an earlier restoration fails.
+     *
+     * @returns The errors reported by marker restorations.
+     */
+    const releaseMarkers = (): unknown[] => {
+      const errors: unknown[] = [];
+      for (const release of releases.splice(0).reverse()) {
+        try {
+          release();
+        } catch (error) {
+          errors.push(error);
+        }
       }
-    });
-    return () => marked.forEach((host) => delete host.dataset.edgelessEraseTarget);
-  }, [root, ids]);
+      return errors;
+    };
+    try {
+      const targets = new Set(ids);
+      const regions = inputRoot.findRegions(
+        "[data-edgeless-object-id]",
+        "[data-rivto-block-editor]",
+      );
+      for (const region of regions) {
+        const id = region.readAttribute("data-edgeless-object-id");
+        if (id && targets.has(id)) {
+          releases.push(region.setTemporaryAttribute("data-edgeless-erase-target", "true"));
+        }
+      }
+    } catch (error) {
+      const failures = releaseMarkers();
+      if (failures.length) {
+        throw new AggregateError([error, ...failures], "Erasure feedback setup failed");
+      }
+      throw error;
+    }
+    return () => {
+      const failures = releaseMarkers();
+      if (failures.length) {
+        throw new AggregateError(failures, "Erasure feedback cleanup failed");
+      }
+    };
+  }, [inputRoot, ids]);
   return null;
 }
 

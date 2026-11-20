@@ -1,6 +1,6 @@
 import type { CanvasToolSnapping as CreationSnapOptions } from "@chulane/rivto-edgeless";
 import type { VisualFrame } from "../types";
-import type { CanvasPoint } from "./canvas-point";
+import type { CanvasPoint } from "./types";
 import {
   applyCornerResize,
   EDGELESS_GRID_SIZE,

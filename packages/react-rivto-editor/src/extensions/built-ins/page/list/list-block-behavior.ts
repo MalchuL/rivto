@@ -2,7 +2,7 @@ import type { KeyboardSelectionTarget } from "../../../../managers/keyboard/sele
 import type {
   BlockBehavior,
   BlockBehaviorAvailabilityContext,
-  BlockBehaviorContext,
+  BlockKeyboardContext,
   BlockBehaviorOutcome,
 } from "../../../../block-behaviors/types";
 import { scheduleBlockFocus } from "../../../../block-behaviors/utils/focus-ops";
@@ -36,8 +36,9 @@ export class ListBlockBehavior implements BlockBehavior {
    * @returns Handled after a root marker transition, split, or outdent attempt.
    * @throws If delegated block mutation or list-property validation fails.
    */
-  onSplit(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
-    const { reactPanel, block, root } = context;
+  onSplit(context: BlockKeyboardContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
+    const { reactPanel, block, inputRoot } = context;
+    const attachment = inputRoot ?? reactPanel.inputRoot;
     if (
       !reactPanel.blocks.getParentId(block.id) &&
       reactPanel.editor.defaultWritingBlockFactory.isEmptyBlock(
@@ -46,7 +47,7 @@ export class ListBlockBehavior implements BlockBehavior {
       block.listProps.type !== "list"
     ) {
       convertEmptyToList(reactPanel, block.id);
-      scheduleBlockFocus(reactPanel, root, block.id, 0);
+      scheduleBlockFocus(reactPanel, block.id, 0, attachment, context.inputRegistration);
       return "handled";
     }
     return splitBlock(context, target, { ...DEFAULT_BLOCK_LIST_PROPS });

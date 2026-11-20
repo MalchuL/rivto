@@ -96,3 +96,4 @@ export function edgelessPreset(
 export * from "./visuals";
 
 export { useEdgelessElementStyle } from "../../hooks/elements/use-edgeless-element-style";
+export type { EdgelessElementStyle } from "../../hooks/elements/types";

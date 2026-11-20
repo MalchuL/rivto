@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { ReactEditor } from "@chulane/rivto-react";
+import type { MouseInput } from "@chulane/rivto-root";
 
 /** Production host runtime with an observable trace owned by this test. */
 interface EventInspection {
@@ -20,10 +21,17 @@ function installRegistrationTrace(root: Element): void {
   const button = document.createElement("button");
   button.textContent = "Test event registration";
   button.setAttribute("data-editor-control", "");
+  button.setAttribute("data-event-registration-target", "");
   root.prepend(button);
+  const other = document.createElement("button");
+  other.textContent = "Other event target";
+  other.setAttribute("data-editor-control", "");
+  root.prepend(other);
   const definition = {
     type: "click" as const,
-    when: ({ raw }: { raw: Event }) => raw.target === button,
+    scope: "surface" as const,
+    when: ({ mouseInput }: { mouseInput?: MouseInput }) =>
+      mouseInput?.target?.hasAncestor("[data-event-registration-target]") ?? false,
   };
   const removeCapture = events.register(
     { ...definition, id: "test.capture", capture: true },
@@ -56,6 +64,10 @@ test("registration changes preserve pending native delivery and defer new handle
   const surface = page.locator('[data-journal-document="today"] > .page-surface');
   await expect(surface).toBeVisible();
   await surface.evaluate(installRegistrationTrace);
+  await page.getByRole("button", { name: "Other event target", exact: true }).click();
+  expect(await page.evaluate(() => (window as unknown as EventInspection).__eventTrace)).toEqual(
+    [],
+  );
   const button = page.getByRole("button", { name: "Test event registration", exact: true });
   await button.click();
   expect(await page.evaluate(() => (window as unknown as EventInspection).__eventTrace)).toEqual([

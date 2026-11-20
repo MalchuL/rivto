@@ -1,5 +1,5 @@
 import { createCaretSelection } from "@chulane/rivto";
-import { createBlockBehaviorContext } from "../../block-behaviors/utils/context";
+import { createBlockSnapshotContext } from "../../block-behaviors/utils/context";
 import { DefaultBlockBehavior } from "../../block-behaviors/default-block-behavior";
 import type {
   BlockBehavior,
@@ -23,7 +23,7 @@ async function fixture() {
   });
   const block = panel.blocks.insertBlock({ type: "paragraph", content: "text" });
   const selection = createCaretSelection(block.id, 2);
-  const context = createBlockBehaviorContext(panel, block.id, {} as HTMLElement, selection)!;
+  const context = createBlockSnapshotContext(panel, block.id, selection)!;
   const registry = panel.editor.blockBehaviors;
   const availability: BlockBehaviorAvailabilityContext = {
     editor: panel.editor,
@@ -225,7 +225,7 @@ test("table-cell Enter remains specialized before shared list handling", async (
     const cell = table.children[0]!.children[0]!;
     panel.blocks.updateBlock(cell.id, { listProps: { type: "checkbox", checked: true } });
     const selection = createCaretSelection(cell.id, 0);
-    const context = createBlockBehaviorContext(panel, cell.id, {} as HTMLElement, selection)!;
+    const context = createBlockSnapshotContext(panel, cell.id, selection)!;
     core.history.clear();
     expect(
       core.history.batchUpdates(() =>
@@ -419,6 +419,12 @@ test.each(["unhandled", "handled", "rejected"] as const)(
   "structural dispatch visits selected blocks in order and %s claims the complete group",
   async (outcome) => {
     const { core, panel, block, context, registry } = await fixture();
+    const deletionContext = {
+      reactPanel: context.reactPanel,
+      block: context.block,
+      parentId: context.parentId,
+      selection: context.selection,
+    };
     core.blockRegistry.defineBlock({ type: "special" });
     const second = panel.blocks.insertBlock({
       type: "special",
@@ -440,7 +446,7 @@ test.each(["unhandled", "handled", "rejected"] as const)(
          */
         onStructuralDelete(current, selected) {
           calls.push(`shared:${current.block.id}`);
-          expect(current).toBe(context);
+          expect(current).toBe(deletionContext);
           expect(selected).toBe(ids);
           return "unhandled";
         },
@@ -470,7 +476,7 @@ test.each(["unhandled", "handled", "rejected"] as const)(
           calls.push(`special:${current.block.id}`);
           expect(current.block).toEqual(second);
           expect(current.selection).toBe(context.selection);
-          expect(current.root).toBe(context.root);
+          expect(current).not.toHaveProperty("root");
           expect(current.reactPanel).toBe(panel);
           expect(selected).toBe(ids);
           return outcome;
@@ -510,7 +516,9 @@ test.each(["unhandled", "handled", "rejected"] as const)(
     }
     for (let request = 0; request < 2; request++) {
       calls.length = 0;
-      expect(registry.dispatch("onStructuralDelete", context, ids)).toBe(outcome !== "unhandled");
+      expect(registry.dispatch("onStructuralDelete", deletionContext, ids)).toBe(
+        outcome !== "unhandled",
+      );
       expect(calls).toEqual(expected);
       expect(panel.blocks.getBlocks()).toEqual(before);
     }

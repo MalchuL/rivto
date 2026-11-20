@@ -15,7 +15,7 @@ import {
 } from "../extensions/built-ins/built-ins";
 import { createTableBlockInput, tableExtension } from "../extensions/containers/table/table";
 import { firstKeyboardTarget } from "../managers/keyboard/selection";
-import { createBlockBehaviorContext } from "./utils/context";
+import { createBlockSnapshotContext } from "./utils/context";
 import { DefaultBlockBehavior } from "./default-block-behavior";
 import type { BlockBehavior, BlockBehaviorAvailabilityContext, BlockMoveContext } from "./types";
 
@@ -115,12 +115,7 @@ test.each(["checkbox", "numbered_list", "start_numbered_list", "continue_numbere
       /** @returns Nothing after dispatching one Enter from a fresh block snapshot. */
       const pressEnter = () => {
         const selection = createCaretSelection(child, 0);
-        const context = createBlockBehaviorContext(
-          reactPanel,
-          child,
-          {} as HTMLElement,
-          selection,
-        )!;
+        const context = createBlockSnapshotContext(reactPanel, child, selection)!;
         const target = firstKeyboardTarget(selection)!;
         editor.history.batchUpdates(() =>
           reactPanel.editor.blockBehaviors.dispatch("onSplit", context, target),
@@ -167,7 +162,7 @@ test.each(["block", "edgeless"] as const)(
         listProps: { type: "checkbox", checked: true, custom: "keep" },
       }).id;
       const selection = createCaretSelection(id, 0);
-      const context = createBlockBehaviorContext(reactPanel, id, {} as HTMLElement, selection)!;
+      const context = createBlockSnapshotContext(reactPanel, id, selection)!;
       expect(new CheckboxBlockBehavior().onSplit(context, firstKeyboardTarget(selection)!)).toBe(
         "handled",
       );
@@ -204,7 +199,7 @@ test("empty checkbox clearing follows the host writing predicate for another blo
       listProps: { type: "checkbox", checked: true },
     }).id;
     const selection = createCaretSelection(id, 0);
-    const context = createBlockBehaviorContext(reactPanel, id, {} as HTMLElement, selection)!;
+    const context = createBlockSnapshotContext(reactPanel, id, selection)!;
     expect(new CheckboxBlockBehavior().onSplit(context, firstKeyboardTarget(selection)!)).toBe(
       "handled",
     );
@@ -231,7 +226,7 @@ test("contentless custom blocks do not lose checkbox state on Enter", async () =
       listProps: { type: "checkbox", checked: true },
     }).id;
     const selection = createCaretSelection(id, 0);
-    const context = createBlockBehaviorContext(reactPanel, id, {} as HTMLElement, selection)!;
+    const context = createBlockSnapshotContext(reactPanel, id, selection)!;
     new DefaultBlockBehavior().onSplit(context, firstKeyboardTarget(selection)!);
     expect(editor.blocks.getBlockNode(id)?.listProps.type).toBe("checkbox");
   } finally {
@@ -255,7 +250,7 @@ test("empty block Enter respects an outline floor", async () => {
     const child = editor.blocks.insertBlock({ type: "paragraph" }).id;
     editor.blocks.moveBlocks([child], cell, "inside");
     const selection = createCaretSelection(child, 0);
-    const context = createBlockBehaviorContext(reactPanel, child, {} as HTMLElement, selection)!;
+    const context = createBlockSnapshotContext(reactPanel, child, selection)!;
     expect(new DefaultBlockBehavior().onSplit(context, firstKeyboardTarget(selection)!)).toBe(
       "handled",
     );

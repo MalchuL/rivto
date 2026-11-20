@@ -4,7 +4,7 @@ import type {
   BlockSelectionExtensions,
   BlockSelectionFeature,
 } from "@chulane/rivto-page";
-import type { KeyboardApi } from "../../managers/keyboard/keyboard-api";
+import type { KeyboardApi } from "../../managers/keyboard/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers/keyboard/keymap";
 
 /** Host gesture identities shared by the occurrence's independently removable features. */

@@ -11,6 +11,10 @@ export const MAX_COLUMN_WIDTH = 1200;
 export const COLUMN_WIDTH_PROPERTY = "--rivto-table-column-width";
 /** Mounted Page cell placement carrying the column width. */
 export const CELL_ITEM_ATTRIBUTE = "data-table-cell-item";
+/** Marker identifying a mounted column resize separator. */
+export const TABLE_RESIZE_HANDLE_ATTRIBUTE = "data-table-resize-handle";
+/** Selector shared by normalized resize input and focus. */
+export const TABLE_RESIZE_HANDLE_SELECTOR = `[${TABLE_RESIZE_HANDLE_ATTRIBUTE}]`;
 
 /** Addressed reads and grouped writes borrowed by column width commands. */
 export interface TableColumnHost {

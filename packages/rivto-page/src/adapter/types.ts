@@ -128,10 +128,10 @@ export interface BlockEditorSelection {
   /**
    * Lets the host reserve pointer input for interactions outside block selection.
    *
-   * @param event - Native pointer or click event starting a selection operation.
+   * @param hasBlockAncestor - Whether the input target is inside a block marker.
    * @returns False when a host gesture owns this input; omission permits selection.
    */
-  canStartSelection?(event: MouseEvent): boolean;
+  canStartSelection?(hasBlockAncestor: boolean): boolean;
   /**
    * Reports whether a host command is restoring native selection asynchronously.
    *

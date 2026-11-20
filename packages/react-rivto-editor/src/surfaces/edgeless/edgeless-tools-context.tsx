@@ -2,8 +2,8 @@ import { CanvasEditorProvider } from "@chulane/rivto-edgeless/react";
 import { EdgelessEditor } from "./edgeless-editor";
 import type { CanvasApi } from "@chulane/rivto-edgeless";
 import { EdgelessToolContext } from "../../managers/edgeless-tools/edgeless-tool-context";
-import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { useReactPanel } from "../../hooks/editor/use-react-panel";
+import { createContext, useContext, useLayoutEffect, useMemo, type ReactNode } from "react";
+import { useReactPanelContext } from "../../hooks/editor/use-react-panel-context";
 import { EdgelessCreationDefaults } from "../../managers/elements/edgeless-creation-defaults";
 
 /** Independent canvas shared by the surface and its editor adapters. */
@@ -27,8 +27,9 @@ export const EdgelessCreationDefaultsContext = createContext<EdgelessCreationDef
  * @returns A provider sharing one tool context and settings session without adding state to the panel.
  */
 export function EdgelessToolsProvider({ children }: { readonly children: ReactNode }) {
-  const panel = useReactPanel();
+  const { reactPanel: panel } = useReactPanelContext();
   const editor = useMemo(() => new EdgelessEditor(panel), [panel]);
+  useLayoutEffect(() => panel.pageNavigation.attachCanvas(editor.source), [panel, editor]);
   const tools = editor.tools;
   return (
     <CanvasEditorProvider editor={editor}>

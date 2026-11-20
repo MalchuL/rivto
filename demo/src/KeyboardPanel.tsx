@@ -1,3 +1,4 @@
+import { getBrowserPrimaryModifier } from "@chulane/rivto-root/browser";
 /**
  * Demo-only live keyboard inventory.
  *
@@ -9,7 +10,7 @@
 import {
   KEYBOARD_BINDING_IDS,
   parseShortcut,
-  shortcutFromKeyboardEvent,
+  formatKeyboardShortcut,
   useReactPanel,
   type KeyboardBindingSnapshot,
 } from "@chulane/rivto-react";
@@ -45,7 +46,7 @@ function recordedShortcut(event: KeyboardEvent): string | undefined {
   if (MODIFIER_KEYS.has(event.key)) {
     return undefined;
   }
-  const raw = shortcutFromKeyboardEvent(event);
+  const raw = formatKeyboardShortcut(event, getBrowserPrimaryModifier());
   const portable =
     event.key === "+" || raw === "+"
       ? `${raw.replace(/\++$/, "")}+Plus`.replace(/^\+Plus/, "Plus")

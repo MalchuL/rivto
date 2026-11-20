@@ -1,9 +1,8 @@
 import type { VisualFrame } from "../../elements/visuals/types";
 import type { ReactNode } from "react";
-import { useLayoutEffect } from "react";
 import type { CreateElementInput } from "../elements/types";
 import type { ElementCreationDefaults } from "../elements/creation-defaults-types";
-import type { CanvasPoint } from "../../elements/visuals/utils/canvas-point";
+import type { CanvasPoint } from "../../elements/visuals/utils/types";
 import type { SnapGuide } from "../../elements/visuals/utils/geometry";
 import {
   centeredPlaceFrame,
@@ -12,8 +11,7 @@ import {
   snapDraggedFrame,
 } from "../../elements/visuals/utils/creation-geometry";
 import { ElementCreationPreview } from "../../elements/visuals/element-creation-preview";
-import { useEditorRoot } from "../../hooks/editor/use-editor-root";
-import { showSnapGuides } from "../../extensions/edgeless/visuals/utils/snap-guides";
+import { SnapGuides } from "../../extensions/edgeless/visuals/components/snap-guides";
 import { EdgelessTool, type EdgelessToolOptions, type EdgelessToolPointer } from "./edgeless-tool";
 
 /** Detached placement shown by toolbar drag; no persisted identity exists yet. */
@@ -212,7 +210,7 @@ export class EdgelessCreationTool extends EdgelessTool {
           operations={this.options.operations}
           zoom={zoom}
         />
-        <CreationSnapGuides guides={this.guides} />
+        <SnapGuides guides={this.guides} />
       </>
     );
   }
@@ -250,22 +248,4 @@ export class EdgelessCreationTool extends EdgelessTool {
     }
     return this.input;
   }
-}
-
-/**
- * Displays current placement guides and clears them when the preview unmounts.
- *
- * @param props - Guides in canvas coordinates owned by the current placement.
- * @returns No React DOM; the existing guide renderer owns its overlay.
- */
-function CreationSnapGuides({ guides }: { readonly guides: readonly SnapGuide[] }) {
-  const { element: root } = useEditorRoot();
-  useLayoutEffect(() => {
-    if (!root) {
-      return;
-    }
-    showSnapGuides(root, guides);
-    return () => showSnapGuides(root, []);
-  }, [root, guides]);
-  return null;
 }

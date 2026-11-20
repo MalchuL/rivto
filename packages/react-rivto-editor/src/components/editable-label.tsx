@@ -15,71 +15,26 @@
  * block or spawn a new visual. The live DOM is not React children while
  * editing, so a parent re-render cannot wipe an in-progress line break.
  */
-import {
-  forwardRef,
-  useImperativeHandle,
-  useLayoutEffect,
-  useRef,
-  type HTMLAttributes,
-  type MutableRefObject,
-} from "react";
-import {
-  insertEditableNewline,
-  insertEditablePlainText,
-  isEditableNewlineInput,
-  readEditablePlainText,
-} from "./editable-label-text";
-import { placeCaretAtPoint } from "./place-caret-at-point";
-
-/** Viewport point used to place the caret when editing becomes active. */
-export interface EditableLabelFocusPoint {
-  readonly x: number;
-  readonly y: number;
-}
-
-/** Imperative API for entering edit mode at a pointer position. */
-export interface EditableLabelHandle {
-  /**
-   * Turns editing on and places the caret nearest to the given viewport point.
-   *
-   * Prefer this when the label is already mounted. If the label mounts only
-   * after `editing` becomes true, set {@link EditableLabelProps.focusPointRef}
-   * before flipping `editing` instead.
-   */
-  beginEditingAt(clientX: number, clientY: number): void;
-}
-
-export interface EditableLabelProps extends Omit<
-  HTMLAttributes<HTMLDivElement>,
-  "contentEditable" | "onBlur" | "children" | "suppressContentEditableWarning"
-> {
-  /** Whether the label is currently an editing host. */
-  readonly editing: boolean;
-  /** Publishes editing changes from blur or {@link EditableLabelHandle.beginEditingAt}. */
-  readonly onEditingChange: (editing: boolean) => void;
-  /** Persisted plain-text content rendered while idle and seeded into the editor. */
-  readonly text: string;
-  /** Called with the editable's plain text when editing ends. */
-  readonly onCommit: (text: string) => void;
-  /**
-   * Optional point captured before `editing` becomes true.
-   *
-   * Useful when the label is mounted only while editing (empty shape/connector
-   * labels). The ref is cleared after the caret is placed.
-   */
-  readonly focusPointRef?: MutableRefObject<EditableLabelFocusPoint | null>;
-  /**
-   * When true, pointerdown while editing stops propagation so canvas drag /
-   * selection handlers do not steal the gesture.
-   */
-  readonly stopPointerWhileEditing?: boolean;
-}
+import { forwardRef, useImperativeHandle, useRef } from "react";
+import { useReactPanelContext } from "../hooks/editor/use-react-panel-context";
+import type { EditableLabelHandle, EditableLabelProps } from "./types";
+import { createLabelInputHandlers } from "./editable-label/browser/label-input-handlers";
+import { useEditableLabelSession } from "./editable-label/use-editable-label-session";
 
 /**
  * Renders one plain-text visual label and optionally turns it into an editor.
  *
- * @param props - Label text, editing flags, and native host attributes.
+ * @param props - Label text, editing flags, and host callbacks.
+ * @param props.editing - Whether the label currently accepts text editing.
+ * @param props.onEditingChange - Receives requests to enter or leave editing.
+ * @param props.text - Persisted text used to seed each editing session.
+ * @param props.onCommit - Receives plain text when editing ends.
+ * @param props.focusPointRef - Optional pending viewport point for caret placement.
+ * @param props.stopPointerWhileEditing - Whether editing pointer presses stop propagation.
+ * @param props.className - Optional presentation class for the label host.
+ * @param ref - Receives the imperative request for editing at a viewport point.
  * @returns A contenteditable host when `editing` is true.
+ * @throws If rendered outside an EditorPanel or browser editing operations fail.
  */
 export const EditableLabel = forwardRef<EditableLabelHandle, EditableLabelProps>(
   function EditableLabel(
@@ -91,19 +46,28 @@ export const EditableLabel = forwardRef<EditableLabelHandle, EditableLabelProps>
       focusPointRef,
       stopPointerWhileEditing = false,
       className,
-      onPointerDown,
-      onKeyDown,
-      onBeforeInput,
-      onPaste,
-      ...attributes
     },
     ref,
   ) {
-    const elementRef = useRef<HTMLDivElement | null>(null);
-    const pendingCaret = useRef<EditableLabelFocusPoint | null>(null);
-    const editingSession = useRef(false);
+    const { reactPanel } = useReactPanelContext();
+    const { labelRef, pendingCaret, draft } = useEditableLabelSession({
+      reactPanel,
+      editing,
+      text,
+      focusPointRef,
+    });
     // keydown runs before beforeinput; remember we already inserted for this Enter.
     const enterInsertedNewline = useRef(false);
+
+    const handlers = createLabelInputHandlers({
+      panel: reactPanel,
+      editing,
+      onCommit,
+      onEditingChange,
+      stopPointerWhileEditing,
+      draft,
+      enterInsertedNewline,
+    });
 
     useImperativeHandle(
       ref,
@@ -122,99 +86,13 @@ export const EditableLabel = forwardRef<EditableLabelHandle, EditableLabelProps>
       [onEditingChange],
     );
 
-    useLayoutEffect(() => {
-      const element = elementRef.current;
-      if (!element) {
-        return;
-      }
-
-      if (!editing) {
-        editingSession.current = false;
-        if (element.textContent !== text) {
-          element.textContent = text;
-        }
-        return;
-      }
-
-      const entering = !editingSession.current;
-      editingSession.current = true;
-      // Seed once per session. Rewriting on later renders would drop typed `\n`.
-      if (entering && element.textContent !== text) {
-        element.textContent = text;
-      }
-
-      const point = pendingCaret.current ?? focusPointRef?.current ?? null;
-      pendingCaret.current = null;
-      if (focusPointRef) {
-        focusPointRef.current = null;
-      }
-      if (point) {
-        placeCaretAtPoint(element, point.x, point.y);
-      } else if (entering) {
-        element.focus({ preventScroll: true });
-      }
-    }, [editing, focusPointRef, text]);
-
     return (
       <div
-        {...attributes}
-        ref={elementRef}
+        ref={labelRef}
         className={className}
         contentEditable={editing}
         suppressContentEditableWarning
-        onBlur={(event) => {
-          onCommit(readEditablePlainText(event.currentTarget));
-          onEditingChange(false);
-        }}
-        onBeforeInput={(event) => {
-          onBeforeInput?.(event);
-          if (event.defaultPrevented || !editing || event.nativeEvent.isComposing) {
-            return;
-          }
-          if (!isEditableNewlineInput(event.nativeEvent.inputType)) {
-            return;
-          }
-          event.preventDefault();
-          if (enterInsertedNewline.current) {
-            enterInsertedNewline.current = false;
-            return;
-          }
-          insertEditableNewline(event.currentTarget);
-        }}
-        onKeyDown={(event) => {
-          onKeyDown?.(event);
-          if (event.key !== "Enter") {
-            enterInsertedNewline.current = false;
-          }
-          if (event.defaultPrevented || !editing || event.nativeEvent.isComposing) {
-            return;
-          }
-          if (event.key !== "Enter") {
-            return;
-          }
-          // Replace insertParagraph so commit can persist a real newline character.
-          event.preventDefault();
-          insertEditableNewline(event.currentTarget);
-          enterInsertedNewline.current = true;
-        }}
-        onPaste={(event) => {
-          onPaste?.(event);
-          if (event.defaultPrevented || !editing) {
-            return;
-          }
-          // Structured clipboard must not steal this paste; insert visible text.
-          event.preventDefault();
-          insertEditablePlainText(
-            event.currentTarget,
-            event.clipboardData?.getData("text/plain") ?? "",
-          );
-        }}
-        onPointerDown={(event) => {
-          if (editing && stopPointerWhileEditing) {
-            event.stopPropagation();
-          }
-          onPointerDown?.(event);
-        }}
+        {...handlers}
       />
     );
   },

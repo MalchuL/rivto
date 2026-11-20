@@ -1,5 +1,4 @@
-import { registeredBlockRegion } from "../../presentation/components/block-layout/block-layout-regions";
-import { BLOCK_DROP_EXCLUDE_ATTRIBUTE } from "./block-drop-attributes";
+import type { InputRegion, RegionIdentity } from "@chulane/rivto-root";
 import type {
   BlockDropEdgeRegion,
   BlockDropDestination,
@@ -7,18 +6,11 @@ import type {
   BlockDropPoint,
   BlockDropRegion,
   BlockDropTargetRegistration,
-  ResolvedBlockDropTarget,
+  BlockDropGeometryTarget,
+  BlockDropBounds,
+  BlockDropGeometry,
+  BlockDropGeometryReader,
 } from "./types";
-
-/** Viewport bounds used without constructing browser-only DOMRect objects. */
-export interface BlockDropBounds {
-  readonly left: number;
-  readonly right: number;
-  readonly top: number;
-  readonly bottom: number;
-  readonly width: number;
-  readonly height: number;
-}
 
 /**
  * Builds immutable-by-contract viewport bounds from an origin and dimensions.
@@ -38,50 +30,31 @@ export function dropBounds(
   return { left, top, width, height, right: left + width, bottom: top + height };
 }
 
-/** A local geometry read, shared by declarations on one anchor for one resolution. */
-export interface BlockDropGeometry {
-  readonly rect: BlockDropBounds;
-  /** Owned content or primary row, when mounted and nonempty; never a descendant block. */
-  readonly contentRect?: BlockDropBounds;
-  /** False for an owned local child layout; omission preserves ordinary outline depth. */
-  readonly continuesOutline?: boolean;
-  readonly style: CSSStyleDeclaration;
-  readonly scaleX: number;
-  readonly scaleY: number;
-}
-
 /**
  * Reads one anchor's current viewport bounds and local-to-viewport scale.
  *
- * @param element - Existing mounted layout element.
- * @returns Geometry for this synchronous query only; no cache survives scrolling.
- * Registered body bounds are read without searching unregistered DOM or child blocks.
+ * @param region - Root capability bound to this anchor and attachment.
+ * @returns Detached bounds and style values for this synchronous query; no browser
+ * geometry or computed style object is retained and no cache survives scrolling.
+ * Registered body bounds are supplied separately by the Page layout registry.
  */
-export function readDropGeometry(element: HTMLElement): BlockDropGeometry {
-  const rect = element.getBoundingClientRect();
+export function readDropGeometry(
+  region: Pick<InputRegion, "readLayout">,
+): BlockDropGeometry | undefined {
+  const layout = region.readLayout(["--rivto-drop-target-size", "--rivto-block-indent"]);
+  if (!layout) {
+    return undefined;
+  }
+  const { left, top, width, height } = layout.bounds;
+  const rect = dropBounds(left, top, width, height);
   return {
     rect,
-    contentRect: readContentBounds(element),
-    continuesOutline: continuesDropOutline(element),
-    style: element.ownerDocument.defaultView!.getComputedStyle(element),
-    scaleX: element.offsetWidth ? rect.width / element.offsetWidth : 1,
-    scaleY: element.offsetHeight ? rect.height / element.offsetHeight : 1,
+    direction: layout.direction,
+    targetSize: layout.properties["--rivto-drop-target-size"] ?? "",
+    indent: layout.properties["--rivto-block-indent"] ?? "",
+    scaleX: layout.scaleX,
+    scaleY: layout.scaleY,
   };
-}
-
-/**
- * Reads whether this anchor's owned child layout continues ordinary outline depth.
- *
- * Only the existing registered child host participates. Its local declaration
- * separates outer sibling placement from body/child drops; no block type, CSS
- * class, descendant traversal or unregistered DOM marker determines this policy.
- * Missing declarations keep ordinary outline behavior for leaves and custom anchors.
- *
- * @param element - Existing registered shell or wrapping item in this occurrence.
- * @returns False for an explicitly local child scope; true for outline or absent scopes.
- */
-export function continuesDropOutline(element: HTMLElement): boolean {
-  return registeredBlockRegion(element, "children")?.dataset.blockDropScope !== "local";
 }
 
 /**
@@ -122,22 +95,22 @@ export function dropRegionRank(region: BlockDropRegion): number {
  * Tests a declaration's physical area and its optional unoccupied-background restriction.
  *
  * Measurements are borrowed from this anchor's current query. Background checks
- * use the native hit, so child content cannot become an ancestor append target.
+ * use the captured hit, so child content cannot become an ancestor append target.
  *
- * @param element - Registered anchor owning the declaration.
+ * @param regionIdentity - Opaque identity of the registered anchor owning the declaration.
  * @param region - Live edge or inside declaration to test.
  * @param geometry - Anchor bounds and computed style captured for this query.
  * @param point - Viewport coordinates in CSS pixels.
- * @param hit - Current native hit inside the editor occurrence.
+ * @param measurements - Root-backed measurements for background ownership.
  * @returns True when both physical coverage and background ownership match.
- * @throws If an inset edge size is negative or nonfinite.
+ * @throws If an inset edge size is negative or nonfinite, or a Root measurement fails.
  */
 export function containsDropRegion(
-  element: HTMLElement,
+  regionIdentity: RegionIdentity,
   region: BlockDropRegion,
   geometry: BlockDropGeometry,
   point: BlockDropPoint,
-  hit: Element,
+  measurements: Pick<BlockDropGeometryReader, "isBackground">,
 ): boolean {
   const rect =
     region.kind === "edge" && region.coverage !== "bounds"
@@ -147,7 +120,7 @@ export function containsDropRegion(
     return false;
   }
   if (region.kind === "inside" && region.coverage === "background") {
-    return isDropBackground(element, hit, point);
+    return measurements.isBackground(regionIdentity, point);
   }
   return true;
 }
@@ -192,8 +165,8 @@ export function dropEdgeRect(
   region: BlockDropEdgeRegion,
   geometry: BlockDropGeometry,
 ): BlockDropBounds {
-  const { rect, style, scaleX, scaleY } = geometry;
-  const token = style.getPropertyValue("--rivto-drop-target-size").trim();
+  const { rect, direction, scaleX, scaleY } = geometry;
+  const token = geometry.targetSize.trim();
   const size = region.size ?? (token ? Number.parseFloat(token) : 12);
   if (!Number.isFinite(size) || size < 0) {
     throw new Error("Drop target size must be finite and nonnegative");
@@ -201,9 +174,9 @@ export function dropEdgeRect(
   const block = region.side.startsWith("block");
   const thickness = Math.min(size * (block ? scaleY : scaleX), contentEdgeLimit(region, geometry));
   const end = region.side.endsWith("end");
-  const rtl = style.direction === "rtl";
+  const rtl = direction === "rtl";
   if (block) {
-    const indent = (parseFloat(style.getPropertyValue("--rivto-block-indent")) || 28) * scaleX;
+    const indent = (parseFloat(geometry.indent) || 28) * scaleX;
     const extra = (region.depth?.ancestors ?? 0) * indent;
     return dropBounds(
       rect.left - (rtl ? 0 : extra),
@@ -235,18 +208,17 @@ export function dropRegionTarget(
   region: BlockDropRegion,
   geometry: BlockDropGeometry,
   point: BlockDropPoint,
-): ResolvedBlockDropTarget {
+): BlockDropGeometryTarget {
   if (region.kind === "inside") {
-    return { element: entry.element, destination: region.destination, region };
+    return { identity: entry.identity, destination: region.destination, region };
   }
   const rect = dropEdgeRect(region, geometry);
   let destination = region.destination;
   let left = rect.left;
   let width = rect.width;
   if (region.depth?.destinations.length) {
-    const indent =
-      (parseFloat(geometry.style.getPropertyValue("--rivto-block-indent")) || 28) * geometry.scaleX;
-    const rtl = geometry.style.direction === "rtl";
+    const indent = (parseFloat(geometry.indent) || 28) * geometry.scaleX;
+    const rtl = geometry.direction === "rtl";
     const offset = rtl ? rect.right - point.x : point.x - rect.left;
     const level = dropOutlineLevel(
       region.depth.destinations,
@@ -263,14 +235,12 @@ export function dropRegionTarget(
     ? { left, top: (end ? geometry.rect.bottom : geometry.rect.top) - 1, width, height: 2 }
     : {
         left:
-          (end !== (geometry.style.direction === "rtl")
-            ? geometry.rect.right
-            : geometry.rect.left) - 1,
+          (end !== (geometry.direction === "rtl") ? geometry.rect.right : geometry.rect.left) - 1,
         top: rect.top,
         width: 2,
         height: rect.height,
       };
-  return { element: entry.element, destination, indicator, region };
+  return { identity: entry.identity, destination, indicator, region };
 }
 
 /**
@@ -298,57 +268,6 @@ function dropOutlineLevel(
 }
 
 /**
- * Restricts background append to space outside owned content, child placements and explicit exclusions.
- *
- * The registered own content/row stays occupied even when its controls have no
- * content marker. This does not exclude those controls from their owner's inside
- * region; it only prevents child-list background from replacing that body action.
- *
- * @param host - Declared background owner.
- * @param hit - Browser's visible native hit.
- * @param point - Exact viewport coordinate; a rounded native hit outside its box does not occupy background.
- * @returns Whether the hit belongs to unoccupied host chrome rather than item content.
- */
-export function isDropBackground(host: HTMLElement, hit: Element, point: BlockDropPoint): boolean {
-  const content = readContentBounds(host);
-  if (content && containsDropPoint(content, point)) {
-    return false;
-  }
-  for (let node: Element | null = hit; node && node !== host; node = node.parentElement) {
-    if (node.hasAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE)) {
-      return false;
-    }
-    if (
-      node.matches("[data-block-id], [data-block-item-id], [data-block-content]") &&
-      containsDropPoint(node.getBoundingClientRect(), point)
-    ) {
-      return false;
-    }
-  }
-  return host.contains(hit);
-}
-
-/**
- * Reads a mounted owner's body, falling back to its primary row for contentless layouts.
- *
- * Empty or omitted regions do not contribute a protected rectangle. The lookup
- * uses primitive registrations only and never searches descendants or the document.
- *
- * @param element - Current registered drop anchor.
- * @returns Nonempty content/row viewport bounds, or undefined when neither exists.
- */
-function readContentBounds(element: HTMLElement): BlockDropBounds | undefined {
-  for (const role of ["content", "row"] as const) {
-    const region = registeredBlockRegion(element, role);
-    const rect = region?.getBoundingClientRect();
-    if (rect && rect.width > 0 && rect.height > 0) {
-      return rect;
-    }
-  }
-  return undefined;
-}
-
-/**
  * Limits an edge so its owner's middle body remains available for inside drops.
  *
  * Shell padding retains its sorting area. Child subtree height cannot enlarge an
@@ -366,7 +285,7 @@ function contentEdgeLimit(region: BlockDropEdgeRegion, geometry: BlockDropGeomet
     return limit;
   }
   const end = region.side.endsWith("end");
-  const trailing = block ? end : end !== (geometry.style.direction === "rtl");
+  const trailing = block ? end : end !== (geometry.direction === "rtl");
   const start = block ? rect.top : rect.left;
   const finish = block ? rect.bottom : rect.right;
   const bodyStart = block ? content.top : content.left;

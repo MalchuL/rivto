@@ -1,7 +1,7 @@
 import { DropdownMenuItem, DropdownMenuLabel } from "../../../components/ui/dropdown-menu";
 import { CheckIcon, SlashIcon } from "lucide-react";
 import { useSyncExternalStore, type CSSProperties } from "react";
-import type { ReactEditorApi } from "../../../editor/types";
+import type { ReactEditorExtensionApi } from "../../../editor/types";
 import type { BlockContextMenuRenderContext } from "../../../managers/block-context-menu/types";
 import { assertBlockMenuTargets } from "../../../managers/block-context-menu/targets";
 
@@ -101,7 +101,7 @@ function BlockBackgroundColors(context: BlockContextMenuRenderContext) {
  * @returns No value; both registrations are owned by the extension lifecycle.
  * @throws If registration is rejected by the list-property or context-menu registry.
  */
-export function registerBlockBackground(editor: ReactEditorApi): void {
+export function registerBlockBackground(editor: ReactEditorExtensionApi): void {
   editor.blockListProps.register({
     id: "backgroundColor",
     defaults: { backgroundColor: "" },

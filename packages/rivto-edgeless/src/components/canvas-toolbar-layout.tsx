@@ -1,10 +1,14 @@
 import { useEffect, useRef, type RefObject } from "react";
 import type { CanvasToolButtonProps, CanvasToolbarLayout } from "../types/toolbar";
+import type { CanvasToolbarDismissalTools, CanvasToolbarInputAttachment } from "./types";
+import { CANVAS_TOOL_ATTRIBUTE } from "./canvas-toolbar-markers";
+import { useCanvasViewportLayers } from "./browser/use-canvas-viewport-layers";
+import { attachCanvasToolbarDismissal } from "../browser/canvas-toolbar-input";
 
 /**
  * Renders a native accessible tool button without an application-specific icon vocabulary.
  *
- * @param props - Label, optional icon content, pressed state and native pointer handlers.
+ * @param props - Label, optional icon content, pressed state and activation capability.
  * @returns A button whose icon is rendered exactly as registered.
  */
 export function CanvasToolButton({
@@ -12,7 +16,11 @@ export function CanvasToolButton({
   icon,
   pressed,
   children,
-  ...props
+  className,
+  toolId,
+  menuId,
+  menuOpen,
+  onActivate,
 }: CanvasToolButtonProps) {
   return (
     <button
@@ -20,8 +28,13 @@ export function CanvasToolButton({
       title={label}
       aria-label={label}
       aria-pressed={pressed}
+      aria-haspopup={menuOpen === undefined ? undefined : "dialog"}
+      aria-controls={menuId}
+      aria-expanded={menuOpen}
+      className={className}
       data-canvas-control=""
-      {...props}
+      {...{ [CANVAS_TOOL_ATTRIBUTE]: toolId }}
+      onClick={onActivate}
     >
       {icon}
       {children}
@@ -78,25 +91,22 @@ export function CanvasToolbarLayoutView({
 
 /** Native toolbar presentation and its receiving tool session. */
 interface ToolbarLayoutProps extends CanvasToolbarLayout {
-  readonly tools: {
-    readonly active?: { readonly keepsMenuOpen: boolean };
-    /**
-     * Returns to the registry-defined default tool.
-     *
-     * @returns Active preview is cancelled and the fallback is activated.
-     */
-    reset(): void;
-  };
+  readonly tools: CanvasToolbarDismissalTools;
 }
 
 /**
  * Dismisses an open toolbar menu according to keyboard and active-tool policy.
  *
+ * Escape resets the active tool unless an earlier listener prevented its default.
+ * Pointer input outside the toolbar closes the menu only when the active tool does
+ * not retain it; input inside the toolbar leaves the menu open.
+ *
  * @param root - Toolbar node used to distinguish outside pointer input.
  * @param menu - Open group identity, or null when closed.
  * @param setMenu - Publishes menu dismissal without moving focus.
  * @param tools - Session supplying fallback activation and menu retention policy.
- * @returns Document listeners exist only while a menu is open.
+ * @returns Normalized document listeners exist only while a menu is open.
+ * @throws Propagates listener attachment, tool reset, and cleanup failures.
  */
 function useToolbarDismissal(
   root: RefObject<HTMLDivElement | null>,
@@ -104,31 +114,12 @@ function useToolbarDismissal(
   setMenu: ToolbarLayoutProps["setMenu"],
   tools: ToolbarLayoutProps["tools"],
 ) {
+  const layers: CanvasToolbarInputAttachment | null = useCanvasViewportLayers();
   useEffect(() => {
-    if (!menu) {
+    const element = root.current;
+    if (!menu || !element) {
       return;
     }
-    /**
-     * Closes the menu on Escape or outside input when the active tool permits dismissal.
-     *
-     * @param event - Keyboard or pointer input observed outside the toolbar's local handlers.
-     * @returns Dismisses only the applicable menu without moving DOM focus.
-     */
-    const dismiss = (event: KeyboardEvent | PointerEvent) => {
-      if ("key" in event) {
-        if (event.key === "Escape" && !event.defaultPrevented) {
-          tools.reset();
-          setMenu(null);
-        }
-      } else if (!root.current?.contains(event.target as Node) && !tools.active?.keepsMenuOpen) {
-        setMenu(null);
-      }
-    };
-    document.addEventListener("keydown", dismiss);
-    document.addEventListener("pointerdown", dismiss);
-    return () => {
-      document.removeEventListener("keydown", dismiss);
-      document.removeEventListener("pointerdown", dismiss);
-    };
-  }, [menu, setMenu, tools]);
+    return attachCanvasToolbarDismissal(element, layers, setMenu, tools);
+  }, [menu, setMenu, tools, layers]);
 }

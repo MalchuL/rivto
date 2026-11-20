@@ -59,7 +59,9 @@ const WRITING_NOT_INSTALLED =
  * The hook owns creation after commit and matching destruction. Low-level
  * construction is reserved for managed storage infrastructure and internal tests.
  */
-export class ReactEditor implements ReactEditorApi {
+export class ReactEditor<
+  CustomEvents extends object = object,
+> implements ReactEditorApi<CustomEvents> {
   /** Framework-neutral core permanently bound to this document and its managers.
    * Document managers provide the following shared capabilities:
    * Creates and updates document elements, including canvas objects, through the core element manager.
@@ -172,9 +174,9 @@ export class ReactEditor implements ReactEditorApi {
   /** Root surfaces and their ordered block/editor wrappers. */
   readonly surfaces: SurfacesApi;
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
-  readonly extensions: ExtensionsApi;
+  readonly extensions: ExtensionsApi<CustomEvents>;
   /** Delegated surface/document/window DOM event runtime. */
-  readonly events: EventManager;
+  readonly events: EventManager<CustomEvents>;
   /** Mounted occurrences and explicit active/default view lookup. */
   readonly panels: PanelRegistry;
   /** Semantic keyboard bindings and runtime keymap overrides. */
@@ -204,14 +206,14 @@ export class ReactEditor implements ReactEditorApi {
    * @throws Propagates manager construction failures. Extension setup failure triggers
    * runtime cleanup; if cleanup also fails, both failures are retained in AggregateError.
    */
-  constructor(options: CreateReactEditorOptions) {
+  constructor(options: CreateReactEditorOptions<CustomEvents>) {
     const editor = options.editor;
     this.core = editor;
     const extensions = new ExtensionManager(this);
     this.extensions = extensions;
     this.disposers.push(() => extensions.destroy());
     this.panels = new PanelRegistry(this.selection, extensions);
-    const events = new EventManager(this.panels, extensions);
+    const events = new EventManager<CustomEvents>(this.panels, extensions);
     this.events = events;
     this.disposers.push(() => this.panels.cancelPendingSelections());
     const keyboard = new KeyboardManager(this.events, extensions, options.keymap);
@@ -347,5 +349,6 @@ export class ReactEditor implements ReactEditorApi {
  * @returns Connected runtime whose owner must destroy it before disposing its borrowed core.
  * @throws If manager or extension setup fails; completed registrations are released before rethrowing.
  */
-export const createReactEditor = (options: CreateReactEditorOptions): ReactEditor =>
-  new ReactEditor(options);
+export const createReactEditor = <CustomEvents extends object = object>(
+  options: CreateReactEditorOptions<CustomEvents>,
+): ReactEditor<CustomEvents> => new ReactEditor(options);

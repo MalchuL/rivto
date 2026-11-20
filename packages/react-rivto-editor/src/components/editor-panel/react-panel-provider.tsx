@@ -1,4 +1,5 @@
 import { ReactPanel } from "../../panels/react-panel";
+import { getBrowserElementIdentity } from "@chulane/rivto-root/browser";
 import {
   useCallback,
   useContext,
@@ -10,20 +11,20 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { PanelAPI, PanelOptions } from "@chulane/rivto";
-import type { ReactEditorApi } from "../../editor/types";
+import type { ReactEditorPanelApi } from "../../editor/types";
 import {
   DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN,
   PageVirtualizationContext,
 } from "../../surfaces/page/page-virtualization-context";
 import { ReactPanelContext } from "./react-panel-context";
-import { EditorRootContext } from "./editor-root-context";
+import { EditorPortalHostContext, EditorRootContext } from "./editor-root-context";
 import type { PanelSnapshot } from "../../panels/types";
 import type { EditorPanelProps } from "./types";
 
 /** Internal provider properties with the core panel factory supplied by its owning component. */
 interface ReactPanelProviderProps extends EditorPanelProps {
   /** Creates core panel boundaries after commit; keep this factory stable across renders. */
-  readonly createPanel: (editor: ReactEditorApi, options: PanelOptions) => PanelAPI;
+  readonly createPanel: (editor: ReactEditorPanelApi, options: PanelOptions) => PanelAPI;
 }
 
 const LOADING_PANEL_SNAPSHOT: PanelSnapshot = { status: "loading" };
@@ -91,7 +92,7 @@ export function ReactPanelProvider({
   );
   const [current, setCurrent] = useState<{
     configuration: typeof configuration;
-    instance: ReactPanel;
+    instance: ReactPanel<ReactEditorPanelApi>;
   }>();
   useEffect(() => {
     const { hostEditor, rootBlockId, rootElementId, createPanel, mode } = configuration;
@@ -117,6 +118,11 @@ export function ReactPanelProvider({
     [instance],
   );
   const snapshot = useSyncExternalStore(subscribeAvailability, getSnapshot, getSnapshot);
+  const mountedRoot = useSyncExternalStore(
+    subscribeAvailability,
+    () => instance?.mountedRoot,
+    () => undefined,
+  );
   useEffect(() => {
     if (snapshot.retained && snapshot.document) {
       onReady?.(snapshot.document);
@@ -172,9 +178,8 @@ export function ReactPanelProvider({
   const restoreRootFocus = useRef(false);
   const rootRef = useCallback(
     (element: HTMLElement | null) => {
-      const previous = instance?.getRoot();
-      if (!element && previous) {
-        restoreRootFocus.current = previous.contains(previous.ownerDocument.activeElement);
+      if (!element && instance?.hasInteractiveRoot()) {
+        restoreRootFocus.current = instance.mountedRoot?.hasFocus() ?? false;
       }
       instance?.setRoot(element);
       setRoot(element);
@@ -185,7 +190,14 @@ export function ReactPanelProvider({
     },
     [instance],
   );
-  const rootContext = useMemo(() => ({ element: root, ref: rootRef }), [root, rootRef]);
+  const rootContext = useMemo(
+    () => ({
+      identity: root ? getBrowserElementIdentity(root) : undefined,
+      ref: rootRef,
+      mountedRoot,
+    }),
+    [root, rootRef, mountedRoot],
+  );
 
   if (!panelContextValue) {
     return <div role="status">Loading document…</div>;
@@ -205,7 +217,11 @@ export function ReactPanelProvider({
   return (
     <ReactPanelContext.Provider value={panelContextValue}>
       <PageVirtualizationContext.Provider value={virtualization}>
-        <EditorRootContext.Provider value={rootContext}>{content}</EditorRootContext.Provider>
+        <EditorRootContext.Provider value={rootContext}>
+          <EditorPortalHostContext.Provider value={root}>
+            {content}
+          </EditorPortalHostContext.Provider>
+        </EditorRootContext.Provider>
       </PageVirtualizationContext.Provider>
     </ReactPanelContext.Provider>
   );

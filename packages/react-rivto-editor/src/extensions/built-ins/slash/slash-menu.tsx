@@ -1,10 +1,8 @@
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
-import type { DocumentModel } from "@chulane/document-model";
 import { createCaretSelection } from "@chulane/rivto";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { createPortal } from "react-dom";
 import {
   Command,
   CommandEmpty,
@@ -12,10 +10,13 @@ import {
   CommandItem,
   CommandList,
 } from "../../../components/ui/command";
-import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR } from "../../../constants";
-import { useDOMEvent, useEditorRoot, useReactPanel, useKeyboardEvent } from "../../../hooks";
-import { BUILTIN_KEYMAP, findRenderedBlock, KEYBOARD_BINDING_IDS } from "../../../managers";
+import { useDOMEvent, useReactPanel, useKeyboardEvent } from "../../../hooks";
+import { EditorPortal } from "../../../components/editor-panel/editor-portal";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers";
 import type { SlashCommand } from "../../../managers/slash";
+import { BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR } from "../../../constants";
+import type { ContentCaretGeometry, ContentInput } from "../../../managers/events/types";
+import type { SlashSession } from "./types";
 import { keepNoResultMenuOpen, rankSlashCommands } from "./slash-search";
 
 /**
@@ -40,20 +41,6 @@ export interface SlashMenuPositionOptions {
 
 const DEFAULT_POSITION = { width: 280, maxHeight: 320, gap: 6, viewportPadding: 8 };
 
-interface SlashSession {
-  readonly document?: DocumentModel;
-  readonly rootBlockId?: string;
-  readonly panelRoot: HTMLElement;
-  readonly blockId: string;
-  readonly slashOffset: number;
-  readonly query: string;
-  readonly lastMatchedLength: number;
-  readonly left: number;
-  readonly top: number;
-  readonly above: boolean;
-  readonly activeIndex: number;
-}
-
 /** Returns the last valid slash trigger ending at a collapsed caret. */
 function findSlash(
   source: string,
@@ -68,26 +55,25 @@ function findSlash(
 }
 
 /**
- * Measures the live caret and chooses the menu edge that stays beside it.
+ * Chooses a popup position from copied viewport-relative caret geometry.
  *
  * An upward menu stores its bottom anchor rather than its top, so filtering
  * moves the top down while the final choice remains next to the caret.
  *
- * @param content - Editable region containing the active slash query.
+ * @param geometry - Copied caret, content, and viewport geometry for the active query.
  * @param options - Resolved menu dimensions and viewport spacing.
  * @returns Viewport coordinates and the side used to anchor the menu.
  */
 export function popupPosition(
-  content: HTMLElement,
+  geometry: ContentCaretGeometry,
   options: Required<SlashMenuPositionOptions> = DEFAULT_POSITION,
 ): Pick<SlashSession, "left" | "top" | "above"> {
-  const selection = content.ownerDocument.getSelection();
-  const rect = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : undefined;
-  const fallback = content.getBoundingClientRect();
-  const viewport = content.ownerDocument.defaultView;
+  const rect = geometry.caret;
+  const fallback = geometry.content;
+  const viewport = geometry.viewport;
   const desiredTop = (rect?.bottom || fallback.bottom) + options.gap;
   const above = Boolean(
-    viewport && desiredTop + options.maxHeight > viewport.innerHeight - options.viewportPadding,
+    viewport && desiredTop + options.maxHeight > viewport.height - options.viewportPadding,
   );
   const top = above ? (rect?.top || fallback.top) - options.gap : desiredTop;
   return {
@@ -96,36 +82,13 @@ export function popupPosition(
           options.viewportPadding,
           Math.min(
             rect?.left || fallback.left,
-            viewport.innerWidth - options.width - options.viewportPadding,
+            viewport.width - options.width - options.viewportPadding,
           ),
         )
       : rect?.left || fallback.left,
     top,
     above,
   };
-}
-
-/** Reads a collapsed native caret owned by the supplied editable element. */
-function caretOffset(content: HTMLElement): number | undefined {
-  const selection = content.ownerDocument.getSelection();
-  if (
-    !selection?.rangeCount ||
-    !selection.isCollapsed ||
-    !selection.focusNode ||
-    !content.contains(selection.focusNode)
-  ) {
-    return;
-  }
-  const range = content.ownerDocument.createRange();
-  range.selectNodeContents(content);
-  let offset: number | undefined;
-  try {
-    range.setEnd(selection.focusNode, selection.focusOffset);
-    offset = range.toString().length;
-  } catch {
-    offset = undefined;
-  }
-  return offset;
 }
 
 /** Groups already-ranked commands without changing their search order. */
@@ -148,6 +111,11 @@ function groupCommands(
  * second input field. Command execution removes `/query` and runs the selected
  * manager action inside one document transaction, making both changes one undo
  * step while the preceding typing stays a separate capture.
+ *
+ * @param props - Slash menu configuration.
+ * @param props.options - Optional viewport dimensions and spacing for the menu.
+ * @returns A portal containing the current command menu, or null without an active query.
+ * @throws If rendered outside an editor panel or delegated browser operations fail.
  */
 export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositionOptions }) {
   const width = Math.max(1, options.width ?? DEFAULT_POSITION.width);
@@ -157,7 +125,6 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   const reactPanel = useReactPanel();
   const roots = reactPanel.blocks.getBlocks();
   const slashCommands = reactPanel.slashCommands;
-  const { element: root } = useEditorRoot();
   const [session, setSession] = useState<SlashSession | null>(null);
   const sessionRef = useRef(session);
   const activeItemRef = useRef<HTMLDivElement | null>(null);
@@ -205,13 +172,43 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
 
   useEffect(() => reactPanel.subscribeDeactivation(close), [reactPanel, close]);
 
-  /** Validates the current caret and optionally discovers a freshly typed slash. */
+  /**
+   * Updates the slash session from a caret in the initiating input registration.
+   *
+   * @param content - Borrowed content operations used to read and position the query.
+   * @param blockId - Block containing the edited content.
+   * @param discover - Whether this input may open a previously closed query.
+   * @param inputRoot - Root that received the input.
+   * @param inputRegistration - Routing lifetime that received the input.
+   * @returns The current session is updated, closed, or left unchanged when input is stale.
+   * @throws Propagates caret, geometry, and command lookup failures.
+   */
   const refresh = useCallback(
-    (content: HTMLElement, blockId: string, discover: boolean) => {
-      const offset = caretOffset(content);
-      const source = content.textContent ?? "";
+    (
+      content: Pick<ContentInput, "readCaret" | "measureCaret">,
+      blockId: string,
+      discover: boolean,
+      inputRoot: SlashSession["inputRoot"],
+      inputRegistration: SlashSession["inputRegistration"],
+    ) => {
+      if (!inputRegistration.isCurrent(inputRoot)) {
+        return;
+      }
+      const { text: source, offset } = content.readCaret();
+      if (!inputRegistration.isCurrent(inputRoot)) {
+        return;
+      }
       const trigger = offset === undefined ? undefined : findSlash(source, offset);
-      const current = sessionRef.current;
+      const previous = sessionRef.current;
+      const current =
+        previous?.inputRegistration === inputRegistration &&
+        previous.inputRoot === inputRoot &&
+        inputRegistration.isCurrent(inputRoot)
+          ? previous
+          : null;
+      if (previous && !current) {
+        setSession(null);
+      }
       const triggerChanged = Boolean(
         current &&
         trigger &&
@@ -243,15 +240,20 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
           ignoredTrigger.current = key;
           setSession(null);
         } else {
-          const position = popupPosition(content, { width, maxHeight, gap, viewportPadding });
-          const panelRoot = reactPanel.getRoot();
-          if (!panelRoot) {
+          const position = popupPosition(content.measureCaret(), {
+            width,
+            maxHeight,
+            gap,
+            viewportPadding,
+          });
+          if (!inputRegistration.isCurrent(inputRoot)) {
             return;
           }
           setSession({
             document: reactPanel.document.getDocument(),
             rootBlockId: reactPanel.rootBlockId,
-            panelRoot,
+            inputRoot,
+            inputRegistration,
             blockId,
             slashOffset: trigger.slashOffset,
             query: trigger.query,
@@ -273,31 +275,39 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
       type: "input",
       scope: "content",
     },
-    ({ raw: event }) => {
-      const content =
-        event.target instanceof Element
-          ? event.target.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR)
-          : null;
-      const blockId = content
-        ?.closest<HTMLElement>(BLOCK_ID_SELECTOR)
-        ?.getAttribute(BLOCK_ID_ATTRIBUTE);
-      if (!content || !blockId || !root?.contains(content)) {
+    ({ contentInput: content, textInput, inputRoot, inputRegistration }) => {
+      const blockId = content?.readAncestorAttribute(BLOCK_ID_SELECTOR, BLOCK_ID_ATTRIBUTE);
+      if (
+        !content ||
+        !blockId ||
+        !Object.is(reactPanel.inputRoot, inputRoot) ||
+        !inputRegistration.isCurrent(inputRoot)
+      ) {
         return;
       }
       // Counter is contentless; Markdown and Slider both expose the same marker.
       // Discover only a slash inserted by this input event. Once open, ordinary
       // query edits continue refreshing it; old URL/path slashes never reopen.
       const discover =
-        Boolean(sessionRef.current) ||
-        (event instanceof InputEvent && event.inputType === "insertText" && event.data === "/");
-      queueMicrotask(() => refresh(content, blockId, discover));
+        Boolean(sessionRef.current?.inputRegistration.isCurrent(sessionRef.current.inputRoot)) ||
+        (textInput?.inputType === "insertText" && textInput.data === "/");
+      queueMicrotask(() => {
+        if (
+          inputRegistration.isCurrent(inputRoot) &&
+          content.readAncestorAttribute(BLOCK_ID_SELECTOR, BLOCK_ID_ATTRIBUTE) === blockId
+        ) {
+          refresh(content, blockId, discover, inputRoot, inputRegistration);
+        }
+      });
     },
   );
 
   useEffect(() => {
     if (
       session &&
-      (!session.panelRoot.isConnected || !reactPanel.blocks.hasBlock(session.blockId))
+      (!session.inputRegistration.isCurrent(session.inputRoot) ||
+        !session.inputRoot.isConnected() ||
+        !reactPanel.blocks.hasBlock(session.blockId))
     ) {
       close();
     }
@@ -309,15 +319,21 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
       type: "selectionchange",
       target: "document",
     },
-    () => {
+    ({ inputRoot, inputRegistration }) => {
       const current = sessionRef.current;
-      if (root && current) {
-        const block = findRenderedBlock(current.panelRoot, current.blockId);
-        const content = block?.querySelector<HTMLElement>(BLOCK_CONTENT_SELECTOR);
-        if (!content || content.closest(BLOCK_ID_SELECTOR) !== block) {
+      if (current) {
+        if (
+          !current.inputRegistration.isCurrent(current.inputRoot) ||
+          inputRoot !== current.inputRoot ||
+          inputRegistration !== current.inputRegistration
+        ) {
           return close();
         }
-        refresh(content, current.blockId, false);
+        const content = reactPanel.selection.contentInput(current.blockId);
+        if (!content) {
+          return close();
+        }
+        refresh(content, current.blockId, false, current.inputRoot, current.inputRegistration);
       }
     },
   );
@@ -325,8 +341,11 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   const execute = useCallback(
     (command: SlashCommand) => {
       const current = sessionRef.current;
-      if (!current || !root) {
+      if (!current) {
         return;
+      }
+      if (!current.inputRegistration.isCurrent(current.inputRoot)) {
+        return close();
       }
 
       const block = reactPanel.blocks.getBlockNode(current.blockId);
@@ -335,6 +354,9 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
       }
       const caret = current.slashOffset + current.query.length + 1;
       if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) {
+        return close();
+      }
+      if (!current.inputRegistration.isCurrent(current.inputRoot)) {
         return close();
       }
 
@@ -346,15 +368,26 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
       });
       setSession(null);
 
+      if (!current.inputRegistration.isCurrent(current.inputRoot)) {
+        return;
+      }
+
       reactPanel.selection.scheduleIfSelectionUnchanged(() => {
+        if (!current.inputRegistration.isCurrent(current.inputRoot)) {
+          return;
+        }
         if (reactPanel.selection.restoreDOM()) {
           return;
         }
-        current.panelRoot.ownerDocument.getSelection()?.removeAllRanges();
-        current.panelRoot.focus({ preventScroll: true });
+        if (current.inputRegistration.isCurrent(current.inputRoot)) {
+          current.inputRoot.clearSelection();
+        }
+        if (current.inputRegistration.isCurrent(current.inputRoot)) {
+          current.inputRoot.focus();
+        }
       });
     },
-    [close, reactPanel, root, slashCommands],
+    [close, reactPanel, slashCommands],
   );
 
   const currentResults = useCallback(() => {
@@ -386,12 +419,33 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
     [currentResults],
   );
 
+  /**
+   * Checks that a keyboard delivery belongs to the open slash session.
+   *
+   * @param inputRoot - Root that received the keyboard input.
+   * @param inputRegistration - Routing lifetime that received the input.
+   * @returns True when the same session still owns the input.
+   * @throws Propagates registration validity failures.
+   */
+  const ownsSession = (
+    inputRoot: Pick<SlashSession["inputRoot"], "isAttached">,
+    inputRegistration: SlashSession["inputRegistration"],
+  ): boolean => {
+    const current = sessionRef.current;
+    return Boolean(
+      current &&
+      current.inputRoot === inputRoot &&
+      current.inputRegistration === inputRegistration &&
+      inputRegistration.isCurrent(inputRoot),
+    );
+  };
+
   useKeyboardEvent(
     {
       id: KEYBOARD_BINDING_IDS.slashClose,
       keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashClose],
       priority: 100,
-      when: () => Boolean(sessionRef.current),
+      when: ({ inputRoot, inputRegistration }) => ownsSession(inputRoot, inputRegistration),
     },
     () => {
       close(true);
@@ -404,7 +458,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
       id: KEYBOARD_BINDING_IDS.slashPrevious,
       keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashPrevious],
       priority: 100,
-      when: () => Boolean(sessionRef.current),
+      when: ({ inputRoot, inputRegistration }) => ownsSession(inputRoot, inputRegistration),
     },
     () => moveActive(-1),
   );
@@ -414,7 +468,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
       id: KEYBOARD_BINDING_IDS.slashNext,
       keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashNext],
       priority: 100,
-      when: () => Boolean(sessionRef.current),
+      when: ({ inputRoot, inputRegistration }) => ownsSession(inputRoot, inputRegistration),
     },
     () => moveActive(1),
   );
@@ -424,7 +478,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
       id: KEYBOARD_BINDING_IDS.slashExecute,
       keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashExecute],
       priority: 100,
-      when: () => Boolean(sessionRef.current),
+      when: ({ inputRoot, inputRegistration }) => ownsSession(inputRoot, inputRegistration),
     },
     () => {
       const current = sessionRef.current;
@@ -455,7 +509,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
     [currentResults],
   );
 
-  if (!root || !session) {
+  if (!session || !session.inputRegistration.isCurrent(session.inputRoot)) {
     return null;
   }
   const flat = groups.flatMap(({ commands }) => commands);
@@ -464,61 +518,62 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   // cmdk provides list semantics and pointer highlighting only. Filtering is
   // disabled because ranking already happened, and keyboard navigation stays
   // with the editor keymap so focus never leaves the editable block.
-  return createPortal(
-    <Command
-      shouldFilter={false}
-      value={activeCommand?.id ?? ""}
-      onValueChange={selectByValue}
-      className={SLASH_MENU_CLASS}
-      data-slash-menu="true"
-      aria-label="Slash commands"
-      style={{
-        left: session.left,
-        top: session.top,
-        transform: session.above ? "translateY(-100%)" : undefined,
-        width: `min(${width}px, calc(100vw - ${viewportPadding * 2}px))`,
-        maxHeight: Math.min(
-          maxHeight,
-          Math.max(
-            0,
-            session.above
-              ? session.top - viewportPadding
-              : (root.ownerDocument.defaultView?.innerHeight ?? maxHeight) -
-                  session.top -
-                  viewportPadding,
+  return (
+    <EditorPortal inputRoot={session.inputRoot} inputRegistration={session.inputRegistration}>
+      <Command
+        shouldFilter={false}
+        value={activeCommand?.id ?? ""}
+        onValueChange={selectByValue}
+        className={SLASH_MENU_CLASS}
+        data-slash-menu="true"
+        aria-label="Slash commands"
+        style={{
+          left: session.left,
+          top: session.top,
+          transform: session.above ? "translateY(-100%)" : undefined,
+          width: `min(${width}px, calc(100vw - ${viewportPadding * 2}px))`,
+          maxHeight: Math.min(
+            maxHeight,
+            Math.max(
+              0,
+              session.above
+                ? session.top - viewportPadding
+                : (session.inputRoot.readViewport()?.height ?? maxHeight) -
+                    session.top -
+                    viewportPadding,
+            ),
           ),
-        ),
-      }}
-      onPointerDown={(event) => event.preventDefault()}
-    >
-      <CommandList className="max-h-none overflow-visible">
-        {ranked.length ? (
-          groups.map(({ group, commands }) => (
-            <CommandGroup key={group} heading={group}>
-              {commands.map((command) => {
-                const index = resultIndex++;
-                return (
-                  <CommandItem
-                    key={command.id}
-                    value={command.id}
-                    data-slash-command={command.id}
-                    data-active={index === session.activeIndex || undefined}
-                    ref={index === session.activeIndex ? activeItemRef : undefined}
-                    onSelect={() => execute(command)}
-                  >
-                    {command.title}
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          ))
-        ) : (
-          <CommandEmpty className="px-2 py-2.5 text-sm text-muted-foreground">
-            No matching commands
-          </CommandEmpty>
-        )}
-      </CommandList>
-    </Command>,
-    root.ownerDocument.body,
+        }}
+        onPointerDown={(event) => event.preventDefault()}
+      >
+        <CommandList className="max-h-none overflow-visible">
+          {ranked.length ? (
+            groups.map(({ group, commands }) => (
+              <CommandGroup key={group} heading={group}>
+                {commands.map((command) => {
+                  const index = resultIndex++;
+                  return (
+                    <CommandItem
+                      key={command.id}
+                      value={command.id}
+                      data-slash-command={command.id}
+                      data-active={index === session.activeIndex || undefined}
+                      ref={index === session.activeIndex ? activeItemRef : undefined}
+                      onSelect={() => execute(command)}
+                    >
+                      {command.title}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ))
+          ) : (
+            <CommandEmpty className="px-2 py-2.5 text-sm text-muted-foreground">
+              No matching commands
+            </CommandEmpty>
+          )}
+        </CommandList>
+      </Command>
+    </EditorPortal>
   );
 }

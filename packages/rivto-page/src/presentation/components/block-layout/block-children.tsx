@@ -1,56 +1,16 @@
-import type {
-  BlockDropBoundaryMode,
-  BlockDropGutterSize,
-} from "../../../editor/drag-and-drop/types";
+import type { BlockChildrenProps } from "./types";
+import { useBlockLayoutInputRef } from "./browser/use-block-layout-input-ref";
+import { useBlockEditorController } from "../../hooks/use-block-editor-controller";
 import { BlockDropLayoutContext, useBlockDropLayout } from "../../drag-and-drop/block-drop-layout";
-import {
-  forwardRef,
-  useContext,
-  type ComponentType,
-  type HTMLAttributes,
-  type ReactNode,
-} from "react";
+import { forwardRef, useContext } from "react";
 import { BLOCK_EDITOR_CLASSES } from "../../block-editor-classes";
 import { useBlockChildrenState } from "./block-layout-context";
-import { BlockList, type BlockChildrenItemProps } from "./block-list";
+import { BlockList } from "./block-list";
 import { BlockChildrenControlsContext } from "./block-item-context";
 import { useBlockRegion } from "./use-block-region";
-import type { BlockEditorTheme } from "../../block-editor-theme";
+import type { RegionIdentity } from "@chulane/rivto-root";
 
-/** Child host geometry and optional layout-owned item/control composition. */
-export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
-  /** Native styles and the existing shared geometry/theme tokens. */
-  readonly style?: BlockEditorTheme;
-  readonly item?: ComponentType<BlockChildrenItemProps>;
-  /** Left-top control placement inherited by child rows and descendants; omission inherits the enclosing layout. An explicit BlockItem placement takes precedence for its own row. */
-  readonly controlsPlacement?: "inside" | "outside";
-  /** Whether to retain the host for an empty child list; defaults to true for custom drop regions. */
-  readonly renderEmpty?: boolean;
-  /** Register the retained empty child host as an inside destination; defaults to false. */
-  readonly emptyDropTarget?: boolean;
-  /** Enable declared physical gaps independently of item edges; grid defaults to false. */
-  readonly dropGaps?: boolean;
-  /** Finite nonnegative local CSS-pixel continuation distance; zero disables it, row fills the host, and omission defaults to row when gaps are enabled. */
-  readonly dropGutterSize?: BlockDropGutterSize;
-  /** Extend linear endpoint boundaries through all remaining free space; defaults to true. False keeps edge-sized continuation while farther space uses the declared background action. */
-  readonly dropEndGaps?: boolean;
-  /** Matching sibling feedback; omission inherits the editor default. */
-  readonly dropBoundaries?: BlockDropBoundaryMode;
-  /** Append on unoccupied background, including filtered lists; defaults to false. */
-  readonly dropBackground?: boolean;
-  /** Whether this host bounds row hover; defaults to true. Outline layouts opt into inherited width. */
-  readonly hoverBoundary?: boolean;
-  /** Flow for declared insertion regions; defaults to vertical, grid items own their placement edges. */
-  readonly dropAxis?: "vertical" | "horizontal" | "grid";
-  /** Inherited inset edge thickness in local CSS pixels; omission preserves the theme token. */
-  readonly targetSize?: number;
-  /** Outline declares depth bands; siblings keeps each region at this parent. Defaults to outline. */
-  readonly dropPlacement?: "outline" | "siblings";
-  /** Local (default) keeps the owner's outer boundaries at its sibling level. Outline continues ordinary nesting depth through the owner. Body drops and depth choices within this list remain independent. */
-  readonly dropScope?: "local" | "outline";
-  /** Optional non-block JSX appended after mapped children, such as an add-column button. */
-  readonly children?: ReactNode;
-}
+export type { BlockChildrenProps } from "./types";
 
 /**
  * Places actual child blocks with shared identity, collapse, and addressed subscriptions.
@@ -77,13 +37,15 @@ export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
  * @param props.hoverBoundary - True bounds descendant row hover to this layout; false inherits the enclosing area without changing indentation or drop permission.
  * @param props.renderEmpty - False omits the entire host when childIds is empty, including extra controls.
  * @param props.className - Additional classes, including optional outline indentation.
- * @param ref - Optional reference to this occurrence's child host.
+ * @param props.bindInput - Optional normalized input setup for this child host's mounted identity.
+ * @param ref - Optional ref receiving this child host's opaque identity; callback cleanup is retained.
  * @returns The owner-local child group, empty or hidden when appropriate.
  * @throws If outside a block layout or a child/placement component fails.
  */
-export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(function BlockChildren(
+export const BlockChildren = forwardRef<RegionIdentity, BlockChildrenProps>(function BlockChildren(
   {
     item,
+    bindInput,
     controlsPlacement,
     children,
     className,
@@ -127,6 +89,8 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
     },
     childrenRef,
   );
+  const { events } = useBlockEditorController();
+  const inputRef = useBlockLayoutInputRef(dropLayout.ref, events, bindInput);
   const inheritedControls = useContext(BlockChildrenControlsContext);
   if (!renderEmpty && childIds.length === 0) {
     return null;
@@ -134,7 +98,7 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
   const host = (
     <div
       {...attributes}
-      ref={dropLayout.ref}
+      ref={inputRef}
       id={childrenId}
       data-block-drop-axis={dropAxis}
       data-block-drop-placement={dropPlacement}

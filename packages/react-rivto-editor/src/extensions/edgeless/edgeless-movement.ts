@@ -1,14 +1,14 @@
 import { EDITOR_CONTROL_SELECTOR } from "../../constants";
-import type { ReactPanelApi } from "../../panels/types";
-import type { ReactEditorApi } from "../../editor/types";
+import type { EdgelessMovementPanel } from "./types";
+import type { ReactEditorExtensionApi } from "../../editor/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 
 /** Moves selected canvas roots through eight exact arrow-key bindings. */
-export function registerEdgelessMovement(reactEditor: ReactEditorApi): void {
+export function registerEdgelessMovement(reactEditor: ReactEditorExtensionApi): void {
   const selection = getEdgelessRuntime(reactEditor);
 
-  const move = (reactPanel: ReactPanelApi, dx: number, dy: number): boolean => {
+  const move = (reactPanel: EdgelessMovementPanel, dx: number, dy: number): boolean => {
     const items = getEdgelessRuntime(reactPanel).get().items;
     if (!items.length) {
       return false;
@@ -35,15 +35,17 @@ export function registerEdgelessMovement(reactEditor: ReactEditorApi): void {
         id,
         keys: BUILTIN_KEYMAP[id],
         mode: "edgeless",
-        when: ({ raw: event }) => {
-          const target = event.target;
-          return (
-            selection.get().active &&
-            selection.get().items.length > 0 &&
-            target instanceof HTMLElement &&
-            !target.isContentEditable &&
-            !target.closest(EDITOR_CONTROL_SELECTOR) &&
-            !/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName)
+        when: ({ readTarget, targetHasAncestor }) => {
+          if (!selection.get().active || selection.get().items.length === 0) {
+            return false;
+          }
+          const target = readTarget();
+          return Boolean(
+            target?.isCurrentRealmHTMLElement &&
+            !target.isEditable &&
+            !targetHasAncestor(EDITOR_CONTROL_SELECTOR) &&
+            !target.isFormControl &&
+            !target.isLink,
           );
         },
       },

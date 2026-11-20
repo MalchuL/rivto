@@ -328,6 +328,17 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
+   * Resolves current document parentage for several block identities.
+   *
+   * @param ids - Block identities to resolve; duplicate IDs are ignored.
+   * @returns Parent IDs keyed by placed block ID, with null for roots.
+   * @throws Propagates document hierarchy read failures.
+   */
+  getParentIds(ids: readonly string[]): ReadonlyMap<string, string | null> {
+    return this.document.blocks.getParentIds(ids);
+  }
+
+  /**
    * Reports whether a block is at the root level.
    *
    * @param id - Block identifier to check.

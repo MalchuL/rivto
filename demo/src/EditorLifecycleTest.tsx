@@ -1,4 +1,4 @@
-import { Suspense, useId, useMemo, useState } from "react";
+import { Suspense, useEffect, useId, useMemo, useState } from "react";
 import { YjsDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl } from "@chulane/document-model";
 import {
@@ -62,13 +62,6 @@ export function EditorLifecycleTest() {
             counts.panelsDestroyed++;
           };
         };
-        const destroy = editor.destroy.bind(editor);
-        editor.destroy = async () => {
-          await destroy();
-          if (counts.failCleanup) {
-            throw new Error("Expected asynchronous cleanup failure");
-          }
-        };
         return () => {
           counts.cleanup++;
           const fixture = window as unknown as { __rivtoLifecycleEditor?: typeof editor };
@@ -113,6 +106,7 @@ export function EditorLifecycleTest() {
             extension={extension}
             abandon={abandon}
             fail={fail}
+            shouldFailCleanup={() => counts.failCleanup}
             onError={() => {
               counts.errors++;
             }}
@@ -128,12 +122,14 @@ function Consumer({
   extension,
   abandon,
   fail,
+  shouldFailCleanup,
   onError,
 }: {
   document: DocumentModelImpl;
   extension: ReactEditorExtension;
   abandon: boolean;
   fail: boolean;
+  shouldFailCleanup: () => boolean;
   onError: () => void;
 }) {
   const [suspendPanels, setSuspendPanels] = useState(false);
@@ -156,6 +152,22 @@ function Consumer({
     ],
     onError,
   });
+  const editor = state.status === "ready" ? state.editor : undefined;
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+    const destroy = editor.destroy;
+    editor.destroy = async () => {
+      await destroy.call(editor);
+      if (shouldFailCleanup()) {
+        throw new Error("Expected asynchronous cleanup failure");
+      }
+    };
+    return () => {
+      editor.destroy = destroy;
+    };
+  }, [editor, shouldFailCleanup]);
   if (abandon) {
     throw pending;
   }

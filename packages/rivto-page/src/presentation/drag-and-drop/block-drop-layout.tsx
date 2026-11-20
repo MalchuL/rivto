@@ -1,13 +1,19 @@
+import type { RegionIdentity } from "@chulane/rivto-root";
 import { Slot } from "radix-ui";
+import { getBrowserElementIdentity } from "@chulane/rivto-root/browser";
+import { getDropTargetIdentity } from "./browser/drop-target-identity";
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef } from "react";
 import type {
   BlockDropBoundaryMode,
-  BlockDropGutterSize,
   BlockDropLayoutRegistration,
   BlockDropRegion,
   BlockDropTargetRegistration,
+  BlockDropTargetsApi,
 } from "../../editor/drag-and-drop/types";
-import { useBlockEditorController } from "../hooks/use-block-editor-controller";
+import { BlockEditorContext } from "../components/block-editor/block-editor-context";
+import type { BlockDropLayoutOptions, BlockDropLayoutProps } from "./types";
+
+export type { BlockDropLayoutOptions, BlockDropLayoutProps } from "./types";
 
 /** Maintains DOM identities in committed flow order, without reading element geometry. */
 class MountedDropItems {
@@ -79,35 +85,23 @@ export const BlockDropLayoutContext = createContext<Pick<MountedDropItems, "regi
 /** View default borrowed by layouts; explicit layout options override it. */
 export const BlockDropBoundaryContext = createContext<BlockDropBoundaryMode>("merged");
 
-/** Configuration attached to an existing ordered host, with independent gap/background policies. */
-export interface BlockDropLayoutOptions {
-  readonly axis: "vertical" | "horizontal" | "grid";
-  readonly gaps?: boolean;
-  /** Finite nonnegative local CSS-pixel continuation distance; zero disables it, row fills the host, and omission defaults to row. */
-  readonly gutterSize?: BlockDropGutterSize;
-  /** Fill all remaining linear end space; false retains edge-sized continuation and background ownership. Defaults to true. */
-  readonly endGaps?: boolean;
-  /** Matching sibling feedback; omission inherits the editor default. */
-  readonly boundaries?: BlockDropBoundaryMode;
-  readonly virtual?: boolean;
-  readonly regions?: readonly BlockDropRegion[];
-  /** Stable child-order identity; changing it republishes mounted DOM order after commit. */
-  readonly order: readonly string[];
-}
-
 /**
  * Registers an existing layout and provides its child-anchor collection without adding DOM.
  *
  * @param options - Flow, canonical order identity, and independent region declarations.
  * @param forwarded - Existing ref whose registration and cleanup remain intact.
- * @returns A ref for the current host and the context borrowed by its mounted items.
+ * @returns DOM and identity refs for the current host and the context borrowed by its mounted items.
  * @throws If outside an editor or delegated registration/ref callbacks fail.
  */
 export function useBlockDropLayout(
   options: BlockDropLayoutOptions,
   forwarded?: (element: HTMLDivElement | null) => void,
 ) {
-  const editor = useBlockEditorController();
+  const editor = useContext(BlockEditorContext);
+  if (!editor) {
+    throw new Error("Block editor hooks require a BlockEditor");
+  }
+  const targets: Pick<BlockDropTargetsApi, "register" | "registerLayout"> = editor.dropTargets;
   const boundaries = useContext(BlockDropBoundaryContext);
   options = { ...options, boundaries: options.boundaries ?? boundaries };
   const items = useMemo(() => new MountedDropItems(), []);
@@ -117,16 +111,15 @@ export function useBlockDropLayout(
   }, [options]);
   const release = useRef<(() => void) | undefined>(undefined);
   useLayoutEffect(() => items.publish(options.order), [items, options.order]);
-  const ref = useCallback(
-    (element: HTMLDivElement | null) => {
+  const identityRef = useCallback(
+    (identity: RegionIdentity | null) => {
       release.current?.();
       release.current = undefined;
-      forwarded?.(element);
-      if (!element) {
+      if (!identity) {
         return;
       }
       const layout: BlockDropLayoutRegistration = {
-        element,
+        identity,
         /**
          * Reads the latest committed flow direction.
          *
@@ -177,9 +170,9 @@ export function useBlockDropLayout(
         },
         getItems: items.read,
       };
-      const stopLayout = editor.dropTargets.registerLayout(layout);
-      const stopRegions = editor.dropTargets.register({
-        element,
+      const stopLayout = targets.registerLayout(layout);
+      const stopRegions = targets.register({
+        identity,
         /**
          * Reads committed host declarations without retaining layout geometry.
          *
@@ -192,38 +185,52 @@ export function useBlockDropLayout(
         stopLayout();
       };
     },
-    [editor, forwarded, items],
+    [targets, items],
   );
-  return { ref, items };
+  const ref = useCallback(
+    (element: HTMLDivElement | null) => {
+      identityRef(null);
+      forwarded?.(element);
+      if (element) {
+        identityRef(getBrowserElementIdentity(element));
+      }
+    },
+    [forwarded, identityRef],
+  );
+  return { ref, identityRef, items };
 }
 
 /**
  * Registers data-only areas on a mounted placement and borrows its containing layout.
  *
- * @param anchor - Current existing shell/item or its lookup; null detaches this registration.
+ * @param anchor - Opaque identity of the current shell/item or its lookup; null detaches this registration.
  * @param regions - Live declarative geometry, independent of the element's dimensions.
  * @param blockId - Canonical item identity in the containing layout order.
  * @returns The effect releases registry and containing-layout references on replacement/unmount.
  * @throws If outside an editor or delegated registration fails.
  */
 export function useBlockDropRegions(
-  anchor: HTMLElement | null | (() => HTMLElement | null),
+  anchor: object | null | (() => object | null),
   regions: readonly BlockDropRegion[],
   blockId: string,
 ): void {
-  const editor = useBlockEditorController();
+  const editor = useContext(BlockEditorContext);
+  if (!editor) {
+    throw new Error("Block editor hooks require a BlockEditor");
+  }
+  const targets: Pick<BlockDropTargetsApi, "register"> = editor.dropTargets;
   const items = useContext(BlockDropLayoutContext);
   const current = useRef(regions);
   useLayoutEffect(() => {
     current.current = regions;
   }, [regions]);
   useLayoutEffect(() => {
-    const element = typeof anchor === "function" ? anchor() : anchor;
-    if (!element) {
+    const identity = typeof anchor === "function" ? anchor() : anchor;
+    if (!identity) {
       return;
     }
     const entry = {
-      element,
+      identity,
       /**
        * Reads the last committed declarations for this mounted item.
        *
@@ -231,19 +238,13 @@ export function useBlockDropRegions(
        */
       getRegions: () => current.current,
     };
-    const stop = editor.dropTargets.register(entry);
+    const stop = targets.register(entry);
     const stopItem = items?.register(blockId, entry);
     return () => {
       stopItem?.();
       stop();
     };
-  }, [editor, anchor, items, blockId]);
-}
-
-/** Existing ref-forwarding layout element and its declarative flow policy. */
-export interface BlockDropLayoutProps {
-  readonly options: BlockDropLayoutOptions;
-  readonly children: React.ReactElement;
+  }, [targets, anchor, items, blockId]);
 }
 
 /**
@@ -251,15 +252,19 @@ export interface BlockDropLayoutProps {
  *
  * @param props - Existing element and explicit flow/region declarations.
  * @param props.options - Stable order plus gap and background policies.
- * @param props.children - One existing element containing its already-rendered items.
+ * @param props.children - One existing element forwarding its DOM element or region identity and containing its already-rendered items.
  * @returns The same DOM subtree with occurrence-owned registration and item context.
  * @throws If outside an editor or composed ref/registration callbacks fail.
  */
 export function BlockDropLayout({ options, children }: BlockDropLayoutProps) {
   const layout = useBlockDropLayout(options);
+  const attach = useCallback(
+    (target: object | null) => layout.identityRef(target ? getDropTargetIdentity(target) : null),
+    [layout.identityRef],
+  );
   return (
     <BlockDropLayoutContext.Provider value={layout.items}>
-      <Slot.Root ref={layout.ref}>{children}</Slot.Root>
+      <Slot.Root ref={attach}>{children}</Slot.Root>
     </BlockDropLayoutContext.Provider>
   );
 }

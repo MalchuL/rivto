@@ -1,16 +1,14 @@
-import type { CanvasTool, CanvasToolPointer } from "../core/tools/canvas-tool";
+import type { CanvasTool } from "../core/tools/canvas-tool";
+import type {
+  CanvasPointerCapture,
+  CanvasPointerDownInput,
+  CanvasPointerInput,
+  CanvasPointerNormalizer,
+} from "./types";
 
-/**
- * Converts native browser input to the receiving canvas coordinates.
- *
- * @param event - Native pointer sample.
- * @returns World coordinates, modifiers and current snapping policy.
- */
-export type CanvasPointerNormalizer = (event: PointerEvent) => CanvasToolPointer;
-
-/** Owns one tool's native pointer capture without a React or application event dependency. */
+/** Owns one tool's pointer capture without a React or application event dependency. */
 export class CanvasToolGesture {
-  private captured: { host: Element; id: number } | null = null;
+  private captured: CanvasPointerCapture | null = null;
 
   /**
    * Binds pointer routing to a fixed tool instance without installing browser listeners.
@@ -47,23 +45,33 @@ export class CanvasToolGesture {
   /**
    * Starts the registered tool and captures only accepted pointers.
    *
-   * @param event - Native pointer sample from the capture layer.
-   * @param host - Mounted element that owns capture for the admitted pointer.
-   * @returns Delivers the sample and updates browser capture when required.
+   * @param event - Detached pointer sample and current delivery's capture capabilities.
+   * A missing normalized sample does not begin or capture a gesture.
+   *
+   * @returns Delivers an available sample and updates browser capture when required.
    * @throws Tool or browser failures propagate after cancellation and release.
    */
-  pointerDown(event: PointerEvent, host: Element): void {
+  pointerDown(event: CanvasPointerDownInput): void {
     if (!this.tool || this.captured || event.button !== 0) {
       return;
     }
+    let canceling = false;
     try {
-      if (this.tool.pointerDown(this.normalize(event))) {
-        host.setPointerCapture(event.pointerId);
-        this.captured = { host, id: event.pointerId };
+      const input = this.normalize(event);
+      if (input && this.tool.pointerDown(input)) {
+        const release = event.capture();
+        if (!release) {
+          canceling = true;
+          this.tool.cancel();
+          return;
+        }
+        this.captured = { release, id: event.pointerId };
         event.preventDefault();
       }
     } catch (error) {
-      this.cancel();
+      if (!canceling) {
+        this.cancel();
+      }
       throw error;
     }
   }
@@ -71,36 +79,60 @@ export class CanvasToolGesture {
   /**
    * Routes hover and accepted pointer motion without document-specific behavior.
    *
-   * @param event - Native pointer sample from the capture layer.
-   * @returns Delivers the sample and updates browser capture when required.
+   * @param event - Detached pointer sample from the capture layer.
+   * A missing normalized sample cancels the tool and releases any capture.
+   *
+   * @returns Delivers an available sample and updates browser capture when required.
    * @throws Tool failures propagate after cancellation and release.
    */
-  pointerMove(event: PointerEvent): void {
+  pointerMove(event: CanvasPointerInput): void {
     if (!this.captured || this.captured.id === event.pointerId) {
+      if (!this.tool) {
+        return;
+      }
       try {
-        this.tool?.pointerMove(this.normalize(event));
+        const input = this.normalize(event);
+        if (input) {
+          this.tool.pointerMove(input);
+          return;
+        }
       } catch (error) {
         this.cancel();
         throw error;
       }
+      this.cancel();
     }
   }
 
   /**
    * Commits the accepted gesture and releases capture even if the tool rejects it.
    *
-   * @param event - Native pointer sample from the capture layer.
-   * @returns Delivers the sample and updates browser capture when required.
+   * @param event - Detached pointer sample from the capture layer.
+   * A missing normalized sample cancels instead of committing the gesture.
+   *
+   * @returns Delivers an available sample and updates browser capture when required.
    * @throws Tool failures propagate after cancellation and release.
    */
-  pointerUp(event: PointerEvent): void {
+  pointerUp(event: CanvasPointerInput): void {
     if (this.captured?.id !== event.pointerId) {
       return;
     }
+    let canceling = false;
     try {
-      this.tool?.pointerUp(this.normalize(event));
+      if (!this.tool) {
+        return;
+      }
+      const input = this.normalize(event);
+      if (input) {
+        this.tool.pointerUp(input);
+      } else {
+        canceling = true;
+        this.tool.cancel();
+      }
     } catch (error) {
-      this.tool?.cancel();
+      if (!canceling) {
+        this.tool?.cancel();
+      }
       throw error;
     } finally {
       this.release();
@@ -110,10 +142,10 @@ export class CanvasToolGesture {
   /**
    * Cancels only the pointer currently owned by this adapter.
    *
-   * @param event - Native pointer sample from the capture layer.
+   * @param event - Detached pointer sample from the capture layer.
    * @returns Delivers the sample and updates browser capture when required.
    */
-  pointerCancel(event: PointerEvent): void {
+  pointerCancel(event: CanvasPointerInput): void {
     if (this.captured?.id === event.pointerId) {
       this.cancel();
     }
@@ -150,8 +182,6 @@ export class CanvasToolGesture {
   private release(): void {
     const active = this.captured;
     this.captured = null;
-    if (active?.host.hasPointerCapture(active.id)) {
-      active.host.releasePointerCapture(active.id);
-    }
+    active?.release();
   }
 }

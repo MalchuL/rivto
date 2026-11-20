@@ -8,91 +8,19 @@
  * Marked text inputs also retain their native clipboard behavior. Toolbar buttons
  * remain eligible for canvas clipboard commands when they hold focus.
  */
+import type { ClipboardTarget } from "@chulane/rivto-root";
 import { BLOCK_CONTENT_SELECTOR, EDITOR_CONTROL_SELECTOR } from "../../../constants";
 
-/** Matches boolean and plaintext-only contenteditable hosts. */
-const CONTENT_EDITABLE_SELECTOR = "[contenteditable=true], [contenteditable=plaintext-only]";
-
 /**
- * True when a clipboard event should use native/plain-text editing instead of
- * structured block or visual clipboard handling.
+ * Checks a normalized clipboard target against the editor's text-host markers.
  *
- * Checks both `event.target` and `document.activeElement` because Firefox can
- * dispatch copy/paste to `document.body` while a label or control still holds focus.
+ * The browser capability checks both the event target and document focus because
+ * Firefox can dispatch copy or paste to the body while a label or control holds focus.
  *
- * @param event - Native copy, cut, or paste event.
- * @returns True when the target or focused host belongs to a marked text input or editable visual label.
+ * @param target - Live browser capability, or undefined for a non-clipboard event.
+ * @returns True when an independent text control or visual label owns the input.
+ * @throws If browser selector evaluation fails.
  */
-export function isNonBlockEditableClipboardEvent(event: Event): boolean {
-  const target = eventElement(event);
-  const active = activeElementFrom(event);
-  return [target, active].some((node) => Boolean(node && isNonBlockEditableHost(node)));
-}
-
-/**
- * True when `origin` belongs to a marked text input or a contenteditable that is not block text.
- *
- * @param origin - Event target or `document.activeElement`.
- * @returns True for marked text inputs and visual label editors; false for ordinary page blocks.
- */
-function isNonBlockEditableHost(origin: { closest: Element["closest"] }): boolean {
-  // Input/textarea expose selectionStart; buttons share the pointer marker but not text editing.
-  if (origin.closest(EDITOR_CONTROL_SELECTOR) && "selectionStart" in origin) {
-    return true;
-  }
-  const editable = origin.closest<HTMLElement>(CONTENT_EDITABLE_SELECTOR);
-  return Boolean(editable?.isContentEditable && !editable.closest(BLOCK_CONTENT_SELECTOR));
-}
-
-/**
- * Resolves a DOM element from an event target, including text-node targets.
- *
- * @param event - Native event whose target may be a Node rather than an Element.
- * @returns The nearest Element, or null when the target cannot answer `closest`.
- */
-function eventElement(event: Event): { closest: Element["closest"] } | null {
-  const target = event.target;
-  if (isClosestHost(target)) {
-    return target;
-  }
-  if (isNodeHost(target) && isClosestHost(target.parentElement)) {
-    return target.parentElement;
-  }
-  return null;
-}
-
-/**
- * Reads `document.activeElement` from the event's document when available.
- *
- * @param event - Native event used to reach the owning document.
- * @returns The focused element, or null when focus is outside the document.
- */
-function activeElementFrom(event: Event): { closest: Element["closest"] } | null {
-  const target = event.target;
-  const document = isNodeHost(target) ? target.ownerDocument : undefined;
-  const active = document?.activeElement;
-  return isClosestHost(active) ? active : null;
-}
-
-/**
- * Duck-types an object that can answer CSS `closest` queries.
- *
- * @param value - Candidate event target or focused node.
- * @returns True when `closest` is callable.
- */
-function isClosestHost(value: unknown): value is { closest: Element["closest"] } {
-  return Boolean(value) && typeof (value as { closest?: unknown }).closest === "function";
-}
-
-/**
- * Duck-types a Node-like object with a parent and owner document.
- *
- * @param value - Candidate event target.
- * @returns True when parent and document can be read.
- */
-function isNodeHost(value: unknown): value is {
-  parentElement: unknown;
-  ownerDocument: { activeElement: unknown } | null;
-} {
-  return value !== null && typeof value === "object" && "ownerDocument" in value;
+export function isIndependentClipboardTarget(target: ClipboardTarget | undefined): boolean {
+  return target?.isIndependentTextEditing(EDITOR_CONTROL_SELECTOR, BLOCK_CONTENT_SELECTOR) ?? false;
 }

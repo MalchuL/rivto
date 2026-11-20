@@ -1,7 +1,13 @@
 import { EdgelessGridSpotlight } from "./edgeless-grid-spotlight";
+import { useEdgelessSurfaceRoots } from "./use-edgeless-surface-roots";
 import { useReactPanelContext } from "../../hooks/editor/use-react-panel-context";
 import { BlockEditorScope } from "@chulane/rivto-page";
-import { CanvasView, useCanvasCamera, useCanvasVisible } from "@chulane/rivto-edgeless/react";
+import {
+  CanvasView,
+  useCanvasCamera,
+  useCanvasViewport,
+  useCanvasVisible,
+} from "@chulane/rivto-edgeless/react";
 import { useEdgelessCanvas } from "./edgeless-tools-context";
 import { EdgelessToolsProvider } from "./edgeless-tools-context";
 import type { CanvasApi } from "@chulane/rivto-edgeless";
@@ -15,7 +21,7 @@ import { EdgelessSurfaceRegistration } from "./register";
  * of canonical block elements. Persisted document mutations stay in core
  * managers; camera state belongs to Canvas and editor pointer visuals remain here.
  */
-import { memo, useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { memo, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
 import { UI_SCOPE_CLASS } from "../../components/ui-scope";
 import {
   blockIdsOf,
@@ -23,12 +29,18 @@ import {
   EDGELESS_BLOCK_ELEMENT_TYPE,
   EDGELESS_CARD_DEFAULT_FRAME,
 } from "../../elements/block-element-projection";
-import { useEditorRoot, useReactPanel, useElements, useRootBlockIds } from "../../hooks";
+import { useReactPanel, useElements, useRootBlockIds } from "../../hooks";
 import { ToolBarDivider } from "../../components/edgeless/tool-bar-divider";
 import { EdgelessToolButton } from "../../components/edgeless/tool-button";
 import { EDGELESS_GRID_SIZE } from "../../elements/visuals/utils/geometry";
 import { EdgelessBlockElement } from "./edgeless-block";
-import type { EdgelessSurfaceOptions } from "./types";
+import type {
+  EdgelessCardCreationProps,
+  EdgelessSpotlightInputProps,
+  EdgelessSurfaceOptions,
+  SurfaceOverlayProps,
+  ZoomControlProps,
+} from "./types";
 import { EdgelessSnappingStore } from "@chulane/rivto-edgeless";
 
 const GRID_SPOTLIGHT_CLASS = "edgeless-grid-spotlight";
@@ -104,29 +116,25 @@ function EdgelessSurfaceContent({
   );
   const spotlight = useMemo(() => new EdgelessGridSpotlight(), []);
   const { reactPanel } = useReactPanelContext();
-  const { ref: registerRoot, element: root } = useEditorRoot();
-  const rootRef = useCallback(
-    (root: HTMLElement | null) => {
-      controller.viewport = root;
-      spotlight.viewport = root;
-      registerRoot(root);
-    },
-    [controller, spotlight, registerRoot],
+  const { scopeInputRoot, viewportRef, spotlightRef, inputRoot } = useEdgelessSurfaceRoots(
+    reactPanel,
+    controller,
+    spotlight,
   );
-  useEffect(() => spotlight.observeViewport(), [spotlight]);
-  useEffect(() => controller.applySnapping(snap), [controller, snap]);
+  // Tool input can arrive after this commit before passive effects run.
+  useLayoutEffect(() => controller.applySnapping(snap), [controller, snap]);
+  // During a surface switch the context root can still refer to the previous surface.
   return (
-    <BlockEditorScope editor={reactPanel.page} root={root}>
+    <BlockEditorScope editor={reactPanel.page} inputRoot={scopeInputRoot}>
       <CanvasView
         canvas={canvas}
-        viewportRef={rootRef}
+        inputRoot={reactPanel.mountedRoot ?? null}
+        viewportRef={viewportRef}
         interactions={false}
-        {...controller.getViewportProps(camera, snap)}
-        onPointerMove={spotlight.updatePointerSpotlight}
-        onPointerEnter={spotlight.refreshViewportOrigin}
+        {...controller.getViewportProps(camera, snap, inputRoot)}
         overlay={
           <EdgelessSurfaceOverlay
-            controller={spotlight}
+            spotlightRef={spotlightRef}
             canvas={canvas}
             snapping={snapping}
             snap={snap}
@@ -134,10 +142,62 @@ function EdgelessSurfaceContent({
           />
         }
       >
+        <EdgelessCardCreation controller={controller} />
+        <EdgelessSpotlightInput spotlight={spotlight} />
         <EdgelessCards canvas={canvas} />
       </CanvasView>
     </BlockEditorScope>
   );
+}
+
+/**
+ * Observes pointer movement over this viewport, including nested editors.
+ *
+ * @param props - Borrowed pointer decoration.
+ * @param props.spotlight - Owner of viewport origin and spotlight updates.
+ * @returns No rendered content; unmount releases both observations.
+ */
+function EdgelessSpotlightInput({ spotlight }: EdgelessSpotlightInputProps) {
+  const viewport = useCanvasViewport();
+  useLayoutEffect(
+    () =>
+      viewport?.events.observe(
+        { id: "edgeless.spotlight.enter", type: "pointerenter" },
+        spotlight.refreshViewportOrigin,
+      ),
+    [viewport, spotlight],
+  );
+  useLayoutEffect(
+    () =>
+      viewport?.events.observe(
+        { id: "edgeless.spotlight.move", type: "pointermove", includeNested: true },
+        spotlight.updatePointerSpotlight,
+      ),
+    [viewport, spotlight],
+  );
+  return null;
+}
+
+/**
+ * Registers card creation with the current canvas occurrence.
+ *
+ * @param props - Controller borrowing the viewport's normalized input and geometry.
+ * @param props.controller - Document policy owner for creating new cards.
+ * @returns No rendered content; unmount releases the input registration.
+ */
+function EdgelessCardCreation({ controller }: EdgelessCardCreationProps) {
+  const viewport = useCanvasViewport();
+  useLayoutEffect(() => {
+    if (!viewport) {
+      return;
+    }
+    return viewport.events.register({
+      id: "edgeless.create-card",
+      type: "dblclick",
+      handle: (event) => controller.createBlockAt(event, viewport),
+    });
+  }, [controller, viewport]);
+  return null;
 }
 
 /**
@@ -154,28 +214,17 @@ function useSurfaceSnapping(snapping: Pick<EdgelessSnappingStore, "subscribe" | 
   );
 }
 
-/** Screen-space viewport UI and the local spotlight owner. */
-interface SurfaceOverlayProps extends ZoomControlProps {
-  readonly controller: Pick<EdgelessGridSpotlight, "spotlightOverlay">;
-}
-
 /**
  * Renders the pointer spotlight and viewport controls outside the transformed world layer.
  *
  * @param props - Camera values, preferences and the controller owning spotlight paint scheduling.
- * @param props.controller - Receives the mounted overlay for animation-frame updates.
+ * @param props.spotlightRef - Supplies the mounted overlay identity for animation-frame updates.
  * @returns Screen-coordinate spotlight and zoom/snapping controls.
  */
-function EdgelessSurfaceOverlay({ controller, ...controls }: SurfaceOverlayProps) {
+function EdgelessSurfaceOverlay({ spotlightRef, ...controls }: SurfaceOverlayProps) {
   return (
     <>
-      <div
-        ref={(node) => {
-          controller.spotlightOverlay = node;
-        }}
-        className={GRID_SPOTLIGHT_CLASS}
-        aria-hidden="true"
-      />
+      <div ref={spotlightRef} className={GRID_SPOTLIGHT_CLASS} aria-hidden="true" />
       <EdgelessZoomControls {...controls} />
     </>
   );
@@ -243,41 +292,33 @@ function EdgelessZoomControls({ canvas, snapping, snap, zoom }: ZoomControlProps
       <EdgelessToolButton
         label="Zoom out"
         icon="zoom-out"
-        onClick={() => canvas.zoomAt(zoom - 0.1)}
+        onActivate={() => canvas.zoomAt(zoom - 0.1)}
       />
       <EdgelessToolButton
         label="Reset zoom"
         className={ZOOM_VALUE_CLASS}
-        onClick={() => canvas.zoomAt(1)}
+        onActivate={() => canvas.zoomAt(1)}
       >
         {Math.round(zoom * 100)}%
       </EdgelessToolButton>
       <EdgelessToolButton
         label="Zoom in"
         icon="zoom-in"
-        onClick={() => canvas.zoomAt(zoom + 0.1)}
+        onActivate={() => canvas.zoomAt(zoom + 0.1)}
       />
       <ToolBarDivider />
       <EdgelessToolButton
         label={snap.snapToGrid ? "Disable snap to grid" : "Enable snap to grid"}
         icon="snap"
         pressed={snap.snapToGrid}
-        onClick={() => snapping.set({ snapToGrid: !snap.snapToGrid })}
+        onActivate={() => snapping.set({ snapToGrid: !snap.snapToGrid })}
       />
       <EdgelessToolButton
         label={snap.alignObjects ? "Disable object alignment" : "Enable object alignment"}
         icon="align-objects"
         pressed={snap.alignObjects}
-        onClick={() => snapping.set({ alignObjects: !snap.alignObjects })}
+        onActivate={() => snapping.set({ alignObjects: !snap.alignObjects })}
       />
     </div>
   );
-}
-
-/** Live camera and snapping values presented by the viewport toolbar. */
-interface ZoomControlProps {
-  readonly canvas: CanvasApi;
-  readonly snapping: EdgelessSnappingStore;
-  readonly snap: ReturnType<EdgelessSnappingStore["getSnapshot"]>;
-  readonly zoom: number;
 }

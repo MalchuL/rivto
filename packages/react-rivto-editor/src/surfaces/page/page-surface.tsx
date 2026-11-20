@@ -5,7 +5,7 @@ import { ESTIMATED_ROOT_HEIGHT } from "./page-virtualization-context";
 import { usePageVirtualization } from "../../hooks/editor/use-page-virtualization";
 import { useEditorRoot, useRootBlockIds } from "../../hooks";
 
-const PAGE_SURFACE_CLASS = "page-surface";
+import { PAGE_SURFACE_CLASS } from "./constants";
 
 /**
  * Renders the collaborative document as a nested writing page.

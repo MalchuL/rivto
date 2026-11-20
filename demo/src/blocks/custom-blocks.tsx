@@ -231,10 +231,10 @@ export const customBlockExtensions: readonly ReactEditorExtension[] = [
         };
       },
       parseHTML: (element) => {
-        if (element.getAttribute("data-rivto-block") !== "counter") {
+        if (element.attributes["data-rivto-block"] !== "counter") {
           return;
         }
-        const count = Number(element.getAttribute("data-count"));
+        const count = Number(element.attributes["data-count"] ?? null);
         if (!Number.isInteger(count) || count < 0) {
           return;
         }

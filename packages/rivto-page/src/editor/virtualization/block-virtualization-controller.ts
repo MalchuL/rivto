@@ -2,37 +2,13 @@ import { defaultRangeExtractor, type Range } from "@tanstack/react-virtual";
 import { flushSync } from "react-dom";
 import type { BlockEditorBlocks, BlockEditorSelection, BlockListType } from "../../adapter/types";
 
-/** Public windowing settings for a vertical display list of complete subtrees. */
-export interface BlockVirtualizationOptions {
-  /** Whether to window the display list; defaults to true when settings are supplied. */
-  readonly enabled?: boolean;
-  /** Initial height of an unmeasured subtree in CSS pixels; defaults to 240. */
-  readonly estimateSize?: number;
-  /** Extra roots mounted on each side of the viewport; defaults to 3. */
-  readonly overscan?: number;
-}
-
-/** Borrowed operations for resolving an offscreen model position before reading DOM. */
-export interface BlockVirtualizationApi {
-  /**
-   * Synchronously mounts the display roots containing the requested IDs.
-   *
-   * Pins accumulate until the next native selection change; focus and endpoints remain pinned
-   * independently. Collapsed descendants stay collapsed. Call from events, not render.
-   *
-   * @param blockIds - Model IDs, including descendants of displayed roots.
-   * @returns Requested expanded DOM is mounted; unknown IDs are ignored.
-   * @throws Propagates host hierarchy reads and synchronous React commit failures.
-   */
-  mountBlocks(blockIds: readonly string[]): void;
-}
+import type { InputRoot, RegionIdentity } from "@chulane/rivto-root";
+import type { BlockVirtualizationGeometryObserver, BlockVirtualizationView } from "./types";
+import type { BlockVirtualizationRegistry } from "./block-virtualization-registry";
 
 /** View-owned range policy; the adapter retains data and selection while DOM is absent. */
-export class BlockVirtualizationController implements BlockVirtualizationApi {
-  private static readonly views = new WeakMap<HTMLElement, BlockVirtualizationApi>();
-  private root: HTMLElement | undefined;
-  private followingEnd = false;
-  private endFrame: number | undefined;
+export class BlockVirtualizationController implements BlockVirtualizationView {
+  private attached = false;
   private readonly rootIndices = new Map<string, number>();
   private readonly listTypes = new Map<string, BlockListType | undefined>();
   private readonly numbers = new Map<string, number>();
@@ -40,6 +16,7 @@ export class BlockVirtualizationController implements BlockVirtualizationApi {
   private ids: readonly string[] = [];
   private requested: readonly string[] = [];
   private nativeIds: readonly string[] = [];
+  private observeGeometry: BlockVirtualizationGeometryObserver | undefined;
 
   /**
    * Borrows hierarchy reads and owns only view-local metadata subscriptions.
@@ -56,16 +33,6 @@ export class BlockVirtualizationController implements BlockVirtualizationApi {
     private readonly selection: Pick<BlockEditorSelection, "get">,
     private readonly invalidate: () => void,
   ) {}
-
-  /**
-   * Finds the mounted windowing view of an editor root.
-   *
-   * @param root - Exact editor root; nested editors never borrow an ancestor's view.
-   * @returns Borrowed mount capability, or undefined when windowing is disabled.
-   */
-  static getForRoot(root: HTMLElement): BlockVirtualizationApi | undefined {
-    return this.views.get(root);
-  }
 
   /**
    * Supplies the current complete display order before range extraction.
@@ -87,23 +54,30 @@ export class BlockVirtualizationController implements BlockVirtualizationApi {
   }
 
   /**
-   * Observes native endpoints and focus for this mounted occurrence only.
+   * Registers this mounted windowing view and its Root-dependent observations.
    *
-   * @param host - Flow container inside the editor root.
-   * @param onMargin - Receives the container's document offset in CSS pixels.
-   * @returns Idempotent cleanup releasing listeners and the bridge without clearing model selection.
-   * @throws If already attached, outside an editor, or a host subscription fails.
+   * Focus and native text endpoints are observed through Root as soon as the
+   * matching editor attachment is bound, regardless of which attaches first.
+   * Geometry starts and stops with the same matching attachment.
+   *
+   * @param identity - Opaque identity of the mounted editor surface.
+   * @param observeGeometry - Starts measurement through the matching Root and returns its cleanup.
+   * @param registry - Editor-owned registration capability for this mounted view.
+   * @returns Idempotent cleanup releasing observation and geometry without clearing model selection.
+   * @throws If already attached, the registry is destroyed, or geometry,
+   * Root observation, or a host subscription fails.
    */
-  attach(host: HTMLElement, onMargin: (offset: number) => void): () => void {
-    if (this.root) {
+  attach(
+    identity: RegionIdentity,
+    observeGeometry: BlockVirtualizationGeometryObserver,
+    registry: Pick<BlockVirtualizationRegistry, "register">,
+  ): () => void {
+    if (this.attached) {
       throw new Error("Virtualization is already attached");
     }
-    const root = host.closest<HTMLElement>("[data-rivto-block-editor]");
-    if (!root) {
-      throw new Error("Virtualization requires a BlockEditor root");
-    }
-    this.root = root;
-    let releaseGeometry = () => {};
+    this.attached = true;
+    this.observeGeometry = observeGeometry;
+    let releaseView = () => {};
     let active = true;
     /**
      * Releases this attachment once, including during setup rollback.
@@ -114,16 +88,11 @@ export class BlockVirtualizationController implements BlockVirtualizationApi {
     const detach = () => {
       if (active) {
         active = false;
-        this.detach(root, releaseGeometry);
+        this.detach(releaseView);
       }
     };
     try {
-      releaseGeometry = this.observeGeometry(host, root, onMargin);
-      BlockVirtualizationController.views.set(root, this);
-      root.addEventListener("focusin", this.captureNativeIds);
-      root.addEventListener("focusout", this.captureNativeIds);
-      root.ownerDocument.addEventListener("selectionchange", this.captureNativeIds);
-      this.captureNativeIds();
+      releaseView = registry.register(identity, this);
       this.reconcileListSubscriptions();
       return detach;
     } catch (error) {
@@ -134,6 +103,40 @@ export class BlockVirtualizationController implements BlockVirtualizationApi {
       }
       throw error;
     }
+  }
+
+  /**
+   * Observes geometry and focused and selected owners through the matching Root attachment.
+   *
+   * The Root immediately reports current state and continues until the editor or
+   * this mounted view releases the observation.
+   *
+   * @param root - Borrowed occurrence capability owned by the editor attachment.
+   * @returns Disposer releasing this view's Root observations.
+   * @throws Propagates browser observation setup, initial notification, and rollback failures.
+   */
+  observeRoot(root: Pick<InputRoot, "observeTextOwners" | "captureRegionByIdentity">): () => void {
+    const releaseGeometry = this.observeGeometry?.(root) ?? (() => {});
+    let releaseOwners: () => void;
+    try {
+      releaseOwners = root.observeTextOwners(
+        {
+          ownerSelector: "[data-block-id]",
+          ownerAttribute: "data-block-id",
+          contentSelector: "[data-block-content]",
+          boundarySelector: "[data-rivto-block-editor]",
+        },
+        (ids) => this.updateObservedIds(ids),
+      );
+    } catch (error) {
+      try {
+        releaseGeometry();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Virtualization observation setup failed");
+      }
+      throw error;
+    }
+    return () => releaseVirtualizationObservations(releaseOwners, releaseGeometry);
   }
 
   /**
@@ -170,7 +173,7 @@ export class BlockVirtualizationController implements BlockVirtualizationApi {
    * @throws Propagates host hierarchy reads and synchronous React commit failures.
    */
   mountBlocks(blockIds: readonly string[]): void {
-    if (!this.root) {
+    if (!this.attached) {
       return;
     }
     this.requested = [...new Set([...this.requested, ...blockIds])];
@@ -225,63 +228,17 @@ export class BlockVirtualizationController implements BlockVirtualizationApi {
   }
 
   /**
-   * Observes document-space geometry without measuring every block during scrolling.
-   *
-   * @param host - Flow container whose top defines the virtualizer's scroll margin.
-   * @param root - Owning editor occurrence.
-   * @param onMargin - Receives the current document offset in CSS pixels.
-   * @returns Cleanup disconnecting resize and end-following scroll listeners.
-   */
-  private observeGeometry(
-    host: HTMLElement,
-    root: HTMLElement,
-    onMargin: (offset: number) => void,
-  ): () => void {
-    const view = root.ownerDocument.defaultView!;
-    /**
-     * Reconciles the document offset after viewport or surrounding chrome changes.
-     *
-     * @returns The virtualizer receives its current window scroll margin.
-     */
-    const measure = () => {
-      onMargin(host.getBoundingClientRect().top + view.scrollY);
-      this.scheduleEndAdjustment();
-    };
-    measure();
-    const observer =
-      typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
-    observer?.observe(root);
-    observer?.observe(root.ownerDocument.body);
-    view.addEventListener("resize", measure);
-    view.addEventListener("scroll", this.captureScroll, true);
-    return () => {
-      observer?.disconnect();
-      view.removeEventListener("resize", measure);
-      view.removeEventListener("scroll", this.captureScroll, true);
-      if (this.endFrame !== undefined) {
-        view.cancelAnimationFrame(this.endFrame);
-      }
-      this.endFrame = undefined;
-      this.followingEnd = false;
-    };
-  }
-
-  /**
    * Releases view resources even if a host subscription disposer fails.
    *
-   * @param root - Occurrence captured by the attachment being removed.
-   * @param releaseGeometry - Disconnects measurement and scheduled scroll work.
+   * @param releaseView - Releases this exact editor-owned view registration.
    * @returns Bridge, DOM references and all metadata subscriptions are released.
    * @throws AggregateError containing any failed cleanup operations.
    */
-  private detach(root: HTMLElement, releaseGeometry: () => void): void {
-    root.removeEventListener("focusin", this.captureNativeIds);
-    root.removeEventListener("focusout", this.captureNativeIds);
-    root.ownerDocument.removeEventListener("selectionchange", this.captureNativeIds);
-    BlockVirtualizationController.views.delete(root);
-    const cleanups = [releaseGeometry, ...this.subscriptions.values()];
+  private detach(releaseView: () => void): void {
+    const cleanups = [releaseView, ...this.subscriptions.values()];
     this.subscriptions.clear();
-    this.root = undefined;
+    this.attached = false;
+    this.observeGeometry = undefined;
     this.requested = [];
     this.nativeIds = [];
     const errors: unknown[] = [];
@@ -295,44 +252,6 @@ export class BlockVirtualizationController implements BlockVirtualizationApi {
     if (errors.length) {
       throw new AggregateError(errors, "Virtualization cleanup failed");
     }
-  }
-
-  /**
-   * Records whether the user reached the page end before React measures new roots.
-   *
-   * Capture phase runs before the virtualizer's scroll listener can replace DOM.
-   *
-   * @returns Scrolling away cancels end following; ordinary middle scrolling is unchanged.
-   */
-  private captureScroll = (): void => {
-    const document = this.root?.ownerDocument;
-    const view = document?.defaultView;
-    if (view && document) {
-      this.followingEnd =
-        view.scrollY + view.innerHeight >= document.documentElement.scrollHeight - 2;
-    }
-  };
-
-  /**
-   * Keeps an end-of-document scroll at the end as estimated heights become measured.
-   *
-   * @returns At most one frame is scheduled; detach cancels it and middle scrolling opts out.
-   */
-  private scheduleEndAdjustment(): void {
-    const root = this.root;
-    const view = root?.ownerDocument.defaultView;
-    if (!root || !view || !this.followingEnd || this.endFrame !== undefined) {
-      return;
-    }
-    this.endFrame = view.requestAnimationFrame(() => {
-      this.endFrame = undefined;
-      if (this.followingEnd && this.root === root) {
-        view.scrollTo({
-          top: root.ownerDocument.documentElement.scrollHeight,
-          behavior: "instant",
-        });
-      }
-    });
   }
 
   /**
@@ -385,44 +304,52 @@ export class BlockVirtualizationController implements BlockVirtualizationApi {
   }
 
   /**
-   * Captures only this occurrence's focused block and registered native text endpoints.
+   * Reconciles the occurrence's focused block and registered native text endpoints.
    *
    * Browser ranges on structural labels can remain after whole-block selection
    * changes. Live carets and text ranges remain protected through their registered
    * content and focused element, without retaining previously clicked offscreen cards.
    *
+   * @param ids - Unique focused and selected owner identities supplied by Root.
    * @returns A changed pin set schedules a range update; unchanged endpoints do no work.
    */
-  private captureNativeIds = (): void => {
-    const root = this.root;
-    if (!root) {
+  private updateObservedIds(ids: readonly string[]): void {
+    if (!this.attached) {
       return;
     }
-    const selection = root.ownerDocument.getSelection();
-    const ids = new Set<string>();
-    const active = root.ownerDocument.activeElement;
-    for (const node of [active, selection?.anchorNode, selection?.focusNode]) {
-      const element = node?.nodeType === 1 ? (node as Element) : node?.parentElement;
-      if (element?.closest("[data-rivto-block-editor]") !== root) {
-        continue;
-      }
-      if (node !== active && !root.contains(element.closest("[data-block-content]"))) {
-        continue;
-      }
-      const id = element.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
-      if (id) {
-        ids.add(id);
-      }
-    }
-    const next = [...ids];
     if (
       this.requested.length > 0 ||
-      next.length !== this.nativeIds.length ||
-      next.some((id, index) => id !== this.nativeIds[index])
+      ids.length !== this.nativeIds.length ||
+      ids.some((id, index) => id !== this.nativeIds[index])
     ) {
-      this.nativeIds = next;
+      this.nativeIds = [...ids];
       this.requested = [];
       this.invalidate();
     }
-  };
+  }
+}
+
+/**
+ * Releases both Root observations even when one disposer fails.
+ *
+ * @param releaseOwners - Releases focus and selection observation.
+ * @param releaseGeometry - Releases geometry and scheduled scroll work.
+ * @returns Both observations have been offered cleanup.
+ * @throws AggregateError if either observation fails to release.
+ */
+function releaseVirtualizationObservations(
+  releaseOwners: () => void,
+  releaseGeometry: () => void,
+): void {
+  const errors: unknown[] = [];
+  for (const release of [releaseOwners, releaseGeometry]) {
+    try {
+      release();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length) {
+    throw new AggregateError(errors, "Virtualization observation cleanup failed");
+  }
 }

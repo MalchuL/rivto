@@ -1,9 +1,11 @@
 import type { BlockEditorResourceOwner } from "./block-editor-resource-owner";
-import type { BlockEditorApi } from "../block-editor-api";
+import type { BlockEditorApi } from "../types";
 import type { BlockEditorExtension, BlockEditorExtensionsApi } from "./types";
 
 /** Owns editor registrations and nested synchronous extension setup scopes. */
-export class BlockEditorExtensions implements BlockEditorExtensionsApi, BlockEditorResourceOwner {
+export class BlockEditorExtensions<CustomEvents extends object = object>
+  implements BlockEditorExtensionsApi<CustomEvents>, BlockEditorResourceOwner
+{
   private readonly registrations = new Set<() => void>();
   private readonly ids = new Set<string>();
   private activeScope: Set<() => void> | undefined;
@@ -14,7 +16,7 @@ export class BlockEditorExtensions implements BlockEditorExtensionsApi, BlockEdi
    *
    * @param editor - Editor supplied to each synchronous setup callback.
    */
-  constructor(private readonly editor: BlockEditorApi) {}
+  constructor(private readonly editor: BlockEditorApi<CustomEvents>) {}
 
   /**
    * Installs a uniquely named extension and captures its synchronous registrations.
@@ -28,7 +30,7 @@ export class BlockEditorExtensions implements BlockEditorExtensionsApi, BlockEdi
    * @returns Idempotent disposer running cleanup before owned registrations.
    * @throws If destroyed, the ID is empty/duplicate, setup fails, or cleanup fails.
    */
-  register(id: string, extension: BlockEditorExtension): () => void {
+  register(id: string, extension: BlockEditorExtension<CustomEvents>): () => void {
     this.assertActive();
     if (!id.trim() || this.ids.has(id)) {
       throw new Error(`Invalid or duplicate block editor extension ID: ${id}`);

@@ -1,6 +1,6 @@
 import { createCaretSelection } from "@chulane/rivto";
 import { splitBlock } from "../../block-behaviors/utils/text-ops";
-import { createBlockBehaviorContext } from "../../block-behaviors/utils/context";
+import { createBlockSnapshotContext } from "../../block-behaviors/utils/context";
 import { firstKeyboardTarget } from "../keyboard/selection";
 import { defaultWritingBlockExtension } from "../../extensions/built-ins/built-ins";
 import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
@@ -56,7 +56,7 @@ test("custom onSplit owns continuation properties and is released with its exten
      */
     const pressEnter = () => {
       const selection = createCaretSelection(block.id, 2);
-      const context = createBlockBehaviorContext(editor, block.id, {} as HTMLElement, selection)!;
+      const context = createBlockSnapshotContext(editor, block.id, selection)!;
       core.history.batchUpdates(() =>
         editor.editor.blockBehaviors.dispatch("onSplit", context, firstKeyboardTarget(selection)!),
       );

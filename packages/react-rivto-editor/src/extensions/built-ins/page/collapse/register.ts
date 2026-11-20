@@ -1,11 +1,11 @@
 import { registerBlockCollapseActions } from "../../block-handle/actions";
 import { CollapseBlockBehavior } from "./collapse-block-behavior";
-import type { ReactEditorApi } from "../../../../editor/types";
+import type { ReactEditorExtensionApi } from "../../../../editor/types";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import { BlockCollapseSlot } from "../../../../blocks/block-slot-controls/block-slot-controls";
-import type { ReactPanelApi } from "../../../../panels/types";
+import type { CollapseKeyboardPanel } from "./types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../managers";
 import { reconcileCollapsedSelection } from "../navigation";
 import { collapseTargets } from "./utils";
@@ -21,7 +21,7 @@ import { collapseTargets } from "./utils";
  * @param reactEditor - Runtime receiving collapse state and keyboard registrations.
  * @returns Cleanup for document and selection reconciliation subscriptions.
  */
-export function registerCollapse(reactEditor: ReactEditorApi): () => void {
+export function registerCollapse(reactEditor: ReactEditorExtensionApi): () => void {
   registerBlockCollapseActions(reactEditor);
   reactEditor.slashCommands.register({
     id: "block.collapse",
@@ -83,7 +83,7 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
     }
     const reconcilePanel = () => {
       const apiDocument = "editor" in api ? api.document : api;
-      const root = reactPanel?.getRoot();
+      const inputRoot = reactPanel?.inputRoot;
       const boundary = reactPanel?.rootBlockId;
       const next = reconcileCollapsedSelection(apiDocument.blocks, current, boundary);
       if (next !== current) {
@@ -94,8 +94,8 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
         }
         // A native Range retains detached text nodes after React removes a
         // collapsed subtree. Clear it and focus the page's block-selection owner.
-        root?.ownerDocument.getSelection()?.removeAllRanges();
-        root?.focus({ preventScroll: true });
+        inputRoot?.clearSelection();
+        inputRoot?.focus();
       }
     };
     reconcilePanel();
@@ -107,7 +107,7 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
     unsubscribeDocument();
   };
 
-  const setCollapsed = (reactPanel: ReactPanelApi, value: boolean | "toggle"): boolean => {
+  const setCollapsed = (reactPanel: CollapseKeyboardPanel, value: boolean | "toggle"): boolean => {
     const current = reactPanel.selection.get();
     // Chromium may deliver the shortcut before its selectionchange event after
     // a click. Reading the native caret keeps the keybinding deterministic.
@@ -144,7 +144,7 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
     {
       id: KEYBOARD_BINDING_IDS.blockCollapse,
       keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCollapse]!,
-      when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
+      when: ({ mode, insideBlock }) => mode === "block" || insideBlock,
     },
     ({ reactPanel }) => setCollapsed(reactPanel, true),
   );
@@ -152,7 +152,7 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
     {
       id: KEYBOARD_BINDING_IDS.blockExpand,
       keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockExpand]!,
-      when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
+      when: ({ mode, insideBlock }) => mode === "block" || insideBlock,
     },
     ({ reactPanel }) => setCollapsed(reactPanel, false),
   );
@@ -160,7 +160,7 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
     {
       id: KEYBOARD_BINDING_IDS.blockToggleCollapse,
       keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockToggleCollapse]!,
-      when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
+      when: ({ mode, insideBlock }) => mode === "block" || insideBlock,
     },
     ({ reactPanel }) => setCollapsed(reactPanel, "toggle"),
   );

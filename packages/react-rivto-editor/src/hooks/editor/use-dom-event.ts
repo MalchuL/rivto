@@ -17,7 +17,7 @@ import type {
  */
 export function useDOMEvent<
   Target extends DOMEventTarget = "surface",
-  Type extends DOMEventName<Target> = DOMEventName<Target>,
+  Type extends DOMEventName = DOMEventName,
 >(
   definition: DOMEventDefinition<Target, Type>,
   listener: EditorEventHandler<EditorEvent<Target, Type>>,

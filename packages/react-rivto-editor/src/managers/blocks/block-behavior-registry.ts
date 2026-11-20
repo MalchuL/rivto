@@ -1,6 +1,6 @@
 import { RevisionStore } from "../../internal-store";
 import {
-  createBlockBehaviorContext,
+  createBlockSnapshotContext,
   createBlockOutlineContext,
 } from "../../block-behaviors/utils/context";
 import { DefaultBlockBehavior } from "../../block-behaviors/default-block-behavior";
@@ -8,7 +8,7 @@ import type {
   BlockBehavior,
   BlockBehaviorAction,
   BlockBehaviorAvailabilityContext,
-  BlockBehaviorContext,
+  BlockSnapshotContext,
   BlockBehaviorData,
   BlockBehaviorOutcome,
   BlockMoveContext,
@@ -184,7 +184,7 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
     // A structural selection can span several block types. Consult distinct
     // behaviors across the complete group before allowing generic deletion.
     if (action === "onStructuralDelete") {
-      const [context, ids] = args as [BlockBehaviorContext, readonly string[]];
+      const [context, ids] = args as [BlockSnapshotContext, readonly string[]];
       // A behavior consulted for an earlier block is skipped for later blocks; every
       // handler gets the full group. A false result leaves generic deletion to the caller.
       return this.dispatchStructuralDelete(context, ids);
@@ -309,16 +309,16 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
    * This method invokes policy only; generic deletion, batching and focus remain
    * with the selection caller when all handlers defer.
    *
-   * @param initialContext - Selected block context supplying the live panel, DOM root and captured selection.
+   * @param initialContext - Selected block context supplying the live panel and captured selection.
    * @param ids - Complete structural selection in its existing order, without normalization.
    * @returns True when a handler claims the whole group; false for empty or missing groups or universal deferral.
    * @throws If context resolution, availability predicates or action handlers fail.
    */
   private dispatchStructuralDelete(
-    initialContext: BlockBehaviorContext,
+    initialContext: BlockSnapshotContext,
     ids: readonly string[],
   ): boolean {
-    const { reactPanel, root, selection } = initialContext;
+    const { reactPanel, selection } = initialContext;
     const seen = new Set<BlockBehavior>();
     for (const id of ids) {
       const block = reactPanel.blocks.getBlockNode(id);
@@ -334,7 +334,7 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
       const context =
         id === initialContext.block.id
           ? initialContext
-          : createBlockBehaviorContext(reactPanel, id, root, selection);
+          : createBlockSnapshotContext(reactPanel, id, selection);
       if (!context) {
         continue;
       }

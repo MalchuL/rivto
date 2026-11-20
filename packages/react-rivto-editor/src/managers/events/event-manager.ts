@@ -1,41 +1,41 @@
+import { EventDispatcher, type EventResult, type CustomEventDefinition } from "@chulane/rivto-root";
 import type { RegistrationOwner } from "../extensions/types";
-import { DOMEventListeners } from "./dom-event-listeners";
-import type { AnyEditorEvent, DOMRegistration, NativeListenerGroup } from "./types";
+import { BrowserRoutedEvents } from "@chulane/rivto-root/browser";
+import type {
+  AnyEditorEvent,
+  DOMEventDefinition,
+  DOMEventName,
+  DOMEventTarget,
+  EditorEventHandler,
+  DOMRegistration,
+  CustomEventPayloads,
+} from "./types";
 /**
  * Browser event registration and dispatch. Event payloads identify the receiving
  * panel and its selection; document mutations still go through core managers.
  */
-import type { DOMEventDefinition, DOMEventName, DOMEventTarget } from "./dom-types";
 import type { EditorEvent } from "./editor-event";
 import { PanelEventFactory } from "./panel-event-factory";
 import type { PanelRegistry } from "../../panels/panel-registry";
-import type { EditorEventHandler } from "./types";
 import type { PanelRegistration } from "../../panels/types";
 
 /**
  * Registers and dispatches browser events for all panels of one document.
  *
- * DOMEventListeners attaches the native listeners. PanelRegistry chooses the
+ * BrowserRoutedEvents attaches native listeners and owns grouped delivery. PanelRegistry chooses the
  * receiving panel through PanelEventFactory, which captures its EditorEvent context.
- * This manager runs matching handlers
- * in registration order. A handled event is not offered to later registrations.
+ * The shared dispatcher runs matching handlers in registration order. A handled event is not offered to later registrations.
  * One native event retains its initial registrations across capture and bubbling;
  * additions wait for a later event, while removals take effect immediately.
  * KeyboardManager defines keyboard actions and registers its keydown and keyup
  * handlers here, on the editor surface or window.
  */
-export class EventManager {
-  private registrations: readonly DOMRegistration[] = [];
-  private readonly eventRegistrations = new WeakMap<Event, readonly DOMRegistration[]>();
+export class EventManager<CustomEvents extends object = object> {
+  private readonly dispatcher = new EventDispatcher<CustomEventPayloads>();
   private readonly registrationIds = new Set<string>();
   private readonly registrationDisposers = new Map<string, () => void>();
-  private readonly listeners = new DOMEventListeners((group, event, root) =>
-    this.dispatch(group, event, root),
-  );
-  private readonly eventFactory: PanelEventFactory;
-  private readonly panels: Pick<PanelRegistry, "subscribeRoots" | "getRoots">;
+  private readonly listeners: BrowserRoutedEvents<AnyEditorEvent>;
   private readonly unsubscribeRoots: () => void;
-  private readonly claimedEvents = new WeakSet<globalThis.Event>();
   private destroyed = false;
 
   /**
@@ -45,15 +45,22 @@ export class EventManager {
    * @param extensions - Internal registration ownership and destruction guard.
    */
   constructor(
-    panels: Pick<
-      PanelRegistry,
-      "subscribeRoots" | "getRoots" | "resolveEventRoot" | "getApi" | "getSurfaceType"
-    >,
+    panels: Pick<PanelRegistry, "subscribeRoots" | "getInputRoots" | "resolveEventPanel">,
     private readonly extensions: RegistrationOwner,
   ) {
-    this.panels = panels;
-    this.eventFactory = new PanelEventFactory(panels);
-    this.unsubscribeRoots = this.panels.subscribeRoots(() => this.reconnectListeners());
+    const eventFactory = new PanelEventFactory(panels);
+    this.listeners = new BrowserRoutedEvents(
+      () => panels.getInputRoots(),
+      (group, root, capture, identity, control) =>
+        eventFactory.create(group.target, group.type, root, capture, identity, control),
+      [
+        { target: "surface", type: "focusin", capture: false, passive: false },
+        { target: "surface", type: "pointerdown", capture: false, passive: false },
+        { target: "window", type: "pointerup", capture: false, passive: false },
+        { target: "window", type: "pointercancel", capture: false, passive: false },
+      ],
+    );
+    this.unsubscribeRoots = panels.subscribeRoots(() => this.listeners.reconcile());
   }
 
   /**
@@ -69,19 +76,29 @@ export class EventManager {
    * removing a handler immediately excludes it, including from later event phases.
    * Failed setup removes the new handler and frees its ID before rethrowing.
    * If rollback also fails, both failures are retained in AggregateError.
-   * @param owner - Optional panel restricting dispatch to its root and prefixing the ID.
+   * @param owner - Optional panel restricting dispatch to its current input registration and prefixing the ID.
    * The caller must also retain the disposer for panel cleanup.
    * @returns Idempotent disposer, also owned by the registering extension.
    * @throws If the ID is empty, already registered in its scope, or the runtime is destroyed.
    * Native attachment or cleanup ownership failures propagate; rollback failures are aggregated.
    */
-  register<
-    Target extends DOMEventTarget = "surface",
-    Type extends DOMEventName<Target> = DOMEventName<Target>,
-  >(
+  register<Target extends DOMEventTarget = "surface", Type extends DOMEventName = DOMEventName>(
     definition: DOMEventDefinition<Target, Type>,
     listener: EditorEventHandler<EditorEvent<Target, Type>>,
-    owner?: Pick<PanelRegistration, "id" | "getRoot">,
+    owner?: Pick<PanelRegistration, "id" | "inputRoot">,
+  ): () => void;
+
+  /**
+   * Registers a typed custom event handler in the current extension scope.
+   *
+   * @param definition - Custom event identity, name and optional priority.
+   * @param listener - Typed callback returning handled to claim delivery.
+   * @returns Idempotent disposer releasing this exact registration.
+   * @throws If the manager is inactive or the identity or priority is invalid.
+   */
+  register<K extends Extract<keyof CustomEvents, string>>(
+    definition: CustomEventDefinition<K>,
+    listener: (event: CustomEvents[K]) => EventResult | void,
   ): () => void;
 
   /**
@@ -89,16 +106,24 @@ export class EventManager {
    *
    * @param definition - Registration definition with its stable ID, filters, and options.
    * @param listener - DOM event handler; a truthy result claims the event.
-   * @param owner - Optional panel registration that scopes the handler to one mounted root.
+   * @param owner - Optional panel registration that scopes the handler to its current input capability.
    * @returns Idempotent cleanup owned by the extension runtime.
    * @throws If the runtime is inactive, the ID is blank, or its scoped registration already exists.
    * Setup failures roll back the registration; setup and rollback errors are retained together.
    */
   register(
-    definition: DOMEventDefinition,
-    listener: EditorEventHandler<AnyEditorEvent>,
-    owner?: Pick<PanelRegistration, "id" | "getRoot">,
+    definition: DOMEventDefinition | CustomEventDefinition<Extract<keyof CustomEvents, string>>,
+    listener: (event: never) => EventResult | boolean | void,
+    owner?: Pick<PanelRegistration, "id" | "inputRoot">,
   ): () => void {
+    if ("kind" in definition) {
+      // The custom overload restricts this callback to explicit event results.
+      return this.registerCustom(
+        definition,
+        listener as (event: never) => EventResult | void,
+        false,
+      );
+    }
     this.assertActive();
     const id = owner ? `${owner.id}:${definition.id.trim()}` : definition.id.trim();
     if (!definition.id.trim()) {
@@ -108,26 +133,53 @@ export class EventManager {
       throw new Error(`Event registration ${id} is already registered`);
     }
 
-    const registration = { ...this.createRegistration({ ...definition, id }, listener), owner };
+    const registration = {
+      ...this.createRegistration(
+        { ...definition, id },
+        listener as EditorEventHandler<AnyEditorEvent>,
+      ),
+      owner,
+    };
     this.registrationIds.add(id);
-    this.registrations = [...this.registrations, registration];
-    try {
-      this.reconnectListeners();
-      const dispose = this.extensions.registerCleanup(() => this.removeRegistration(registration));
-      this.registrationDisposers.set(id, dispose);
-      return dispose;
-    } catch (error) {
-      try {
-        this.removeRegistration(registration);
-      } catch (cleanupError) {
-        throw new AggregateError([error, cleanupError], "Event registration rollback failed");
-      }
-      throw error;
-    }
+    return this.installBrowserRegistration(registration);
   }
 
   /**
-   * Deletes one DOM registration by its stable ID.
+   * Observes a typed custom event before its handlers without claiming delivery.
+   *
+   * @param definition - Custom event identity, name and optional priority.
+   * @param observer - Typed observer receiving the producer's payload.
+   * @returns Idempotent disposer owned by the current extension.
+   * @throws If the manager is inactive or the identity or priority is invalid.
+   */
+  observe<K extends Extract<keyof CustomEvents, string>>(
+    definition: CustomEventDefinition<K>,
+    observer: (event: CustomEvents[K]) => void,
+  ): () => void {
+    return this.registerCustom(definition, observer as (event: never) => void, true);
+  }
+
+  /**
+   * Delivers a typed custom payload independently of panel attachment.
+   *
+   * Extensions borrow registration and observation only; the owning runtime
+   * retains the concrete manager and publishing capability.
+   *
+   * @param type - Custom event name declared by the runtime owner.
+   * @param payload - Producer-owned value associated with that name.
+   * @returns Handled when a handler claims delivery, otherwise continue.
+   * @throws If destroyed or an observer or handler throws.
+   */
+  publish<K extends Extract<keyof CustomEvents, string>>(
+    type: K,
+    payload: CustomEvents[K],
+  ): EventResult {
+    this.assertActive();
+    return this.dispatcher.dispatch(JSON.stringify(["custom", type]), payload);
+  }
+
+  /**
+   * Deletes one browser or custom event registration by its stable ID.
    *
    * @param id - Registered ID, including the panel prefix for a panel-owned registration.
    * @returns True when a registration existed and was disposed.
@@ -158,19 +210,10 @@ export class EventManager {
     }
     this.destroyed = true;
     const disposers = [...this.registrationDisposers.values()].reverse();
-    // Invalidate retained dispatch snapshots before any cleanup can throw or reenter.
-    for (const registration of this.registrations) {
-      registration.active = false;
-    }
     this.registrationDisposers.clear();
     this.registrationIds.clear();
-    this.registrations = [];
     const errors: unknown[] = [];
-    for (const release of [
-      () => this.listeners.disconnect(),
-      this.unsubscribeRoots,
-      ...disposers,
-    ]) {
+    for (const release of [() => this.listeners.destroy(), this.unsubscribeRoots, ...disposers]) {
       try {
         release();
       } catch (error) {
@@ -183,24 +226,69 @@ export class EventManager {
   }
 
   /**
+   * Installs a browser registration and owns rollback through extension cleanup.
+   *
+   * The registration ID is reserved before installation and released if setup fails.
+   *
+   * @param registration - Validated panel-scoped browser registration.
+   * @returns Idempotent cleanup owned by the extension runtime.
+   * @throws Propagates listener or ownership failures; rollback failures are aggregated.
+   */
+  private installBrowserRegistration(registration: DOMRegistration): () => void {
+    const id = registration.id;
+    let releaseEntry: (() => void) | undefined;
+    try {
+      releaseEntry = this.listeners.register(
+        {
+          id,
+          type: registration.type,
+          target: registration.target,
+          capture: registration.capture,
+          passive: registration.passive,
+          preventDefault: registration.preventDefault,
+        },
+        (event) => this.dispatchRegistration(registration, event),
+      );
+      const release = releaseEntry;
+      const dispose = this.extensions.registerCleanup(() =>
+        this.removeRegistration(registration, release),
+      );
+      this.registrationDisposers.set(id, dispose);
+      return dispose;
+    } catch (error) {
+      try {
+        if (releaseEntry) {
+          this.removeRegistration(registration, releaseEntry);
+        } else {
+          registration.active = false;
+          this.registrationIds.delete(id);
+        }
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Event registration rollback failed");
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Removes one exact registration before reconciling its native listener groups.
    *
    * State is released before native cleanup, so errors cannot reserve its ID or
    * leave it eligible in an ongoing dispatch. Old disposers cannot remove replacements.
    *
    * @param registration - Registration being disposed or rolled back after failed setup.
+   * @param releaseEntry - Dispatcher disposer for this exact registration.
    * @returns The handler and its ID are released; repeated removal does nothing.
    * @throws Propagates listener reconciliation failures after unregistering the handler.
    */
-  private removeRegistration(registration: DOMRegistration): void {
+  private removeRegistration(registration: DOMRegistration, releaseEntry: () => void): void {
     if (!registration.active) {
       return;
     }
     registration.active = false;
-    this.registrations = this.registrations.filter((entry) => entry !== registration);
     this.registrationIds.delete(registration.id);
     this.registrationDisposers.delete(registration.id);
-    this.reconnectListeners();
+    releaseEntry();
   }
 
   /**
@@ -230,99 +318,44 @@ export class EventManager {
   }
 
   /**
-   * Connects current registrations to panel roots, or disconnects listeners after destruction.
+   * Checks one registration against its receiving panel and event context.
+   *
+   * Root already matched target, event type, capture, and passive options and
+   * owns cancellation for the synchronous delivery. The availability predicate
+   * can remove its own registration. Nested events retain independent claims.
+   *
+   * @param registration - Captured host registration in its native listener group.
+   * @param event - Receiving panel context and selection snapshot for this group.
+   * @returns True when the eligible handler claims delivery, otherwise false.
+   * @throws If a predicate, Root ownership check, or handler fails.
    */
-  private reconnectListeners(): void {
-    if (this.destroyed) {
-      this.listeners.disconnect();
-    } else {
-      this.listeners.connect(this.registrations, this.panels.getRoots());
+  private dispatchRegistration(registration: DOMRegistration, event: AnyEditorEvent): boolean {
+    if (
+      this.destroyed ||
+      !registration.active ||
+      !event.inputRegistration.isCurrent(event.inputRoot) ||
+      !event.inputRoot.isAttached() ||
+      !event.inputRegistration.isCurrent(event.inputRoot) ||
+      (registration.owner && registration.owner.inputRoot !== event.inputRoot) ||
+      !event.matches(registration) ||
+      (registration.when && !registration.when(event))
+    ) {
+      return false;
     }
+    // Root checks can synchronously destroy the runtime or remove this registration.
+    return Boolean(
+      !this.destroyed &&
+      registration.active &&
+      event.inputRegistration.isCurrent(event.inputRoot) &&
+      event.inputRoot.isAttached() &&
+      event.inputRegistration.isCurrent(event.inputRoot) &&
+      !this.destroyed &&
+      registration.active &&
+      (!registration.owner || registration.owner.inputRoot === event.inputRoot) &&
+      registration.listener(event),
+    );
   }
 
-  /**
-   * Runs matching registrations for one native event until one claims it.
-   *
-   * @param group - Capture/passive/target identity of the native listener.
-   * @param raw - Browser event dispatched to that listener.
-   * @param attachedRoot - Surface listener root; omitted for document/window listeners.
-   * @returns Matching registrations have run unless the event was already claimed.
-   * @throws Propagates routing, predicate and handler failures.
-   */
-  private dispatch(
-    group: NativeListenerGroup,
-    raw: globalThis.Event,
-    attachedRoot?: HTMLElement,
-  ): void {
-    if (this.destroyed || raw.defaultPrevented || this.claimedEvents.has(raw)) {
-      return;
-    }
-    let registrations = this.eventRegistrations.get(raw);
-    if (!registrations) {
-      registrations = this.registrations;
-      this.eventRegistrations.set(raw, registrations);
-    }
-    const event = this.eventFactory.create(group.target, raw, attachedRoot);
-    if (event) {
-      this.dispatchRegistrations(group, event, registrations);
-    }
-  }
-
-  /**
-   * Dispatches a native event to matching panel, scope, mode, and listener-option registrations until handled.
-   *
-   * @param group - Native listener group defining target, event type, capture, and passive options.
-   * @param event - Receiving panel context and selection snapshot for this native group.
-   * @param registrations - Initial registration array shared by all phases of this native event.
-   * @returns Eligible active handlers have run until one claims the event.
-   * @throws Propagates availability-predicate and handler failures.
-   */
-  private dispatchRegistrations(
-    group: NativeListenerGroup,
-    event: AnyEditorEvent,
-    registrations: readonly DOMRegistration[],
-  ): void {
-    const raw: Event = event.raw;
-    const root = event.root;
-    // Pointermove can fire hundreds of times per gesture: arrays are copied only
-    // when registrations change, not for each dispatch. Every native phase shares
-    // this event's original array; active flags make removals effective immediately.
-    for (const registration of registrations) {
-      if (this.destroyed || raw.defaultPrevented || this.claimedEvents.has(raw)) {
-        return;
-      }
-      if (
-        !registration.active ||
-        (registration.owner && registration.owner.getRoot() !== root) ||
-        registration.type !== group.type ||
-        registration.target !== group.target ||
-        registration.capture !== group.capture ||
-        registration.passive !== group.passive ||
-        !event.matches(registration) ||
-        (registration.when && !registration.when(event))
-      ) {
-        continue;
-      }
-      // The availability predicate may remove this registration itself.
-      if (registration.active && registration.listener(event)) {
-        this.markHandled(raw, registration.preventDefault && !registration.passive);
-        return;
-      }
-    }
-  }
-
-  /**
-   * Marks a native event claimed and optionally prevents its default when cancellation is supported.
-   *
-   * @param raw - Original browser event being dispatched.
-   * @param preventDefault - Whether to prevent the native default when the event is cancelable.
-   */
-  private markHandled(raw: globalThis.Event, preventDefault: boolean): void {
-    if (preventDefault && raw.cancelable) {
-      raw.preventDefault();
-    }
-    this.claimedEvents.add(raw);
-  }
   /**
    * Rejects event registration after runtime or extension destruction has started.
    *
@@ -334,5 +367,50 @@ export class EventManager {
       throw new Error("Editor event runtime is destroyed");
     }
     this.extensions.assertActive();
+  }
+
+  /**
+   * Captures one custom callback in the current extension's registration scope.
+   *
+   * @param definition - Custom event name, identity and optional priority.
+   * @param callback - Callback selected by the public typed overload.
+   * @param observer - Whether delivery observes without claiming the event.
+   * @returns Idempotent disposer releasing the identity and dispatcher entry.
+   * @throws If registration is invalid or cleanup ownership fails.
+   */
+  private registerCustom(
+    definition: CustomEventDefinition<Extract<keyof CustomEvents, string>>,
+    callback: (event: never) => EventResult | void,
+    observer: boolean,
+  ): () => void {
+    this.assertActive();
+    const id = definition.id.trim();
+    if (!id || this.registrationIds.has(id)) {
+      throw new Error(`Invalid or duplicate event registration ${id}`);
+    }
+    const entry = {
+      id,
+      type: JSON.stringify(["custom", definition.type]),
+      priority: definition.priority,
+    };
+    // The public overload pairs this callback with the declared custom event name.
+    const invoke = (payload: unknown) => callback(payload as never);
+    const release = observer
+      ? this.dispatcher.observe(entry, invoke)
+      : this.dispatcher.register(entry, invoke);
+    this.registrationIds.add(id);
+    try {
+      const dispose = this.extensions.registerCleanup(() => {
+        release();
+        this.registrationIds.delete(id);
+        this.registrationDisposers.delete(id);
+      });
+      this.registrationDisposers.set(id, dispose);
+      return dispose;
+    } catch (error) {
+      release();
+      this.registrationIds.delete(id);
+      throw error;
+    }
   }
 }

@@ -1,5 +1,5 @@
-import type { ReactPanelApi } from "../../../panels/types";
-import type { ReactEditorApi } from "../../../editor/types";
+import type { SelectionDeletionPanel } from "./types";
+import type { ReactEditorExtensionApi } from "../../../editor/types";
 /**
  * Routes Backspace and Delete for expanded text and whole-block selections.
  * The extension reconciles an immediately clicked native caret before deciding
@@ -8,11 +8,10 @@ import type { ReactEditorApi } from "../../../editor/types";
  * @module
  */
 import { getSelectedBlockIds, isStructuralSelection } from "@chulane/rivto";
-import { createBlockBehaviorContext } from "../../../block-behaviors/utils/context";
+import { createBlockSnapshotContext } from "../../../block-behaviors/utils/context";
 import {
   BUILTIN_KEYMAP,
   focusSelectionCaret,
-  isEditableKeyboardEvent,
   KEYBOARD_BINDING_IDS,
   readKeyboardSelection,
   shouldDeleteSelection,
@@ -29,41 +28,49 @@ import {
  * @param reactEditor - Editor owning the deletion binding and its lifecycle.
  * @returns After registering the binding; deletion occurs only on a matching keyboard event.
  */
-export function registerSelectionDeletion(reactEditor: ReactEditorApi): void {
+export function registerSelectionDeletion(reactEditor: ReactEditorExtensionApi): void {
   reactEditor.keyboard.register(
     {
       id: KEYBOARD_BINDING_IDS.selectionDelete,
       keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.selectionDelete],
-      when: ({ reactPanel, selection, raw: event, blockId }) => {
-        const root = reactPanel.getRoot();
-        if (!root) {
+      when: ({ reactPanel, inputRoot, selection, isBlockContentTarget, blockId }) => {
+        if (!inputRoot.isAttached()) {
           return false;
         }
-        const editableEvent = isEditableKeyboardEvent(event);
+        const editableEvent = isBlockContentTarget();
         const current = editableEvent
           ? readKeyboardSelection(reactPanel.selection, reactPanel.blocks, blockId)
           : selection;
         if (!shouldDeleteSelection(current)) {
           return false;
         }
-        const rootBlockSelection =
-          root.ownerDocument.activeElement === root && isStructuralSelection(current);
+        const rootBlockSelection = inputRoot.isFocused() && isStructuralSelection(current);
         return rootBlockSelection || editableEvent;
       },
     },
-    ({ reactPanel, root }) => {
-      deletePanelSelection(reactPanel, root);
+    ({ reactPanel, inputRoot, inputRegistration }) => {
+      if (!inputRegistration.isCurrent(inputRoot)) {
+        return true;
+      }
+      deletePanelSelection(reactPanel);
+      if (!inputRegistration.isCurrent(inputRoot)) {
+        return true;
+      }
       // Keep keyboard ownership inside Rivto immediately when a normal browser
       // briefly focuses a block deletion just removed. This does not address
       // Cursor Browser intercepting Ctrl/Cmd+Z before the page receives it; see
       // the known-host limitation documented in the history extension.
-      if (!focusSelectionCaret(root, reactPanel.selection)) {
-        root.focus({ preventScroll: true });
+      if (!focusSelectionCaret(reactPanel.selection) && inputRegistration.isCurrent(inputRoot)) {
+        inputRoot.focus();
       }
       // Only restore the caret and its editing focus; document deletion has already completed.
-      reactPanel.selection.scheduleIfSelectionUnchanged(() =>
-        focusSelectionCaret(root, reactPanel.selection),
-      );
+      if (inputRegistration.isCurrent(inputRoot)) {
+        reactPanel.selection.scheduleIfSelectionUnchanged(() => {
+          if (inputRegistration.isCurrent(inputRoot)) {
+            focusSelectionCaret(reactPanel.selection);
+          }
+        });
+      }
       return true;
     },
   );
@@ -78,18 +85,17 @@ export function registerSelectionDeletion(reactEditor: ReactEditorApi): void {
  * text. Policy calls and deletion share one panel batch; focus is left to callers.
  *
  * @param reactPanel - Occurrence whose current selection and block behaviors are used.
- * @param root - Mounted surface root passed to structural-deletion behavior contexts.
  * @returns No value after the selected behavior or generic deletion completes.
  * @throws If context resolution, a behavior handler or delegated selection deletion fails.
  */
-export function deletePanelSelection(reactPanel: ReactPanelApi, root: HTMLElement): void {
+export function deletePanelSelection(reactPanel: SelectionDeletionPanel): void {
   const current = reactPanel.selection.get();
   reactPanel.batchUpdates(() => {
     if (current && isStructuralSelection(current)) {
       const ids = getSelectedBlockIds(current);
       const firstId = ids.find((id) => reactPanel.blocks.getBlockNode(id));
       const context = firstId
-        ? createBlockBehaviorContext(reactPanel, firstId, root, current)
+        ? createBlockSnapshotContext(reactPanel, firstId, current)
         : undefined;
       // A handled or rejected outcome claims the whole selection and skips generic deletion.
       if (

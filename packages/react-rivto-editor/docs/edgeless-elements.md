@@ -410,10 +410,10 @@ gesture state but may retain hover feedback.
 Existing element `creation.create` registrations automatically use it without an
 API change. Its factory runs once per prospective element; previews keep that raw
 input until commit or cancellation. Creation-tool instances with `supportsPlacement` receive common
-toolbar drag bindings. Optional `getButtonProps` can customize those bindings. Its
-click handler may call `preventDefault()` when pointer release already activated
-the tool, avoiding a duplicate activation. Leave keyboard clicks unhandled to use
-the context's common activation behavior.
+toolbar drag bindings. The shared toolbar owns pointer capture and prevents a
+pointer click from activating the tool twice after release. Keyboard activation
+continues through the shared button. Registrations can provide `className` for
+button styling; tool instances define placement and canvas interaction behavior.
 
 Group renderers receive a surface-local `group` instance: `getSettings()` and
 `setSettings()` share the same registered settings with its tools. The panel and

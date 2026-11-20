@@ -15,7 +15,9 @@ import type {
  * event conditions, while surface renderers and wrappers belong exclusively to
  * SurfaceManager.
  */
-export class ExtensionManager implements ExtensionsApi {
+export class ExtensionManager<
+  CustomEvents extends object = object,
+> implements ExtensionsApi<CustomEvents> {
   private readonly store = new RevisionStore();
   private readonly extensionIds = new Set<string>();
   private readonly extensionDisposers: RegistrationDisposer[] = [];
@@ -32,7 +34,7 @@ export class ExtensionManager implements ExtensionsApi {
    *
    * @param reactEditor - Owning React runtime supplied during extension setup.
    */
-  constructor(private readonly reactEditor: ReactEditorApi) {}
+  constructor(private readonly reactEditor: ReactEditorApi<CustomEvents>) {}
 
   /**
    * Installs the creation-time extension list.
@@ -42,7 +44,7 @@ export class ExtensionManager implements ExtensionsApi {
    *
    * @param extensions - Ordered functional extensions with unique stable IDs.
    */
-  initialize(extensions: readonly ReactEditorExtension[]): void {
+  initialize(extensions: readonly ReactEditorExtension<CustomEvents>[]): void {
     this.assertActive();
     for (const extension of extensions) {
       this.install(extension);
@@ -169,7 +171,7 @@ export class ExtensionManager implements ExtensionsApi {
    * @throws If inactive, the ID is empty/duplicate, setup fails or returns invalid cleanup,
    * or rollback fails. Multiple failures are reported together.
    */
-  install(extension: ReactEditorExtension): () => void {
+  install(extension: ReactEditorExtension<CustomEvents>): () => void {
     this.assertActive();
     if (!extension.id.trim()) {
       throw new Error("React extension ID is required");

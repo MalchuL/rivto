@@ -57,18 +57,21 @@ for (const repeat of [0, 200]) {
           },
           { capture: true, once: true },
         );
-        document.querySelector("[data-edgeless-plane]")!.addEventListener(
-          "pointermove",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.radiusTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
+        const stop = Event.prototype.stopPropagation;
+        Event.prototype.stopPropagation = function () {
+          stop.call(this);
+          if (this.type === "pointermove") {
+            Event.prototype.stopPropagation = stop;
+            queueMicrotask(() => {
+              const sync = performance.now() - start;
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => {
+                  state.radiusTiming = { sync, frames: performance.now() - start };
+                }),
+              );
+            });
+          }
+        };
       });
       await page.mouse.move(x + delta, y);
       await page.waitForFunction(

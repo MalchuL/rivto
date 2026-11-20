@@ -1,10 +1,10 @@
 import { ReactPanelProvider } from "../editor-panel/react-panel-provider";
 import type { EditorEmbedProps } from "./types";
 import { EmbeddingPanel, type PanelOptions } from "@chulane/rivto";
-import type { ReactEditorApi } from "../../editor/types";
+import type { ReactEditorPanelApi } from "../../editor/types";
 
 /** Creates core boundaries that include and protect the required source block root. */
-function createEmbeddingPanel(editor: ReactEditorApi, options: PanelOptions) {
+function createEmbeddingPanel(editor: ReactEditorPanelApi, options: PanelOptions) {
   const { rootBlockId } = options;
   if (!rootBlockId) {
     throw new Error("Embedding panel requires a block root");

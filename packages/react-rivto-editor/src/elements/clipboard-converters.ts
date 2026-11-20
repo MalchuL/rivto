@@ -92,12 +92,12 @@ export function textElementClipboardConverter(type: string): ElementClipboardCon
     /**
      * Parses matching element HTML as page blocks or canvas text elements.
      *
-     * @param element - Element snapshot or DOM host used by the operation.
+     * @param element - Detached HTML subtree used by the operation.
      * @param context - Clipboard operation metadata and source-to-destination identity mappings.
      * @returns Parsed clipboard content, or undefined when the HTML belongs to another element type.
      */
     parseHTML(element, context) {
-      if (element.getAttribute("data-rivto-element") !== type) {
+      if (element.attributes["data-rivto-element"] !== type) {
         return;
       }
       const text = clipboardHTMLText(element);

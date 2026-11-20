@@ -5,7 +5,7 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:5198";
 
 export default defineConfig({
   testDir: ".",
-  testMatch: "*.spec.ts",
+  testMatch: "**/*.spec.ts",
   fullyParallel: true,
   outputDir: "../../../test-results/rivto-edgeless",
   reporter: "list",

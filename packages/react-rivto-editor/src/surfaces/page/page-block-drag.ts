@@ -5,33 +5,22 @@ import {
   type BlockDragPreviewRow,
   type BlockDropDestination,
   type BlockDragTargetScope,
+  type BlockDragHit,
   type BlockDropTargetsApi,
   type ResolvedBlockDropTarget,
 } from "@chulane/rivto-page";
 import type { CrossDocumentBlockPanel } from "../../extensions/block-drag/cross-document/panel";
 import { CrossDocumentBlockTransfer } from "../../extensions/built-ins/clipboard/cross-document-block-transfer";
 import { crossDocumentPageRootControllers } from "../../extensions/block-drag/cross-document/target";
-import type { CrossDocumentPageRootController } from "../../extensions/block-drag/types";
 import { PageDragOccurrence } from "./page-drag-occurrence";
-
-/** One borrowed child-ID list in a bounded preview traversal; no descendants are copied. */
-interface PagePreviewCursor {
-  readonly ids: readonly string[];
-  readonly depth: number;
-  index: number;
-}
-
-/** Validated translation into the existing grouped command's anchor syntax. */
-interface PageBlockMove {
-  readonly targetId: string | null;
-  readonly receiver: CrossDocumentBlockPanel;
-  readonly position: "before" | "after" | "inside";
-}
+import type { PageBlockMove, PageDragRoot, PagePreviewCursor } from "./types";
+import type { PanelInputRegistration } from "../../panels/types";
 
 /** Validates live Page destinations against panel access and host movement rules. */
 export class PageBlockDrag implements BlockDragAdapter {
   private occurrence: PageDragOccurrence | undefined;
-  private router: BlockDragRouter<CrossDocumentPageRootController> | undefined;
+  private router: BlockDragRouter<PageDragOccurrence> | undefined;
+  private wasAttached = false;
   /**
    * Borrows the panel's model boundary without storing selection or attaching input.
    *
@@ -42,18 +31,30 @@ export class PageBlockDrag implements BlockDragAdapter {
   /**
    * Registers one receiving Page attachment shared by both surface implementations.
    *
-   * @param root - Mounted occurrence root; registration identity survives only this attachment.
    * @param targets - Local canonical geometry, borrowed without another input installation.
-   * @returns Disposer releasing this exact registry entry and foreign feedback.
-   * @throws If already attached or registration cleanup fails.
+   * @param inputRoot - Current Root for the same mounted surface.
+   * @param inputRegistration - Routing lifetime that owns this drag attachment.
+   * @returns Disposer releasing this exact registry entry and notifying its foreign sources.
+   * @throws If already attached, the Root is unavailable, or registration fails.
    */
-  attach(root: HTMLElement, targets: Pick<BlockDropTargetsApi, "resolve">): () => void {
+  attach(
+    targets: Pick<BlockDropTargetsApi, "resolve">,
+    inputRoot: PageDragRoot,
+    inputRegistration: PanelInputRegistration,
+  ): () => void {
     if (this.occurrence) {
       throw new Error("Page drag is already attached");
     }
-    const occurrence = new PageDragOccurrence(this.panel, root, targets);
+    const occurrence = new PageDragOccurrence(this.panel, targets, inputRoot, inputRegistration);
     this.occurrence = occurrence;
-    this.router = new BlockDragRouter(root, crossDocumentPageRootControllers, targets, this);
+    this.wasAttached = true;
+    this.router = new BlockDragRouter<PageDragOccurrence>(
+      inputRoot,
+      occurrence.region,
+      crossDocumentPageRootControllers,
+      targets,
+      this,
+    );
     return () => {
       if (this.occurrence === occurrence) {
         this.occurrence = undefined;
@@ -64,22 +65,22 @@ export class PageBlockDrag implements BlockDragAdapter {
   }
 
   /**
-   * Routes one native hit through the shared Page and Edgeless receiving registry.
+   * Routes one captured hit through the shared Page and Edgeless receiving registry.
    *
    * @param x - Viewport pointer X in CSS pixels.
    * @param y - Viewport pointer Y in CSS pixels.
    * @param excluded - Captured roots in the source model, including unmounted selection.
-   * @param nativeHit - Current uncaptured native hit; otherwise geometry is refreshed once.
+   * @param hit - Current uncaptured hit; otherwise geometry is refreshed once.
    * @returns Local or scoped foreign target, or undefined outside a registered destination.
    */
   resolve(
     x: number,
     y: number,
     excluded: ReadonlySet<string>,
-    nativeHit?: Element,
+    hit?: BlockDragHit,
   ): ResolvedBlockDropTarget | undefined {
     const ids = [...excluded];
-    return this.router?.resolve(x, y, excluded, nativeHit, (destination) =>
+    return this.router?.resolve(x, y, excluded, hit, (destination) =>
       this.canMove(ids, destination),
     );
   }
@@ -94,29 +95,36 @@ export class PageBlockDrag implements BlockDragAdapter {
    * @param x - Viewport X in CSS pixels.
    * @param y - Viewport Y in CSS pixels.
    * @param excluded - Captured source model roots.
-   * @param hit - Current uncaptured native hit supplied by Page routing.
+   * @param hit - Current uncaptured opaque hit supplied by Page routing.
    * @returns Accepted geometry, or undefined when the receiving host rejects the drop.
    * @throws Propagates source reads, receiving policy, and DOM lookup failures.
    */
   resolveForeign(
-    receiver: CrossDocumentPageRootController,
+    receiver: PageDragOccurrence,
     x: number,
     y: number,
     excluded: ReadonlySet<string>,
-    hit: Element | undefined,
+    hit: BlockDragHit | undefined,
   ): ResolvedBlockDropTarget | undefined {
+    if (!this.isSourceCurrent()) {
+      return;
+    }
     const sources = [...excluded].flatMap((id) => {
       const block = this.panel.blocks.getBlock(id);
       return block ? [block] : [];
     });
-    const placement = receiver.resolvePlacement(
+    if (!this.isSourceCurrent()) {
+      return;
+    }
+    const placement = PageDragOccurrence.resolvePlacement(
+      receiver,
       x,
       y,
       sources,
       this.panel.document.getDocument().id,
       hit,
     );
-    return placement ?? undefined;
+    return this.isSourceCurrent() ? (placement ?? undefined) : undefined;
   }
 
   /**
@@ -132,7 +140,7 @@ export class PageBlockDrag implements BlockDragAdapter {
    * @throws Delegated model and child-visibility failures propagate to gesture cancellation.
    */
   getPreview(ids: readonly string[], limit: number): readonly BlockDragPreviewRow[] {
-    if (!Number.isSafeInteger(limit) || limit <= 0) {
+    if (!Number.isSafeInteger(limit) || limit <= 0 || !this.isSourceCurrent()) {
       return [];
     }
     const rows: BlockDragPreviewRow[] = [];
@@ -159,7 +167,7 @@ export class PageBlockDrag implements BlockDragAdapter {
         stack.push({ ids: node.childIds, depth: cursor.depth + 1, index: 0 });
       }
     }
-    return rows;
+    return this.isSourceCurrent() ? rows : [];
   }
 
   /**
@@ -207,15 +215,23 @@ export class PageBlockDrag implements BlockDragAdapter {
     } else {
       new CrossDocumentBlockTransfer(this.panel, receiver).move(ids, move);
     }
+    if (!this.isMoveCurrent(scope)) {
+      return true;
+    }
     if (receiver !== this.panel) {
       this.panel.selection.clear();
+    }
+    if (!this.isMoveCurrent(scope)) {
+      return true;
     }
     const selected = new Set(ids);
     const siblings =
       destination.parentId === null
         ? receiver.blocks.getRootIds()
         : receiver.document.blocks.getChildIds(destination.parentId);
-    receiver.selection.set(createStructuralSelection(siblings.filter((id) => selected.has(id))));
+    if (this.isMoveCurrent(scope)) {
+      receiver.selection.set(createStructuralSelection(siblings.filter((id) => selected.has(id))));
+    }
     return true;
   }
 
@@ -238,16 +254,95 @@ export class PageBlockDrag implements BlockDragAdapter {
     destination: BlockDropDestination,
     scope?: BlockDragTargetScope,
   ): PageBlockMove | undefined {
-    const entry = scope && crossDocumentPageRootControllers.get(scope.root);
-    if (scope && (entry !== scope || !scope.root.isConnected)) {
+    if (!this.isSourceCurrent()) {
       return;
     }
-    const receiver = entry?.reactPanel ?? this.panel;
+    const entry = scope && crossDocumentPageRootControllers.getCurrent(scope);
+    if (scope && entry !== scope) {
+      return;
+    }
+    const receiver = entry ? PageDragOccurrence.getPanel(entry) : this.panel;
+    if (!receiver) {
+      return;
+    }
     const sameDocument = receiver.document.getDocument() === this.panel.document.getDocument();
-    const { blocks, rootBlockId } = receiver;
     if (!ids.length || ids.some((id) => !this.panel.blocks.canRemove(id))) {
       return;
     }
+    const parent = destination.parentId;
+    const siblings = this.receivingSiblings(receiver, destination, ids, sameDocument);
+    if (!siblings) {
+      return;
+    }
+    const beforeId = destination.kind === "between" ? (destination.nextId ?? undefined) : undefined;
+    if (!this.permitsMove(ids, receiver, sameDocument, parent, beforeId)) {
+      return;
+    }
+    if (!this.isMoveCurrent(scope)) {
+      return;
+    }
+    if (beforeId) {
+      return { targetId: beforeId, position: "before", receiver };
+    }
+    if (parent !== null) {
+      return { targetId: parent, position: "inside", receiver };
+    }
+    const last = siblings.at(-1);
+    if (last) {
+      return { targetId: last, position: "after", receiver };
+    }
+    return sameDocument ? undefined : { targetId: null, position: "after", receiver };
+  }
+
+  /**
+   * Checks source identities and the receiving panel's movement policy.
+   *
+   * @param ids - Captured roots in the source document.
+   * @param receiver - Occurrence that would receive the roots.
+   * @param sameDocument - Whether the receiver shares the source document.
+   * @param parentId - Destination parent, or null for document roots.
+   * @param beforeId - Destination sibling before which the roots would be inserted.
+   * @returns True only when every source exists, has no foreign collision, and is permitted.
+   * @throws Propagates source reads, collision checks, and host policy failures.
+   */
+  private permitsMove(
+    ids: readonly string[],
+    receiver: CrossDocumentBlockPanel,
+    sameDocument: boolean,
+    parentId: string | null,
+    beforeId?: string,
+  ): boolean {
+    const sources = ids.flatMap((id) => {
+      const block = this.panel.blocks.getBlock(id);
+      return block ? [block] : [];
+    });
+    return (
+      sources.length === ids.length &&
+      (sameDocument || !this.hasIdentityConflict(sources, receiver)) &&
+      receiver.editor.blockBehaviors.canMove({ sources, destination: { parentId, beforeId } })
+    );
+  }
+
+  /**
+   * Resolves the destination's remaining siblings after validating its panel boundary.
+   *
+   * Selected roots are excluded only for moves within the same document, and a
+   * selected ancestor cannot receive its own descendant.
+   *
+   * @param receiver - Occurrence whose document owns the destination.
+   * @param destination - Canonical parent and optional neighboring blocks.
+   * @param ids - Captured source root identities.
+   * @param sameDocument - Whether source IDs can also occur in the receiver.
+   * @returns Remaining sibling IDs, or undefined for an invalid parent, ancestry, or gap.
+   * @throws Propagates delegated document and panel reads.
+   */
+  private receivingSiblings(
+    receiver: CrossDocumentBlockPanel,
+    destination: BlockDropDestination,
+    ids: readonly string[],
+    sameDocument: boolean,
+  ): readonly string[] | undefined {
+    const { blocks, rootBlockId } = receiver;
     const parent = destination.parentId;
     if (
       parent === null
@@ -269,35 +364,7 @@ export class PageBlockDrag implements BlockDragAdapter {
     const siblings = (
       parent === null ? blocks.getRootIds() : receiver.document.blocks.getChildIds(parent)
     ).filter((id) => !selected.has(id));
-    if (!this.isCurrentGap(destination, siblings)) {
-      return;
-    }
-    const sources = ids.flatMap((id) => {
-      const block = this.panel.blocks.getBlock(id);
-      return block ? [block] : [];
-    });
-    const beforeId = destination.kind === "between" ? (destination.nextId ?? undefined) : undefined;
-    if (
-      sources.length !== ids.length ||
-      (!sameDocument && this.hasIdentityConflict(sources, receiver)) ||
-      !receiver.editor.blockBehaviors.canMove({
-        sources,
-        destination: { parentId: parent, beforeId },
-      })
-    ) {
-      return;
-    }
-    if (beforeId) {
-      return { targetId: beforeId, position: "before", receiver };
-    }
-    if (parent !== null) {
-      return { targetId: parent, position: "inside", receiver };
-    }
-    const last = siblings.at(-1);
-    if (last) {
-      return { targetId: last, position: "after", receiver };
-    }
-    return sameDocument ? undefined : { targetId: null, position: "after", receiver };
+    return this.isCurrentGap(destination, siblings) ? siblings : undefined;
   }
 
   /**
@@ -341,5 +408,33 @@ export class PageBlockDrag implements BlockDragAdapter {
       (destination.previousId === null || index > 0) &&
       (siblings[index] ?? null) === destination.nextId
     );
+  }
+
+  /**
+   * Checks the source attachment after a drag adapter has been mounted.
+   *
+   * Headless adapters may validate commands before their first attachment.
+   * Once attached, a released or expired source cannot initiate a move.
+   *
+   * @returns True for a current source or an adapter never attached to input.
+   * @throws Propagates source ownership checks.
+   */
+  private isSourceCurrent(): boolean {
+    return !this.wasAttached || Boolean(this.occurrence?.isCurrent());
+  }
+
+  /**
+   * Checks the source and any receiving occurrence after delegated document reads.
+   *
+   * @param scope - Foreign receiving attachment, omitted for a local move.
+   * @returns False if either captured input lifetime is no longer current.
+   * @throws Propagates source and receiving registration checks.
+   */
+  private isMoveCurrent(scope?: BlockDragTargetScope): boolean {
+    if (!this.isSourceCurrent()) {
+      return false;
+    }
+    const receiver = scope && crossDocumentPageRootControllers.getCurrent(scope);
+    return (!scope || Boolean(receiver?.isCurrent())) && this.isSourceCurrent();
   }
 }

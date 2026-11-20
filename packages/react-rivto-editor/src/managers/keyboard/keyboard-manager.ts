@@ -1,14 +1,10 @@
-import { KeyboardRuntime } from "@chulane/rivto-keyboard";
+import { KeyboardRuntime } from "@chulane/rivto-root";
 import type { RegistrationOwner } from "../extensions/types";
 import type { EventManager } from "../events/event-manager";
 import type { EditorEventHandler } from "../events/types";
 import type { PanelRegistration } from "../../panels/types";
 import type { KeyboardEditorEvent } from "./keyboard-editor-event";
-import type {
-  KeyboardBindingSnapshot,
-  KeyboardEventDefinition,
-  KeymapOverrides,
-} from "./keyboard-types";
+import type { KeyboardBindingSnapshot, KeyboardEventDefinition, KeymapOverrides } from "./types";
 import { ReactKeyboardTransport } from "./keyboard-transport";
 
 /** Owns semantic keyboard bindings while EventManager owns native transport. */
@@ -39,18 +35,29 @@ export class KeyboardManager extends KeyboardRuntime<
    *
    * @param definition - Stable ID, default keys, filters, and composition policy.
    * @param listener - Handler returning true when it claims the native event.
-   * @param owner - Optional panel restricting dispatch to its currently mounted root.
+   * @param owner - Optional panel restricting dispatch to its current input registration.
    * @returns Idempotent disposer which releases the keyboard ID for reuse.
    */
   register(
     definition: KeyboardEventDefinition,
     listener: EditorEventHandler<KeyboardEditorEvent>,
-    owner?: Pick<PanelRegistration, "id" | "getRoot">,
+    owner?: Pick<PanelRegistration, "id" | "inputRoot">,
   ): () => void {
     const id = definition.id.trim();
-    return this.registerBinding(definition, listener, {
+    /**
+     * Checks the input registration before and after action eligibility runs.
+     *
+     * @param event - Keyboard context captured by the host transport.
+     * @returns Whether the original registration is active and still belongs to the owner.
+     */
+    const isCurrent = (event: KeyboardEditorEvent): boolean =>
+      event.inputRegistration.isCurrent(event.inputRoot) &&
+      event.inputRoot.isAttached() &&
+      event.inputRegistration.isCurrent(event.inputRoot) &&
+      (!owner || owner.inputRoot === event.inputRoot);
+    return this.registerBinding(definition, (event) => isCurrent(event) && listener(event), {
       id: owner ? `${owner.id}:${id}` : id,
-      accepts: owner ? (event) => owner.getRoot() === event.root : undefined,
+      accepts: isCurrent,
     });
   }
 }

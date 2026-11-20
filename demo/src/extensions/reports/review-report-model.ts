@@ -14,7 +14,7 @@ import type {
   EditorElementNode,
   EditorElementInput,
   EditorSnapshot,
-  DocumentEditorAPI,
+  DocumentEditorOperations,
 } from "@chulane/rivto";
 import { z } from "zod";
 
@@ -232,7 +232,7 @@ function copyElementForReport(element: EditorElementNode): EditorElementNode {
  * @returns Detached snapshot plus report placement from the same live read.
  */
 export function captureBlockReview(
-  editor: DocumentEditorAPI,
+  editor: DocumentEditorOperations,
   reviewId: string,
   blocksAbove: number,
   blocksBelow: number,
@@ -312,7 +312,7 @@ export function captureBlockReview(
  * @returns Detached loadable schema-v9 snapshot.
  */
 export function captureElementReviewSnapshot(
-  editor: DocumentEditorAPI,
+  editor: DocumentEditorOperations,
   reviewId: string,
   elementsAbove: number,
   elementsBelow: number,
@@ -398,7 +398,7 @@ export function captureElementReviewSnapshot(
 
 /** Builds complete canvas roots for the captured subset, promoting children whose parents were omitted. */
 function createReviewSnapshot(
-  editor: DocumentEditorAPI,
+  editor: DocumentEditorOperations,
   blocks: EditorBlock[],
   elements: EditorElementNode[],
 ): EditorSnapshot {

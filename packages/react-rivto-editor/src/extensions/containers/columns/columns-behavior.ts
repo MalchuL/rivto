@@ -12,10 +12,8 @@ import type { BlockBehaviorAvailabilityContext } from "../../../block-behaviors/
  *
  * @module
  */
-import type { DocumentEditorAPI } from "@chulane/rivto";
 import { ContainerBlockBehavior } from "../../../block-behaviors/container-block-behavior";
-import type { BlockBehaviorContext } from "../../../block-behaviors/types";
-import type { ReactPanelApi } from "../../../panels/types";
+import type { BlockRelocationDocument, BlockSnapshotContext } from "../../../block-behaviors/types";
 
 export const COLUMNS_BLOCK_TYPE = "columns";
 export const COLUMNS_COLUMN_BLOCK_TYPE = "columns-column";
@@ -27,15 +25,15 @@ export const COLUMNS_COLUMN_BLOCK_TYPE = "columns-column";
  * When every column of a board is removed, children are placed after the board
  * so they stay in the document instead of being deleted with the shells.
  *
- * @param editor - Core editor owning the block tree.
+ * @param documentEditor - Document block operations, including parents outside the panel.
  * @param columnIds - Column identifiers whose children must survive.
  * @returns Nothing; callers delete the empty shells afterwards.
+ * @throws Propagates document hierarchy reads and block movement failures.
  */
 export function relocateColumnContents(
-  editor: ReactPanelApi | DocumentEditorAPI,
+  documentEditor: BlockRelocationDocument,
   columnIds: readonly string[],
 ): void {
-  const documentEditor = "editor" in editor ? editor.document : editor;
   const unique = [...new Set(columnIds)].filter(
     (id) => documentEditor.blocks.getBlockNode(id)?.type === COLUMNS_COLUMN_BLOCK_TYPE,
   );
@@ -155,12 +153,12 @@ export class ColumnsColumnBehavior extends ContainerBlockBehavior {
    * @param ids - Complete structural selection about to be removed.
    * @returns `"unhandled"` so the shared deletion path still removes the shells.
    */
-  onStructuralDelete(context: BlockBehaviorContext, ids: readonly string[]): BlockBehaviorOutcome {
+  onStructuralDelete(context: BlockSnapshotContext, ids: readonly string[]): BlockBehaviorOutcome {
     const columnIds = ids.filter(
       (id) => context.reactPanel.blocks.getBlockNode(id)?.type === context.block.type,
     );
     if (columnIds.length) {
-      relocateColumnContents(context.reactPanel, columnIds);
+      relocateColumnContents(context.reactPanel.document, columnIds);
     }
     return "unhandled";
   }

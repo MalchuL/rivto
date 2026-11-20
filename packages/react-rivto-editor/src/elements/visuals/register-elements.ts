@@ -1,6 +1,6 @@
 import { VISUAL_TOOL_GROUPS, VISUAL_ELEMENT_TYPES } from "./constants";
 import { RECTANGLE_REMEMBERED_PROPERTIES } from "./remembered-properties";
-import type { ReactEditorApi } from "../../editor/types";
+import type { ReactEditorExtensionApi } from "../../editor/types";
 import type { ReactElementRegistration } from "../../managers/elements/types";
 import {
   connectorClipboardConverter,
@@ -128,7 +128,7 @@ function styleDefaults(group: string): NonNullable<ReactElementRegistration["beh
  * @throws If a type or converter conflicts, the owner is inactive, or installation fails;
  * completed registrations are rolled back before the error propagates.
  */
-export function registerVisualElements(editor: ReactEditorApi): () => void {
+export function registerVisualElements(editor: ReactEditorExtensionApi): () => void {
   const defaults = createEdgelessDefaults();
   const shapes = styleDefaults(VISUAL_TOOL_GROUPS.shapes);
   const text = styleDefaults(VISUAL_TOOL_GROUPS.text);

@@ -1,5 +1,5 @@
 import { PageBlockSelectionBoundary } from "../../../surfaces/page/page-selection-boundary";
-import type { ReactEditorApi } from "../../../editor/types";
+import type { ReactEditorExtensionApi } from "../../../editor/types";
 
 /**
  * Adds explicit whole-block selection to every editor surface.
@@ -17,6 +17,6 @@ import type { ReactEditorApi } from "../../../editor/types";
  * @param reactEditor - Editor owning the keyboard and pointer registrations.
  * @returns Cleanup is owned by the editor's surface registration lifecycle.
  */
-export function registerBlockSelection(reactEditor: ReactEditorApi): () => void {
+export function registerBlockSelection(reactEditor: ReactEditorExtensionApi): () => void {
   return reactEditor.surfaces.registerEditorWrapper(PageBlockSelectionBoundary);
 }

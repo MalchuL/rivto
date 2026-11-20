@@ -1,4 +1,5 @@
-import { BlockItem, type BlockWrapperProps } from "../src";
+import { useCallback } from "react";
+import { BlockItem, type BlockItemInputBinding, type BlockWrapperProps } from "../src";
 
 /**
  * Wraps the existing shell with an element owning its own pointer handler.
@@ -13,20 +14,42 @@ import { BlockItem, type BlockWrapperProps } from "../src";
  * @returns An ordinary counter-aware wrapper with its own pointer-capture feedback.
  */
 export function DemoBlockWrapper({ block, children }: BlockWrapperProps) {
-  return (
-    <BlockItem
-      block={block}
-      data-demo-wrapper={block.id}
-      onPointerDownCapture={(event) => {
-        const target = event.target;
-        if (
-          target instanceof Element &&
-          target.closest("[data-demo-wrapper]") === event.currentTarget
-        ) {
-          event.currentTarget.dataset.demoWrapperPointer = "true";
+  /**
+   * Marks only the nearest wrapper during normalized pointer capture.
+   *
+   * @param identity - Opaque identity of this mounted wrapper.
+   * @param events - Region input registration borrowed from the editor.
+   * @returns Cleanup releasing the observation and its presentation marker.
+   * @throws Propagates registration, marker, and cleanup failures.
+   */
+  const bindInput = useCallback<BlockItemInputBinding>((identity, events) => {
+    let restoreMarker: (() => void) | undefined;
+    const release = events.observeRegion(identity, "pointerdown", "capture", (input, region) => {
+      if (
+        input.target?.isElement?.() &&
+        input.target.getNearestAncestorIdentity?.("[data-demo-wrapper]") === identity
+      ) {
+        const previous = restoreMarker;
+        restoreMarker = region.setTemporaryAttribute("data-demo-wrapper-pointer", "true");
+        previous?.();
+      }
+    });
+    return () => {
+      const errors: unknown[] = [];
+      for (const cleanup of [release, restoreMarker]) {
+        try {
+          cleanup?.();
+        } catch (error) {
+          errors.push(error);
         }
-      }}
-    >
+      }
+      if (errors.length) {
+        throw new AggregateError(errors, "Demo wrapper input cleanup failed");
+      }
+    };
+  }, []);
+  return (
+    <BlockItem block={block} data-demo-wrapper={block.id} bindInput={bindInput}>
       {children}
     </BlockItem>
   );

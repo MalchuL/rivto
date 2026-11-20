@@ -14,8 +14,9 @@ import { scheduleBlockFocus } from "./utils/focus-ops";
 import type {
   BlockBehavior,
   BlockBehaviorAvailabilityContext,
-  BlockBehaviorContext,
+  BlockKeyboardContext,
   BlockBehaviorOutcome,
+  ContainerWritingContext,
 } from "./types";
 import type { KeyboardSelectionTarget } from "../managers";
 
@@ -40,7 +41,7 @@ export abstract class ContainerBlockBehavior implements BlockBehavior {
    * @param target - Keyboard target; unused once emptiness is confirmed.
    * @returns `"handled"` when a child was inserted, otherwise `"unhandled"`.
    */
-  onSplit(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
+  onSplit(context: BlockKeyboardContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
     if (context.block.children.length > 0) {
       return "unhandled";
     }
@@ -56,12 +57,16 @@ export abstract class ContainerBlockBehavior implements BlockBehavior {
    * DOM focus is restored after React renders the child.
    * When called by onSplit the container is empty, so the appended child is also first.
    *
-   * @param context - Container snapshot, receiving editor view, and its DOM root.
-   * @returns "handled" after insertion and scheduling focus at offset zero.
+   * @param context - Container snapshot, receiving editor view, and originating attachment.
+   * @returns "handled" after insertion and scheduling focus at offset zero, or "unhandled" if the originating attachment is stale.
    * @throws If a delegated block update, insertion, selection change, or focus scheduling fails.
    */
-  appendWritingBlock(context: BlockBehaviorContext): BlockBehaviorOutcome {
-    const { reactPanel, block, root } = context;
+  appendWritingBlock(context: ContainerWritingContext): BlockBehaviorOutcome {
+    const { reactPanel, block, inputRoot } = context;
+    if (inputRoot && !inputRoot.isAttached()) {
+      return "unhandled";
+    }
+    const attachment = inputRoot ?? reactPanel.inputRoot;
     let child: EditorBlock | undefined;
     reactPanel.batchUpdates(() => {
       reactPanel.blocks.updateBlock(block.id, { listProps: { collapsed: false } });
@@ -71,7 +76,7 @@ export abstract class ContainerBlockBehavior implements BlockBehavior {
       );
       reactPanel.selection.set(createCaretSelection(child.id, 0));
     });
-    scheduleBlockFocus(reactPanel, root, child!.id, 0);
+    scheduleBlockFocus(reactPanel, child!.id, 0, attachment, context.inputRegistration);
     return "handled";
   }
 }

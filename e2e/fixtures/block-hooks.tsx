@@ -2,6 +2,8 @@ import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { ReactPanelContext } from "../../packages/react-rivto-editor/src/components/editor-panel/react-panel-context";
+import { EditorRootContext } from "../../packages/react-rivto-editor/src/components/editor-panel/editor-root-context";
+import { getBrowserElementIdentity } from "@chulane/rivto-root/browser";
 import {
   useBlockNode,
   useBlockOperations,
@@ -23,6 +25,7 @@ export async function run(): Promise<void> {
   const subscriptions = editors.map(() => new Map<string, number>());
   let commands!: BlockOperations;
   let renders = 0;
+  let mountedEditor: number | undefined;
   const check = (condition: unknown, message: string) => {
     if (!condition) {
       throw new Error(message);
@@ -44,6 +47,13 @@ export async function run(): Promise<void> {
   }
   const render = (editorIndex: number, id: string, text: boolean, domKey = 0) => {
     const reactPanel = editors[editorIndex]!;
+    if (mountedEditor !== editorIndex) {
+      if (mountedEditor !== undefined) {
+        editors[mountedEditor]!.setRoot(null);
+      }
+      reactPanel.setRoot(host);
+      mountedEditor = editorIndex;
+    }
     flushSync(() =>
       root.render(
         createElement(
@@ -51,7 +61,17 @@ export async function run(): Promise<void> {
           {
             value: { reactPanel, documentId: reactPanel.editor.getDocument().id },
           },
-          text ? createElement(Text, { id, domKey }) : createElement(Commands, { id }),
+          createElement(
+            EditorRootContext.Provider,
+            {
+              value: {
+                identity: getBrowserElementIdentity(host),
+                ref: reactPanel.setRoot,
+                mountedRoot: reactPanel.mountedRoot,
+              },
+            },
+            text ? createElement(Text, { id, domKey }) : createElement(Commands, { id }),
+          ),
         ),
       ),
     );

@@ -5,7 +5,7 @@ import { defaultWritingBlockExtension, listShortcutsExtension } from "../../buil
 import { createTestCoreEditor, createTestReactEditor } from "../../../../test-utils";
 import { createBlockFactory } from "../../../../block-factories";
 import { createCaretSelection } from "@chulane/rivto";
-import { createBlockBehaviorContext } from "../../../../block-behaviors/utils/context";
+import { createBlockSnapshotContext } from "../../../../block-behaviors/utils/context";
 import { firstKeyboardTarget } from "../../../../managers/keyboard/selection";
 
 const originalFrame = globalThis.requestAnimationFrame;
@@ -87,7 +87,7 @@ test.each(
     const source = panel.blocks.getBlock(inserted.id)!;
     core.history.clear();
     const selection = createCaretSelection(source.id, 2);
-    const context = createBlockBehaviorContext(panel, source.id, {} as HTMLElement, selection)!;
+    const context = createBlockSnapshotContext(panel, source.id, selection)!;
     expect(
       core.history.batchUpdates(() =>
         panel.editor.blockBehaviors.dispatch("onSplit", context, firstKeyboardTarget(selection)!),

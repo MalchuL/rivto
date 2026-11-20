@@ -1,4 +1,4 @@
-import type { ReactEditorApi } from "../../../editor/types";
+import type { ReactEditorExtensionApi } from "../../../editor/types";
 import { restoreElementChildren } from "../../../elements/clipboard-element-props";
 import type {
   ConvertedClipboardElements,
@@ -30,7 +30,7 @@ import { createEdgelessSelection, findEdgelessRuntime } from "../selection/edgel
 /** Canvas-specific clipboard paste strategy. */
 export class ElementPasteStrategy implements PasteStrategy {
   /** Document managers used by both the installed strategy and its panel-bound operations. */
-  get reactEditor(): ReactEditorApi {
+  get reactEditor(): ReactEditorExtensionApi {
     return "editor" in this.editor ? this.editor.editor : this.editor;
   }
   /**
@@ -49,7 +49,7 @@ export class ElementPasteStrategy implements PasteStrategy {
    * @param created - Records created by this paste, including generated cards and separators, for failure cleanup.
    */
   constructor(
-    private readonly editor: ReactPanelApi | ReactEditorApi,
+    private readonly editor: ReactPanelApi | ReactEditorExtensionApi,
     private readonly converted?: ConvertedClipboardElements,
     private readonly created?: CreatedClipboardRecords,
   ) {}

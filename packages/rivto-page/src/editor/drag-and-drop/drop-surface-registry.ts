@@ -1,20 +1,13 @@
+import type { BlockDragHit, BlockDropSurfaceEntry, BlockDropSurfaceRoot } from "./types";
+
 /** Attribute identifying mounted receivers independently of the source drag engine. */
 export const DROP_SURFACE_ATTRIBUTE = "data-rivto-cross-document-page-root";
 const DROP_SURFACE_SELECTOR = `[${DROP_SURFACE_ATTRIBUTE}]`;
 
-/** The registry borrows DOM identity; it never owns document data or commands. */
-export interface DropSurface {
-  readonly root: HTMLElement;
-}
-
-/** One registration identity, retained even when the same controller is registered twice. */
-interface DropSurfaceEntry<T extends DropSurface> {
-  readonly controller: T;
-}
-
-/** Routes native hits between independently registered drag engines and document views. */
-export class DropSurfaceRegistry<T extends DropSurface> {
-  private readonly entries = new WeakMap<HTMLElement, DropSurfaceEntry<T>>();
+/** Routes opaque hits between independently registered drag engines and document views. */
+export class DropSurfaceRegistry<T extends object> {
+  private readonly entries = new WeakMap<object, BlockDropSurfaceEntry<T>>();
+  private readonly registrations = new WeakMap<object, BlockDropSurfaceEntry<T>>();
 
   /**
    * Installs one receiving attachment without subscribing to input or owning its controller.
@@ -23,30 +16,67 @@ export class DropSurfaceRegistry<T extends DropSurface> {
    * protects it from an older disposer. A failed marker write leaves the registry
    * unchanged. Receivers retain their own cancellation and feedback lifecycle.
    *
-   * @param controller - Borrowed receiver and its existing DOM root.
+   * @param root - Root capability for the mounted receiving occurrence.
+   * @param controller - Borrowed receiver identity.
    * @returns Idempotent disposer removing only this attachment and its DOM marker.
-   * @throws If the DOM marker cannot be written or removed.
+   * @throws If the Root lacks a current identity, changes during setup, or its marker cleanup fails.
    */
-  register(controller: T): () => void {
-    const entry = { controller };
-    controller.root.setAttribute(DROP_SURFACE_ATTRIBUTE, "true");
-    this.entries.set(controller.root, entry);
-    return () => {
-      if (this.entries.get(controller.root) === entry) {
-        this.entries.delete(controller.root);
-        controller.root.removeAttribute(DROP_SURFACE_ATTRIBUTE);
+  register(root: BlockDropSurfaceRoot, controller: T): () => void {
+    const identity = root.getElementIdentity?.();
+    if (!identity || !root.isAttached()) {
+      throw new Error("Drop surface requires an attached Root identity");
+    }
+    const releaseMarker = root.setTemporaryAttribute(DROP_SURFACE_ATTRIBUTE, "true");
+    let current: boolean;
+    try {
+      current = root.isAttached() && root.getElementIdentity?.() === identity && root.isAttached();
+    } catch (error) {
+      try {
+        releaseMarker();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Drop surface registration failed");
       }
+      throw error;
+    }
+    if (!current) {
+      const error = new Error("Drop surface Root changed during registration");
+      try {
+        releaseMarker();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Drop surface registration failed");
+      }
+      throw error;
+    }
+    const entry = { controller, root, identity };
+    this.entries.set(identity, entry);
+    this.registrations.set(controller, entry);
+    return () => {
+      if (this.registrations.get(controller) === entry) {
+        this.registrations.delete(controller);
+      }
+      if (this.entries.get(identity) === entry) {
+        this.entries.delete(identity);
+      }
+      releaseMarker();
     };
   }
 
   /**
-   * Reads the current attachment for command-time identity validation.
+   * Resolves a receiver only while its exact registration remains connected and current.
    *
-   * @param root - Exact receiving DOM root.
-   * @returns Borrowed receiver, or undefined after removal or before registration.
+   * @param controller - Previously returned receiver identity.
+   * @returns The registered receiver, or undefined after replacement, release or disconnection.
+   * @throws Propagates Root connectivity and attachment-check failures.
    */
-  get(root: HTMLElement): T | undefined {
-    return this.entries.get(root)?.controller;
+  getCurrent(controller: object): T | undefined {
+    const entry = this.registrations.get(controller);
+    if (!entry || this.entries.get(entry.identity) !== entry || !entry.root.isConnected()) {
+      return undefined;
+    }
+    return this.entries.get(entry.identity) === entry &&
+      this.registrations.get(controller) === entry
+      ? entry.controller
+      : undefined;
   }
 
   /**
@@ -58,23 +88,21 @@ export class DropSurfaceRegistry<T extends DropSurface> {
    * mounted regions outside the nested occurrence. Only hit ancestors are read;
    * the registry does not maintain a document tree or rectangle cache.
    *
-   * @param sourceRoot - Source occurrence, providing the browser document; null disables resolution.
-   * @param pointer - Viewport X and Y coordinates in CSS pixels.
-   * @param nativeHit - Optional connected hit from the same browser document.
+   * The caller supplies a hit already checked against its source document; this
+   * registry never performs a second hit test.
+   * A receiver registered again on another root is resolved only at its latest
+   * registration, even before the old root's disposer runs.
+   *
+   * @param hit - Current connected browser hit, or undefined outside a surface.
    * @returns Closest registered receiver, or null outside registered surfaces.
-   * @throws Propagates native hit-testing or DOM traversal failures.
+   * @throws Propagates hit traversal and Root attachment-check failures.
    */
-  resolve(
-    sourceRoot: HTMLElement | null,
-    pointer: { readonly x: number; readonly y: number },
-    nativeHit?: Element,
-  ): T | null {
-    const document = sourceRoot?.ownerDocument;
-    const hit =
-      nativeHit?.isConnected && nativeHit.ownerDocument === document
-        ? nativeHit
-        : document?.elementFromPoint(pointer.x, pointer.y);
-    const root = hit?.closest<HTMLElement>(DROP_SURFACE_SELECTOR);
-    return root ? (this.get(root) ?? null) : null;
+  resolve(hit?: BlockDragHit): T | null {
+    const identity = hit?.getNearestAncestorIdentity(DROP_SURFACE_SELECTOR);
+    const entry = identity ? this.entries.get(identity) : undefined;
+    if (!entry || this.registrations.get(entry.controller) !== entry) {
+      return null;
+    }
+    return this.getCurrent(entry.controller) ?? null;
   }
 }

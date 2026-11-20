@@ -1,40 +1,9 @@
 import { useCanvasToolGesture } from "@chulane/rivto-edgeless/react";
-import { useCallback } from "react";
-import type {
-  EdgelessTool,
-  EdgelessToolPointer,
-} from "../../../../managers/edgeless-tools/edgeless-tool";
-import type { EdgelessToolContext } from "../../../../managers/edgeless-tools/edgeless-tool-context";
-import { canvasPoint } from "../../../../elements/visuals/utils/canvas-point";
-
-/**
- * Converts browser pointer input into the tool's canvas-space contract.
- *
- * @param event - Native viewport coordinates and pointer/modifier metadata.
- * @param root - Receiving canvas root, including its snapping preferences.
- * @param zoom - Canvas scale used for screen-constant snapping distance.
- * @returns Detached normalized input without a DOM event or target reference.
- */
-export function toolPointer(
-  event: Pick<PointerEvent, "clientX" | "clientY" | "pointerId" | "button" | "shiftKey" | "altKey">,
-  root: HTMLElement | null,
-  zoom: number,
-): EdgelessToolPointer {
-  return {
-    point: canvasPoint(event, root, zoom),
-    pointerId: event.pointerId,
-    button: event.button,
-    shiftKey: event.shiftKey,
-    zoom,
-    snapping: {
-      snapToGrid: root?.dataset.edgelessSnap !== "false",
-      alignObjects: root?.dataset.edgelessAlign !== "false",
-      grid: Number(root?.dataset.edgelessGrid) || undefined,
-      threshold: 8 / Math.max(zoom, 0.01),
-      disabled: event.altKey,
-    },
-  };
-}
+import { useCallback, useRef } from "react";
+import { subscribeToolGestureCancellation } from "./tool-gesture-cancellation";
+import type { CanvasViewportCoordinates } from "@chulane/rivto-edgeless/react";
+import type { ToolGestureOptions } from "./types";
+import { toolPointer } from "./tool-pointer";
 
 /**
  * Binds the canvas pointer adapter to Rivto keyboard routing and panel deactivation.
@@ -42,43 +11,39 @@ export function toolPointer(
  * Tool implementations own geometry and preview state. This adapter only normalizes
  * input and supplies Escape/deactivation policies; it never inspects tool IDs.
  *
- * @param props - Surface context, active instance, root and viewport scale.
- * @returns Pointer handlers for the common capture layer.
+ * @param props - Surface context, active instance, viewport and scale.
+ * @param props.tools - Panel cancellation capabilities borrowed from the surface.
+ * @param props.tool - Active tool receiving normalized input.
+ * @param props.viewport - Live snapping policy.
+ * @param props.coordinates - Coordinate capability bound to the current attachment.
+ * @param props.zoom - Viewport scale for screen-constant snapping distance.
+ * @returns The tool receives input from its capture layer until the subscription is released.
  */
-export function useToolGesture({
-  tools,
-  tool,
-  root,
-  zoom,
-}: {
-  readonly tools: EdgelessToolContext;
-  readonly tool?: EdgelessTool;
-  readonly root: HTMLElement | null;
-  readonly zoom: number;
-}) {
+export function useToolGesture({ tools, tool, viewport, coordinates, zoom }: ToolGestureOptions) {
+  const activeCoordinates = useRef<Pick<CanvasViewportCoordinates, "clientToWorld"> | null>(null);
   const subscribeCancellation = useCallback(
     (cancel: () => boolean, isCaptured: () => boolean) => {
-      const stopKeyboard = tools.reactPanel.keyboard.register(
-        {
-          id: "edgeless.gesture-cancel",
-          keys: ["Escape"],
-          mode: "edgeless",
-          priority: 40,
-          when: isCaptured,
-        },
-        cancel,
-      );
-      const stopDeactivate = tools.reactPanel.subscribeDeactivation(cancel);
+      const release = subscribeToolGestureCancellation(tools, cancel, isCaptured);
+      activeCoordinates.current = coordinates;
       return () => {
-        stopKeyboard();
-        stopDeactivate();
+        if (activeCoordinates.current === coordinates) {
+          activeCoordinates.current = null;
+        }
+        release();
       };
     },
-    [tools],
+    [tools, coordinates],
   );
-  return useCanvasToolGesture({
+  useCanvasToolGesture({
     tool,
-    normalize: (event) => toolPointer(event, root, zoom),
+    events: viewport?.events ?? null,
+    captureSelector: "[data-edgeless-tool-capture]",
+    normalize: (event) => {
+      if (!coordinates || activeCoordinates.current !== coordinates) {
+        return undefined;
+      }
+      return toolPointer(event, viewport, coordinates, zoom);
+    },
     subscribeCancellation,
   });
 }

@@ -1,6 +1,6 @@
 import { useContext } from "react";
 import { BlockEditorContext } from "../components/block-editor/block-editor-context";
-import type { BlockEditorApi } from "../../editor/block-editor-api";
+import type { BlockEditorApi } from "../../editor/types";
 
 /**
  * Reads the existing controller of the nearest autonomous block editor.

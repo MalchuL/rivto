@@ -1,7 +1,7 @@
 export {
   parseShortcut,
   matchesShortcut,
-  shortcutFromKeyboardEvent,
+  formatKeyboardShortcut,
   resolvePrimaryModifier,
   type ParsedShortcut,
-} from "@chulane/rivto-keyboard";
+} from "@chulane/rivto-root";

@@ -7,7 +7,7 @@ import {
 import { createReactEditor } from "./editor/react-editor";
 import { insertBlockElementSeparator } from "./elements/block-element-projection";
 import { defaultWritingBlockExtension } from "./extensions/built-ins/built-ins";
-import { createBlockBehaviorContext } from "./block-behaviors/utils/context";
+import { createBlockSnapshotContext } from "./block-behaviors/utils/context";
 import { DefaultBlockBehavior } from "./block-behaviors/default-block-behavior";
 import type {
   BlockBehavior,
@@ -136,7 +136,7 @@ test("custom reset refusal belongs to the existing block behavior", async () => 
     });
     const id = panel.blocks.insertBlock({ type: "image", props: { image: "keep" } }).id;
     const selection = createCaretSelection(id, 0);
-    const context = createBlockBehaviorContext(panel, id, {} as HTMLElement, selection)!;
+    const context = createBlockSnapshotContext(panel, id, selection)!;
     expect(
       panel.editor.blockBehaviors.dispatch(
         "onResetEmpty",
@@ -173,7 +173,7 @@ test("reset skips host predicates when text is nonempty", async () => {
   try {
     const id = panel.blocks.insertBlock({ type: "paragraph", content: "keep" }).id;
     const selection = createCaretSelection(id, 0);
-    const context = createBlockBehaviorContext(panel, id, {} as HTMLElement, selection)!;
+    const context = createBlockSnapshotContext(panel, id, selection)!;
     expect(new DefaultBlockBehavior().onResetEmpty(context, firstKeyboardTarget(selection)!)).toBe(
       "unhandled",
     );
@@ -219,11 +219,7 @@ test.each(["image", "paragraph"])(
       }).id;
       const before = panel.blocks.getBlockNode(id)!;
       const selection = createCaretSelection(id, 0);
-      const root = {
-        querySelector: () => null,
-        querySelectorAll: () => [],
-      } as unknown as HTMLElement;
-      const context = createBlockBehaviorContext(panel, id, root, selection)!;
+      const context = createBlockSnapshotContext(panel, id, selection)!;
       expect(
         new DefaultBlockBehavior().onResetEmpty(context, firstKeyboardTarget(selection)!),
       ).toBe("handled");

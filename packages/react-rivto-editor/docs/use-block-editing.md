@@ -34,7 +34,7 @@ function TextBlock({ blockId }: { blockId: string }) {
 Put the attributes on the actual editable `<div>`, not on its outer layout
 wrapper. They provide:
 
-- the contenteditable ref;
+- a callback ref that identifies the mounted contenteditable without exposing its element;
 - `contentEditable="plaintext-only"`;
 - input and IME composition handlers;
 - `data-block-selection-anchor`, which permits a selection gesture to begin;
@@ -47,6 +47,18 @@ then both try to own the same text node.
 Properties such as `className`, ARIA attributes, and `spellCheck` can be placed
 beside the spread. Do not replace the returned `ref`, `onInput`,
 `onCompositionStart`, or `onCompositionEnd`; they perform synchronization.
+These handlers are intended for React's attribute spread; calling them directly
+without a React event does not apply an edit.
+
+When an edit must be grouped with other document changes, pass
+`{ runTextInput: (apply) => { /* run apply synchronously in the transaction */ } }`
+as the second argument to `useBlockEditing`. The callback must call `apply`
+synchronously. It runs for input and composition end, so related changes can
+share the text update's transaction without receiving a browser event.
+
+Spread `preventTextEditingAttributes` onto nested interactive controls. Its
+pointer callback is delivered by React and does not expose a browser event; a
+direct call without a React delivery does nothing.
 
 ## Contentless or control blocks
 

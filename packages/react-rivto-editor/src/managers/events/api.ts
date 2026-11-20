@@ -1,6 +1,5 @@
-import type { DOMEventDefinition, DOMEventName, DOMEventTarget } from "./dom-types";
+import type { DOMEventDefinition, DOMEventName, DOMEventTarget, EditorEventHandler } from "./types";
 import type { EditorEvent } from "./editor-event";
-import type { EditorEventHandler } from "./types";
 
 /** Event registrations for one EditorPanel. */
 export interface PanelEventsApi {
@@ -15,10 +14,7 @@ export interface PanelEventsApi {
    * @returns Idempotent function that removes the registration before panel cleanup.
    * @throws If the ID is empty, already registered in this panel, or the runtime is destroyed.
    */
-  register<
-    Target extends DOMEventTarget = "surface",
-    Type extends DOMEventName<Target> = DOMEventName<Target>,
-  >(
+  register<Target extends DOMEventTarget = "surface", Type extends DOMEventName = DOMEventName>(
     definition: DOMEventDefinition<Target, Type>,
     listener: EditorEventHandler<EditorEvent<Target, Type>>,
   ): () => void;

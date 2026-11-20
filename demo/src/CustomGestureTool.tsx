@@ -2,7 +2,7 @@ import {
   EdgelessCreationTool,
   type EdgelessToolOptions,
   type EdgelessToolPointer,
-  type ReactEditorApi,
+  type ReactEditorExtensionApi,
 } from "@chulane/rivto-react";
 
 /** Fixture identities deliberately unrelated to built-in tool and group names. */
@@ -126,7 +126,7 @@ class BadgeGestureTool extends EdgelessCreationTool {
  * @param editor - Fixture editor with the ordinary badge element already registered.
  * @returns Cleanup removing the tool and its settings group.
  */
-export function registerCustomGesture(editor: ReactEditorApi): () => void {
+export function registerCustomGesture(editor: ReactEditorExtensionApi): () => void {
   const releaseGroup = editor.edgelessToolbar.registerGroup({
     id: CUSTOM_GESTURE.group,
     title: "Host tools",

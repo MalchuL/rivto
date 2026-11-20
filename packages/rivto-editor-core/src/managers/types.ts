@@ -100,6 +100,13 @@ export interface BlockManagerApi {
   hasChildren(id: string): boolean;
   /** @param id - Block ID. @returns Parent ID, null, or undefined. */
   getParentId(id: string): string | null | undefined;
+  /**
+   * Resolves current document parents for placed block identities.
+   *
+   * @param ids - Block identities to resolve; duplicates are ignored.
+   * @returns Parent IDs keyed by block ID, with null for roots and missing IDs omitted.
+   */
+  getParentIds(ids: readonly string[]): ReadonlyMap<string, string | null>;
   /** @param id - Block ID. @returns True when the block exists and has no parent. */
   isRootBlock(id: string): boolean;
   /** @param block - Creation input. @param destination - Actual parent and optional next sibling. @returns Complete persisted block. */

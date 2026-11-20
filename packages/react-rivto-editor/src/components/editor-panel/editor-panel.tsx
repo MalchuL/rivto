@@ -1,10 +1,10 @@
 import { ReactPanelProvider } from "./react-panel-provider";
 import type { EditorPanelProps } from "./types";
 import { ChildrenPanel, type PanelOptions } from "@chulane/rivto";
-import type { ReactEditorApi } from "../../editor/types";
+import type { ReactEditorPanelApi } from "../../editor/types";
 
 /** Creates core boundaries that display children of the selected block root. */
-function createChildrenPanel(editor: ReactEditorApi, options: PanelOptions) {
+function createChildrenPanel(editor: ReactEditorPanelApi, options: PanelOptions) {
   return new ChildrenPanel(editor, options);
 }
 

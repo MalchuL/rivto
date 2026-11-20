@@ -43,13 +43,13 @@ export function SelectionToolbar({
       aria-label="Selected objects"
     >
       {items.length > 1 && (
-        <EdgelessToolButton label="Group" icon="group" onClick={() => edgelessOperation.group()} />
+        <EdgelessToolButton label="Group" icon="group" onActivate={() => edgelessOperation.group()} />
       )}
       {items.some((id) => edgelessOperation.elements.getElementNode(id)?.type === "group") && (
         <EdgelessToolButton
           label="Ungroup"
           icon="ungroup"
-          onClick={() => edgelessOperation.ungroup()}
+          onActivate={() => edgelessOperation.ungroup()}
         />
       )}
       {items.length > 1 &&
@@ -58,7 +58,7 @@ export function SelectionToolbar({
             key={alignment}
             label={label}
             icon={icon}
-            onClick={() => edgelessOperation.align(alignment)}
+            onActivate={() => edgelessOperation.align(alignment)}
           />
         ))}
       {items.length > 2 && (
@@ -66,12 +66,12 @@ export function SelectionToolbar({
           <EdgelessToolButton
             label="Distribute horizontally"
             icon="distribute-h"
-            onClick={() => edgelessOperation.distribute("horizontal")}
+            onActivate={() => edgelessOperation.distribute("horizontal")}
           />
           <EdgelessToolButton
             label="Distribute vertically"
             icon="distribute-v"
-            onClick={() => edgelessOperation.distribute("vertical")}
+            onActivate={() => edgelessOperation.distribute("vertical")}
           />
         </>
       )}
@@ -80,7 +80,7 @@ export function SelectionToolbar({
           key={direction}
           label={`Move ${direction}`}
           icon={direction}
-          onClick={() => edgelessOperation.reorder(direction)}
+          onActivate={() => edgelessOperation.reorder(direction)}
         />
       ))}
     </div>

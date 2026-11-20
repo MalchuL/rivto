@@ -4,7 +4,7 @@ import {
   CanvasView,
   CanvasToolbar,
   CanvasEditorProvider,
-  useCanvasViewportLayers,
+  useCanvasViewportAttached,
 } from "@chulane/rivto-edgeless/react";
 import { useMemo, useState } from "react";
 
@@ -91,8 +91,8 @@ export function CanvasDemo() {
  * @returns Mount status that follows view detach and remount without rebuilding the editor.
  */
 function ViewportStatus() {
-  const layers = useCanvasViewportLayers();
-  return <output aria-label="Canvas attachment">{layers ? "mounted" : "detached"}</output>;
+  const attached = useCanvasViewportAttached();
+  return <output aria-label="Canvas attachment">{attached ? "mounted" : "detached"}</output>;
 }
 
 /** Source owner used by the capability controls. */

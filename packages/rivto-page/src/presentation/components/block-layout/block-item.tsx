@@ -1,6 +1,6 @@
-import type { BlockEditorNodeSnapshot, BlockListType } from "../../../adapter/types";
 import { useBlockRegion } from "./use-block-region";
-import type { BlockEditorTheme } from "../../block-editor-theme";
+import type { RegionIdentity } from "@chulane/rivto-root";
+import type { BlockItemContentProps, BlockItemFrameProps, BlockItemProps } from "./types";
 import {
   BlockChildPlacementContext,
   BlockItemIdentityContext,
@@ -8,19 +8,9 @@ import {
   BlockChildrenControlsContext,
 } from "./block-item-context";
 import { useBlockNode } from "../../hooks/use-block-node";
-import { forwardRef, useContext, useMemo, type ReactNode, type HTMLAttributes } from "react";
+import { forwardRef, useContext, useMemo } from "react";
 
-/** Native placement styles and controls around one already-rendered child block. */
-export interface BlockItemProps extends HTMLAttributes<HTMLDivElement> {
-  /** Native styles and the existing shared geometry/theme tokens. */
-  readonly style?: BlockEditorTheme;
-  /** Borrowed own-node snapshot for a decorator; omission observes the enclosing child placement. */
-  readonly block?: BlockEditorNodeSnapshot;
-  /** Places this block's left-top controls in row flow or outside it; omission inherits the child layout, or outside at the editor root. Descendants keep their own placement. */
-  readonly controlsPlacement?: "inside" | "outside";
-  /** JSX contents arranged by the owning layout; no recursive traversal is performed here. */
-  readonly children?: ReactNode;
-}
+export type { BlockItemProps } from "./types";
 
 /**
  * Provides optional item geometry without introducing another block identity.
@@ -40,13 +30,14 @@ export interface BlockItemProps extends HTMLAttributes<HTMLDivElement> {
  * @param props.controlsPlacement - Inside reserves row width for the left-top slot; outside keeps perimeter positioning. Omission inherits the child layout, or outside at the editor root. Applies only to this item's block.
  * @param props.className - Additional classes appended to the package item hook.
  * @param props.children - The already-rendered child and optional host controls.
- * @param ref - Optional reference for item measurement or control positioning.
+ * @param props.bindInput - Optional normalized input setup for this item's mounted identity.
+ * @param ref - Optional ref receiving the item's opaque identity for Root operations.
  * @returns A package-styled placement wrapper, not a second block shell.
  * @throws If outside BlockEditor, neither a block snapshot nor a BlockChildren
  * placement exists, or delegated node reads/subscriptions fail. Snapshot-backed
  * decorators also require the editor to register their mounted placement region.
  */
-export const BlockItem = forwardRef<HTMLDivElement, BlockItemProps>(function BlockItem(
+export const BlockItem = forwardRef<RegionIdentity, BlockItemProps>(function BlockItem(
   { block, className, children, ...attributes },
   ref,
 ) {
@@ -74,22 +65,17 @@ export const BlockItem = forwardRef<HTMLDivElement, BlockItemProps>(function Blo
   );
 });
 
-/** Native item geometry bound to the child supplying its list decoration. */
-interface BlockItemContentProps extends Omit<BlockItemProps, "block"> {
-  readonly blockId: string;
-}
-
 /**
  * Keeps list counters on the optional outer item without creating a second block identity.
  *
  * @param props - Child identity and native placement attributes.
  * @param props.blockId - Actual child whose list type is reflected on the placement wrapper.
- * @param ref - Optional item measurement ref.
+ * @param ref - Optional ref receiving the item's opaque identity for Root operations.
  * @returns A placement wrapper with the supplied child; only the outermost item
  * for this node owns its sibling counter.
  * @throws If outside BlockEditor or delegated node reads/subscriptions fail.
  */
-const BlockItemContent = forwardRef<HTMLDivElement, BlockItemContentProps>(
+const BlockItemContent = forwardRef<RegionIdentity, BlockItemContentProps>(
   function BlockItemContent({ blockId, className, children, ...attributes }, ref) {
     const node = useBlockNode(blockId);
     const snapshot = node.getSnapshot();
@@ -107,11 +93,6 @@ const BlockItemContent = forwardRef<HTMLDivElement, BlockItemContentProps>(
   },
 );
 
-/** Identity and list decoration already supplied by a snapshot owner. */
-interface BlockItemFrameProps extends BlockItemContentProps {
-  readonly listType?: BlockListType;
-}
-
 /**
  * Places a supplied child and marks only its outermost item as the counter owner.
  *
@@ -121,15 +102,17 @@ interface BlockItemFrameProps extends BlockItemContentProps {
  * @param props.controlsPlacement - Row placement for this block only; omission inherits the child layout, or outside at the editor root.
  * @param props.className - Host classes appended to the package placement class.
  * @param props.children - Already-rendered node or next decorator, rendered once.
- * @param ref - Optional reference to this item's own element.
+ * @param props.bindInput - Optional setup for normalized input on this mounted item.
+ * @param ref - Optional ref receiving this item's opaque identity.
  * @returns One placement div without reading or subscribing to document data.
+ * @throws Propagates region registration, input binding, and cleanup failures.
  */
-const BlockItemFrame = forwardRef<HTMLDivElement, BlockItemFrameProps>(function BlockItemFrame(
-  { blockId, listType, className, children, controlsPlacement, ...attributes },
+const BlockItemFrame = forwardRef<RegionIdentity, BlockItemFrameProps>(function BlockItemFrame(
+  { blockId, listType, className, children, controlsPlacement, bindInput, ...attributes },
   ref,
 ) {
   const outerItem = useContext(BlockItemIdentityContext);
-  const itemRef = useBlockRegion(blockId, "item", ref);
+  const itemRef = useBlockRegion(blockId, "item", ref, bindInput);
   const inheritedControls = useContext(BlockChildrenControlsContext);
   const placement = controlsPlacement ?? inheritedControls;
   const controls = useMemo(() => ({ blockId, placement }), [blockId, placement]);

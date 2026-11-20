@@ -15,7 +15,7 @@ import {
   TextPasteStrategy,
   validateClipboardBundle,
 } from "@chulane/rivto";
-import type { ReactEditorApi } from "../../editor/types";
+import type { ReactEditorExtensionApi } from "../../editor/types";
 import { blockIdsOf } from "../../elements/block-element-projection";
 import { blockElementClipboardConverter } from "../../elements/clipboard-converters";
 import { ElementPasteStrategy } from "../../extensions/built-ins/clipboard/element-paste-strategy";
@@ -25,6 +25,7 @@ import { panelClipboardDocument } from "./panel-clipboard-document";
 import type {
   BlockClipboardConverter,
   ClipboardCopyContext,
+  ClipboardPanel,
   ClipboardPasteContext,
   ConvertedClipboardElements,
   CreatedClipboardRecords,
@@ -55,7 +56,7 @@ export class ClipboardManager {
    */
   constructor(
     private readonly document: DocumentEditorAPI,
-    private readonly editor: ReactEditorApi,
+    private readonly editor: ReactEditorExtensionApi,
     extensions: RegistrationOwner,
   ) {
     this.converters = new ClipboardConverters(extensions);
@@ -98,7 +99,7 @@ export class ClipboardManager {
    */
   copy(
     selection?: Selection,
-    reactPanel?: ReactPanelApi,
+    reactPanel?: ClipboardPanel,
     operation: ClipboardCopyContext["operation"] = "copy",
   ): ClipboardBundle | undefined {
     const current = selection ?? reactPanel?.selection.get() ?? this.document.selection.get();
@@ -118,7 +119,7 @@ export class ClipboardManager {
    * @param reactPanel - Optional source panel supplied to converters.
    * @returns Detached partial-text bundle, or undefined when there is no text to copy.
    */
-  copyText(selection: Selection, reactPanel?: ReactPanelApi): ClipboardBundle | undefined {
+  copyText(selection: Selection, reactPanel?: ClipboardPanel): ClipboardBundle | undefined {
     const bundle = this.document.clipboard.copyText(selection);
     return bundle ? this.convertCopy(bundle, reactPanel) : undefined;
   }
@@ -152,7 +153,7 @@ export class ClipboardManager {
    */
   paste(
     input: Parameters<CoreClipboardManager["paste"]>[0] = {},
-    reactPanel: ReactPanelApi | ReactEditorApi = this.editor,
+    reactPanel: ReactPanelApi | ReactEditorExtensionApi = this.editor,
     operation: "paste" | "duplicate" = "paste",
   ): ReturnType<CoreClipboardManager["paste"]> {
     input ??= {};
@@ -288,7 +289,7 @@ export class ClipboardManager {
    */
   copyElements(
     ids: readonly string[],
-    reactPanel: ReactPanelApi | ReactEditorApi,
+    reactPanel: ClipboardPanel | ReactEditorExtensionApi,
     operation: ClipboardCopyContext["operation"] = "copy",
   ): ClipboardBundle {
     return this.convertCopy(
@@ -312,7 +313,7 @@ export class ClipboardManager {
    */
   convertElements(
     bundle: ClipboardBundle,
-    reactPanel: ReactPanelApi | ReactEditorApi,
+    reactPanel: ReactPanelApi | ReactEditorExtensionApi,
     blockIdMap: ReadonlyMap<string, string>,
     ids?: ReadonlyMap<string, string>,
     operation: "paste" | "duplicate" = "paste",
@@ -375,7 +376,7 @@ export class ClipboardManager {
     bundle: ClipboardBundle,
     input: ClipboardPasteInput,
     selection: Selection,
-    reactPanel: ReactPanelApi | ReactEditorApi,
+    reactPanel: ReactPanelApi | ReactEditorExtensionApi,
     operation: "paste" | "duplicate",
   ): {
     bundle: ClipboardBundle;
@@ -468,7 +469,7 @@ export class ClipboardManager {
   /** Applies copy hooks once to detached nodes, retaining source identities and hierarchy. */
   private convertCopy(
     source: ClipboardBundle,
-    reactPanel?: ReactPanelApi,
+    reactPanel?: ClipboardPanel,
     operation: ClipboardCopyContext["operation"] = "copy",
   ): ClipboardBundle {
     const bundle = structuredClone(source);
@@ -505,7 +506,7 @@ export class ClipboardManager {
    */
   private collectElements(
     ids: readonly string[],
-    reactPanel: ReactPanelApi | ReactEditorApi,
+    reactPanel: ClipboardPanel | ReactEditorExtensionApi,
   ): ClipboardBundle {
     const elements: EditorElementNode[] = [];
     const seen = new Set<string>();
@@ -557,7 +558,7 @@ export class ClipboardManager {
    */
   private pasteContext(
     bundle: ClipboardBundle,
-    reactPanel: ReactPanelApi | ReactEditorApi,
+    reactPanel: ReactPanelApi | ReactEditorExtensionApi,
     blockIdMap: ReadonlyMap<string, string>,
     elementIdMap: ReadonlyMap<string, string>,
     operation: "paste" | "duplicate",

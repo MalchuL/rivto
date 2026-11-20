@@ -6,7 +6,7 @@ import type {
   EdgelessToolPointer,
 } from "../../../../managers/edgeless-tools/edgeless-tool";
 import type { EdgelessBrush } from "../../../../elements/visuals/types";
-import type { CanvasPoint } from "../../../../elements/visuals/utils/canvas-point";
+import type { CanvasPoint } from "../../../../elements/visuals/utils/types";
 import { drawingDefaults } from "../../../../elements/visuals/creation-defaults";
 import { padDrawingFrame } from "../../../../elements/visuals/utils/drawing-frame";
 import { drawingPath } from "../../../../elements/visuals/utils/drawing-path";

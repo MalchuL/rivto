@@ -6,7 +6,7 @@ import type { BlockDestination } from "@chulane/document-model";
  * object. Each strategy decides whether it applies via {@link PasteStrategy.matches}
  * and owns insertion for that case. Ranges come from {@link PasteContext.selection}.
  */
-import type { DocumentEditorAPI } from "../../../editor/types";
+import type { DocumentEditorOperations } from "../../../editor/types";
 import {
   createCaretSelection,
   createStructuralSelection,
@@ -38,7 +38,7 @@ export class TextPasteStrategy implements PasteStrategy {
    * Creates the text strategy.
    * @param editor - Editor providing block and selection operations.
    */
-  constructor(private readonly editor: DocumentEditorAPI) {}
+  constructor(private readonly editor: DocumentEditorOperations) {}
 
   /**
    * Accepts split plain text or a mergeable partial bundle.
@@ -155,7 +155,7 @@ export class PreserveNewlinesPasteStrategy implements PasteStrategy {
    * Creates the preserve-newlines text strategy.
    * @param editor - Editor providing block and selection operations.
    */
-  constructor(private readonly editor: DocumentEditorAPI) {}
+  constructor(private readonly editor: DocumentEditorOperations) {}
 
   /**
    * Accepts plain text when the host asked to keep newlines in one block.
@@ -206,7 +206,7 @@ export class BlockPasteStrategy implements PasteStrategy {
    * whether it is an empty writing block. Omission disables empty-block replacement.
    */
   constructor(
-    private readonly editor: DocumentEditorAPI,
+    private readonly editor: DocumentEditorOperations,
     private readonly isEmptyBlock?: (block: EditorBlockNode) => boolean,
   ) {}
 
@@ -307,7 +307,7 @@ export class BlockPasteStrategy implements PasteStrategy {
 
 /** Imports a clipboard subset using destination IDs already allocated for its references. */
 function importClipboardBlocks(
-  editor: DocumentEditorAPI,
+  editor: DocumentEditorOperations,
   context: PasteContext,
   blocks: readonly EditorBlockInput[],
   destination?: BlockDestination,

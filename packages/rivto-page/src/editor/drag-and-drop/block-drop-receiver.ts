@@ -1,10 +1,8 @@
-import { BlockDropFeedback } from "./block-drop-feedback";
-import type { DropSurface, DropSurfaceRegistry } from "./drop-surface-registry";
-import type { ResolvedBlockDropTarget } from "./types";
+import type { DropSurfaceRegistry } from "./drop-surface-registry";
+import type { BlockDropSurfaceRoot } from "./types";
 
-/** Owns one receiving registration, feedback, and cancellation subscriptions. */
-export class BlockDropReceiver<T extends DropSurface> {
-  private readonly feedback: BlockDropFeedback;
+/** Owns one receiving registration and cancellation subscriptions. */
+export class BlockDropReceiver<T extends object> {
   private readonly listeners = new Set<() => void>();
   private readonly unregister: () => void;
   private disposed = false;
@@ -12,13 +10,17 @@ export class BlockDropReceiver<T extends DropSurface> {
   /**
    * Registers a host's receiving identity without acquiring its model or commands.
    *
-   * @param scope - Borrowed receiver identity and mounted root.
+   * @param root - Root capability for the mounted receiving occurrence.
+   * @param scope - Borrowed receiver identity.
    * @param registry - Registration capability shared by participating drag engines.
    * @throws If the registry cannot install the attachment.
    */
-  constructor(scope: T, registry: Pick<DropSurfaceRegistry<T>, "register">) {
-    this.feedback = new BlockDropFeedback(scope.root);
-    this.unregister = registry.register(scope);
+  constructor(
+    root: BlockDropSurfaceRoot,
+    scope: T,
+    registry: Pick<DropSurfaceRegistry<T>, "register">,
+  ) {
+    this.unregister = registry.register(root, scope);
   }
 
   /**
@@ -48,23 +50,10 @@ export class BlockDropReceiver<T extends DropSurface> {
   }
 
   /**
-   * Displays already resolved geometry without reading the model or DOM layout.
-   *
-   * @param target - Accepted target, or undefined to release visible feedback.
-   * @returns Feedback is updated while active; calls after destruction do nothing.
-   * @throws Propagates feedback DOM-write failures.
-   */
-  update(target?: ResolvedBlockDropTarget): void {
-    if (!this.disposed) {
-      this.feedback.update(target);
-    }
-  }
-
-  /**
-   * Unregisters this identity, clears feedback and notifies every subscribed source.
+   * Unregisters this identity and notifies every subscribed source.
    *
    * @returns Every cleanup is attempted once, including when another cleanup fails.
-   * @throws AggregateError containing registration, feedback or listener failures.
+   * @throws AggregateError containing registration or listener failures.
    */
   destroy(): void {
     if (this.disposed) {
@@ -74,7 +63,7 @@ export class BlockDropReceiver<T extends DropSurface> {
     const listeners = [...this.listeners];
     this.listeners.clear();
     const errors: unknown[] = [];
-    for (const release of [this.unregister, () => this.feedback.clear(), ...listeners]) {
+    for (const release of [this.unregister, ...listeners]) {
       try {
         release();
       } catch (error) {

@@ -1,6 +1,12 @@
+import type { InputRegion, InputRoot } from "@chulane/rivto-root";
+
+/** Attribute temporarily applied to the dragged source shells. */
+const DRAGGING_ATTRIBUTE = "data-dragging";
+
 /** Owns temporary source appearance for one pointer gesture and one mounted occurrence. */
 export class BlockDragSourceFeedback {
-  private readonly previous = new Map<HTMLElement, string | null>();
+  private readonly markers = new Map<string, Map<InputRegion, () => void>>();
+  private releaseActive?: () => void;
 
   /**
    * Borrows the occurrence and the source shell resolved by pointerdown.
@@ -8,12 +14,14 @@ export class BlockDragSourceFeedback {
    * No DOM lookup or mutation happens before activation. The gesture owner must
    * clear this feedback on completion, cancellation, detach and delivery failure.
    *
-   * @param root - Exact editor occurrence, excluding nested editor roots.
-   * @param active - Already resolved shell whose handle reserved the pointer.
+   * @param root - Borrowed occurrence capability, excluding nested editor roots.
+   * @param active - Captured region whose handle reserved the pointer.
+   * @param activeId - Stable block identity of the captured region.
    */
   constructor(
-    private readonly root: HTMLElement,
-    private readonly active: HTMLElement,
+    private readonly root: Pick<InputRoot, "findRegions">,
+    private readonly active: Pick<InputRegion, "setTemporaryAttribute">,
+    private readonly activeId: string,
   ) {}
 
   /**
@@ -30,16 +38,19 @@ export class BlockDragSourceFeedback {
    */
   show(ids: readonly string[]): void {
     const selected = new Set(ids);
-    const activeId = this.active.getAttribute("data-block-id");
-    if (activeId && selected.has(activeId)) {
-      this.mark(this.active);
+    if (selected.has(this.activeId) && !this.releaseActive) {
+      this.releaseActive = this.active.setTemporaryAttribute(DRAGGING_ATTRIBUTE, "true");
     }
-    if (ids.length === 1 && ids[0] === activeId) {
+    if (ids.length === 1 && ids[0] === this.activeId) {
       return;
     }
-    for (const element of this.root.querySelectorAll<HTMLElement>("[data-block-selected]")) {
-      if (selected.has(element.getAttribute("data-block-id") ?? "")) {
-        this.mark(element);
+    for (const region of this.root.findRegions(
+      "[data-block-selected]",
+      "[data-rivto-block-editor]",
+    )) {
+      const id = region.readAttribute("data-block-id");
+      if (id && id !== this.activeId && selected.has(id)) {
+        this.mark(id, region);
       }
     }
   }
@@ -52,18 +63,22 @@ export class BlockDragSourceFeedback {
    */
   clear(): void {
     const errors: unknown[] = [];
-    for (const [element, value] of this.previous) {
-      try {
-        if (value === null) {
-          element.removeAttribute("data-dragging");
-        } else {
-          element.setAttribute("data-dragging", value);
+    try {
+      this.releaseActive?.();
+    } catch (error) {
+      errors.push(error);
+    }
+    this.releaseActive = undefined;
+    for (const regions of this.markers.values()) {
+      for (const release of regions.values()) {
+        try {
+          release();
+        } catch (error) {
+          errors.push(error);
         }
-      } catch (error) {
-        errors.push(error);
       }
     }
-    this.previous.clear();
+    this.markers.clear();
     if (errors.length) {
       throw new AggregateError(errors, "Block drag source feedback cleanup failed");
     }
@@ -72,19 +87,20 @@ export class BlockDragSourceFeedback {
   /**
    * Retains the previous marker before decorating a shell owned by this occurrence.
    *
-   * @param element - Candidate source shell; shells outside root or in nested editors are ignored.
-   * @returns One owned marker is acquired at most once for the shell.
-   * @throws DOM mutation failures after retaining the original value for cleanup.
+   * @param id - Stable block identity used to limit duplicate checks.
+   * @param region - Candidate region belonging to the current occurrence.
+   * @returns One owned marker is acquired at most once for the region.
+   * @throws DOM mutation failures after attempting to restore the original value.
    */
-  private mark(element: HTMLElement): void {
-    if (
-      this.previous.has(element) ||
-      !this.root.contains(element) ||
-      element.closest("[data-rivto-block-editor]") !== this.root
-    ) {
+  private mark(id: string, region: InputRegion): void {
+    let regions = this.markers.get(id);
+    if (!regions) {
+      regions = new Map();
+      this.markers.set(id, regions);
+    }
+    if ([...regions.keys()].some((marked) => marked.isSame(region))) {
       return;
     }
-    this.previous.set(element, element.getAttribute("data-dragging"));
-    element.setAttribute("data-dragging", "true");
+    regions.set(region, region.setTemporaryAttribute(DRAGGING_ATTRIBUTE, "true"));
   }
 }

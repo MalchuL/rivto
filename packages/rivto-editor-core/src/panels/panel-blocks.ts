@@ -1,7 +1,7 @@
+import type { DocumentEditorOperations } from "../editor/types";
 import type { BlockDestination } from "@chulane/document-model";
 import type {
   BlockPrepareErrorHandler,
-  DocumentEditorAPI,
   EditorBlock,
   EditorBlockInput,
   EditorBlockPatch,
@@ -31,7 +31,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param includeRoot - Whether the boundary block itself is displayed and protected; ignored for a null boundary.
    */
   constructor(
-    private readonly document: DocumentEditorAPI,
+    private readonly document: DocumentEditorOperations,
     readonly rootBlockId: string | null,
     readonly includeRoot: boolean,
   ) {}

@@ -1,52 +1,94 @@
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type {
+  FrameClock,
+  InputRegion,
+  InputRoot,
+  PointerInput,
+  RegionBounds,
+} from "@chulane/rivto-root";
+import type { EdgelessSpotlightAttachment } from "./types";
 
 /** Owns the host grid decoration's viewport measurements and pending paint frame. */
 export class EdgelessGridSpotlight {
-  viewport: HTMLElement | null = null;
-  spotlightOverlay: HTMLDivElement | null = null;
-  private spotlightFrame: number | null = null;
+  private attachment?: EdgelessSpotlightAttachment;
   private spotlightPoint = { x: 0, y: 0 };
   private viewportOrigin = { left: 0, top: 0 };
 
   /**
-   * Observes viewport layout and scrolling and cancels outstanding paint work on cleanup.
+   * Observes viewport layout and scrolling and owns the overlay style session.
    *
    * Camera translation moves the world plane rather than this viewport. Its
    * cached client origin follows resize and ancestor scrolling instead of forcing
    * a layout read after every camera paint or newly mounted card.
    *
-   * @returns Cleanup disconnecting the observer and layout listeners and cancelling the pending animation frame.
+   * @param root - Borrowed exact occurrence for attachment and gesture markers.
+   * @param viewport - Borrowed region providing viewport bounds and observation.
+   * @param overlay - Borrowed region providing spotlight-only style ownership.
+   * @param clock - Borrowed occurrence-bound animation frame scheduler.
+   * @returns Cleanup disconnecting observation, cancelling the frame, and releasing styles.
+   * @throws If already attached or if observation setup or cleanup fails.
    */
-  observeViewport(): () => void {
-    const root = this.viewport;
-    const view = root?.ownerDocument.defaultView;
-    let observer: ResizeObserver | undefined;
-    if (root && typeof ResizeObserver !== "undefined") {
-      this.refreshViewportOrigin();
-      observer = new ResizeObserver(this.refreshViewportOrigin);
-      observer.observe(root);
+  attach(
+    root: Pick<InputRoot, "isAttached" | "readAttribute">,
+    viewport: Pick<InputRegion, "readBounds" | "observeBounds">,
+    overlay: Pick<InputRegion, "captureStyles">,
+    clock: Pick<FrameClock, "requestFrame">,
+  ): () => void {
+    if (this.attachment) {
+      throw new Error("Grid spotlight is already attached");
     }
-    view?.addEventListener("scroll", this.refreshViewportOrigin, { capture: true, passive: true });
-    view?.addEventListener("resize", this.refreshViewportOrigin);
-    return () => {
-      observer?.disconnect();
-      view?.removeEventListener("scroll", this.refreshViewportOrigin, true);
-      view?.removeEventListener("resize", this.refreshViewportOrigin);
-      this.cancelPointerSpotlight();
-    };
+    const styles = overlay.captureStyles([
+      "--rivto-edgeless-pointer-x",
+      "--rivto-edgeless-pointer-y",
+    ]);
+    if (!styles) {
+      return () => {};
+    }
+    try {
+      if (!root.isAttached()) {
+        styles.finish({});
+        return () => {};
+      }
+    } catch (error) {
+      try {
+        styles.finish({});
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Grid spotlight setup failed");
+      }
+      throw error;
+    }
+    const attachment: EdgelessSpotlightAttachment = { root, viewport, styles, clock };
+    this.attachment = attachment;
+    try {
+      const release = viewport.observeBounds((bounds) => this.updateOrigin(attachment, bounds));
+      if (this.attachment !== attachment || !root.isAttached()) {
+        release();
+        this.detach(attachment);
+        return () => {};
+      }
+      attachment.releaseBounds = release;
+      return () => this.detach(attachment);
+    } catch (error) {
+      try {
+        this.detach(attachment);
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Grid spotlight setup failed");
+      }
+      throw error;
+    }
   }
+
   /**
    * Caches the viewport's client origin so pointermove can avoid layout reads.
    *
-   * @returns The cached client origin is refreshed when a viewport is mounted.
+   * @returns The cached client origin is refreshed when the occurrence is current.
+   * @throws Propagates occurrence ownership and region measurement failures.
    */
   refreshViewportOrigin = (): void => {
-    const root = this.viewport;
-    if (!root) {
-      return;
+    const attachment = this.attachment;
+    const bounds = attachment?.viewport.readBounds();
+    if (attachment && bounds) {
+      this.updateOrigin(attachment, bounds);
     }
-    const bounds = root.getBoundingClientRect();
-    this.viewportOrigin = { left: bounds.left, top: bounds.top };
   };
 
   /**
@@ -58,46 +100,101 @@ export class EdgelessGridSpotlight {
    *
    * @param event - Pointer movement bubbling through the edgeless viewport.
    * @returns At most one animation frame is scheduled to paint the latest pointer position.
+   * @throws Propagates occurrence ownership and frame scheduling failures.
    */
-  updatePointerSpotlight = (event: ReactPointerEvent<HTMLElement>): void => {
-    this.spotlightPoint = {
-      x: event.clientX,
-      y: event.clientY,
-    };
-    if (this.spotlightFrame !== null) {
+  updatePointerSpotlight = (event: Pick<PointerInput, "clientX" | "clientY">): void => {
+    const attachment = this.attachment;
+    if (!attachment?.root.isAttached()) {
       return;
     }
-    this.spotlightFrame = requestAnimationFrame(() => {
-      const root = this.viewport;
-      const overlay = this.spotlightOverlay;
-      this.spotlightFrame = null;
-      if (!root || !overlay) {
-        return;
+    this.spotlightPoint = { x: event.clientX, y: event.clientY };
+    if (attachment.cancelFrame) {
+      return;
+    }
+    const cancel = attachment.clock.requestFrame(() => this.paint(attachment));
+    try {
+      if (this.attachment === attachment && attachment.root.isAttached()) {
+        attachment.cancelFrame = cancel;
+      } else {
+        cancel?.();
       }
-      if (root.dataset.transforming || root.dataset.panning === "true") {
-        return;
+    } catch (error) {
+      try {
+        cancel?.();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Grid spotlight frame setup failed");
       }
-      overlay.style.setProperty(
-        "--rivto-edgeless-pointer-x",
-        `${this.spotlightPoint.x - this.viewportOrigin.left}px`,
-      );
-      overlay.style.setProperty(
-        "--rivto-edgeless-pointer-y",
-        `${this.spotlightPoint.y - this.viewportOrigin.top}px`,
-      );
-    });
+      throw error;
+    }
   };
 
   /**
-   * Cancels a pending pointer-spotlight animation frame.
+   * Stores a measured origin only while its captured occurrence is current.
    *
-   * @returns Any scheduled spotlight paint is cancelled and its handle is cleared.
+   * @param attachment - Occurrence that produced the measurement.
+   * @param bounds - Detached viewport bounds in CSS pixels.
+   * @returns The cached origin is updated when the attachment remains current.
    */
-  private cancelPointerSpotlight = (): void => {
-    if (this.spotlightFrame === null) {
+  private updateOrigin(attachment: EdgelessSpotlightAttachment, bounds: RegionBounds): void {
+    if (this.attachment === attachment && attachment.root.isAttached()) {
+      this.viewportOrigin = { left: bounds.left, top: bounds.top };
+    }
+  }
+
+  /**
+   * Paints the latest pointer location while no pan or transform is active.
+   *
+   * @param attachment - Occurrence that scheduled this frame.
+   * @returns The current overlay receives its local pointer coordinates when eligible.
+   * @throws Propagates marker reads, ownership checks, and style updates.
+   */
+  private paint(attachment: EdgelessSpotlightAttachment): void {
+    attachment.cancelFrame = undefined;
+    if (this.attachment !== attachment || !attachment.root.isAttached()) {
       return;
     }
-    cancelAnimationFrame(this.spotlightFrame);
-    this.spotlightFrame = null;
-  };
+    if (
+      attachment.root.readAttribute("data-transforming") ||
+      attachment.root.readAttribute("data-panning") === "true"
+    ) {
+      return;
+    }
+    if (this.attachment !== attachment || !attachment.root.isAttached()) {
+      return;
+    }
+    attachment.styles.set({
+      "--rivto-edgeless-pointer-x": `${this.spotlightPoint.x - this.viewportOrigin.left}px`,
+      "--rivto-edgeless-pointer-y": `${this.spotlightPoint.y - this.viewportOrigin.top}px`,
+    });
+  }
+
+  /**
+   * Releases only the resources belonging to the supplied spotlight occurrence.
+   *
+   * @param attachment - Captured owner whose pending work and styles must be released.
+   * @returns The captured observation and frame are released even after Root detachment.
+   * @throws AggregateError if any cleanup fails.
+   */
+  private detach(attachment: EdgelessSpotlightAttachment): void {
+    if (this.attachment === attachment) {
+      this.attachment = undefined;
+    }
+    const errors: unknown[] = [];
+    for (const release of [
+      attachment.cancelFrame,
+      attachment.releaseBounds,
+      () => attachment.styles.finish({}),
+    ]) {
+      try {
+        release?.();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    attachment.cancelFrame = undefined;
+    attachment.releaseBounds = undefined;
+    if (errors.length) {
+      throw new AggregateError(errors, "Grid spotlight cleanup failed");
+    }
+  }
 }

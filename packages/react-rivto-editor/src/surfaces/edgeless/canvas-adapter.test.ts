@@ -13,6 +13,7 @@ function unexpectedRead(): never {
 test("object-only selection does not read roots, ancestors or element lists for card pinning", () => {
   const adapter = new EdgelessCanvasAdapter({
     blocks: { getRootIds: unexpectedRead, getParentId: unexpectedRead },
+    document: { blocks: { getParentIds: unexpectedRead } },
     elements: { getElementNode: unexpectedRead, getElementNodes: unexpectedRead },
     selection: { get: unexpectedRead, subscribe: unexpectedRead },
     editor: {

@@ -1,10 +1,18 @@
+import { getBrowserPrimaryModifier } from "@chulane/rivto-root/browser";
 import { BlockSelectionEndpoints } from "@chulane/rivto-page";
 import { registerBlockClipboardActions } from "../block-handle/actions";
 import {
   browserClipboardFormats,
   readClipboardEnvelope,
 } from "../../../managers/clipboard/browser-clipboard";
-import type { ReactEditorApi } from "../../../editor/types";
+import type {
+  ClipboardData,
+  ClipboardInput,
+  ClipboardTarget,
+  InputRoot,
+} from "@chulane/rivto-root";
+import type { ReactEditorExtensionApi } from "../../../editor/types";
+import type { PanelInputRegistration } from "../../../panels/types";
 import { clipboardContentBundle } from "../../../managers/clipboard/clipboard-content";
 /**
  * Clipboard operations and portable format contracts. Whole-block selection is structural; text editing uses explicit single-block ranges.
@@ -20,11 +28,11 @@ import {
   type ClipboardBundle,
   type Selection,
 } from "@chulane/rivto";
-import type { ReactPanelApi } from "../../../panels/types";
+import type { ClipboardEventPanel } from "./types";
 import { blockIdsOf } from "../../../elements/block-element-projection";
 import { KEYBOARD_BINDING_IDS, matchesShortcut, parseShortcut } from "../../../managers";
 import { findEdgelessRuntime } from "../selection/edgeless-runtime";
-import { isNonBlockEditableClipboardEvent } from "./clipboard-target";
+import { isIndependentClipboardTarget } from "./clipboard-target";
 import { ElementPasteStrategy } from "./element-paste-strategy";
 
 const ELEMENT_PASTE_STRATEGY_ID = "paste.elements";
@@ -77,7 +85,7 @@ export interface ClipboardExtensionOptions {
  * @returns Disposer that unregisters the canvas paste strategy.
  */
 export function registerClipboard(
-  reactEditor: ReactEditorApi,
+  reactEditor: ReactEditorExtensionApi,
   options: ClipboardExtensionOptions = {},
 ): () => void {
   registerBlockClipboardActions(reactEditor);
@@ -95,13 +103,13 @@ export function registerClipboard(
   // as a fallback, but only use it when the browser's plain text still matches.
   let copiedClipboard: { structured: string; text: string } | null = null;
 
-  const selectedCanvasElementIds = (reactPanel: ReactPanelApi): readonly string[] => {
+  const selectedCanvasElementIds = (reactPanel: ClipboardEventPanel): readonly string[] => {
     const snapshot = findEdgelessRuntime(reactPanel)?.get();
     return snapshot?.active ? snapshot.items : [];
   };
 
   /** Returns a core-compatible block selection for active canvas root objects. */
-  const canvasSelection = (reactPanel: ReactPanelApi): Selection | undefined => {
+  const canvasSelection = (reactPanel: ClipboardEventPanel): Selection | undefined => {
     // Core mode may be edgeless while the active view is a page embedding.
     // Its clipboard actions must use the page selection, not canvas objects.
     if (reactPanel.getSurfaceType() !== "edgeless") {
@@ -120,46 +128,55 @@ export function registerClipboard(
   };
 
   /**
-   * Writes the core-produced flavors into a native clipboard event.
+   * Writes the core-produced flavors through the current clipboard capabilities.
    *
    * Caches the structured payload and plain text for later fallback even when
-   * the event has no clipboardData. Does not call the asynchronous Clipboard API.
+   * the browser supplies no clipboard data. Does not call the asynchronous Clipboard API.
    *
    * @param reactPanel - Panel whose editor formats the portable clipboard flavors.
-   * @param event - Native copy or cut event receiving the available formats.
+   * @param clipboard - Synchronous format access, or null when unavailable.
    * @param bundle - Core-produced content to serialize and cache.
    * @returns After writing available event data and replacing the local fallback.
    * @throws If formatting, serialization, or a native clipboard write fails.
    */
   const writeClipboard = (
-    reactPanel: ReactPanelApi,
-    event: ClipboardEvent,
+    reactPanel: ClipboardEventPanel,
+    clipboard: ClipboardData | null,
     bundle: ClipboardBundle,
   ): void => {
     const portable = browserClipboardFormats(reactPanel.editor, bundle);
     const structured = JSON.stringify(bundle);
-    event.clipboardData?.setData(RIVTO_CLIPBOARD_MIME, structured);
-    event.clipboardData?.setData("text/html", portable.html);
-    event.clipboardData?.setData("text/markdown", portable.markdown);
-    event.clipboardData?.setData("text/plain", portable.plain);
+    clipboard?.write(RIVTO_CLIPBOARD_MIME, structured);
+    clipboard?.write("text/html", portable.html);
+    clipboard?.write("text/markdown", portable.markdown);
+    clipboard?.write("text/plain", portable.plain);
     copiedClipboard = {
       structured,
       text: portable.plain,
     };
   };
 
-  /** Recovers custom data only when the event still represents our last copy. */
-  const fallbackStructuredClipboard = (event: ClipboardEvent): string | undefined => {
-    if (event.clipboardData?.getData(RIVTO_CLIPBOARD_MIME)) {
+  /**
+   * Recovers custom data only when the clipboard still represents our last copy.
+   *
+   * A present custom format wins. The cached bundle is used when plain text is
+   * absent or matches the cached copy; different plain text rejects the fallback.
+   *
+   * @param clipboard - Synchronous format access, or null when unavailable.
+   * @returns Cached structured data when it matches, otherwise undefined.
+   * @throws Propagates browser clipboard read failures.
+   */
+  const fallbackStructuredClipboard = (clipboard: ClipboardData | null): string | undefined => {
+    if (clipboard?.read(RIVTO_CLIPBOARD_MIME)) {
       return;
     }
     const copied = copiedClipboard;
-    const plain = event.clipboardData?.getData("text/plain") ?? "";
+    const plain = clipboard?.read("text/plain") ?? "";
     return copied && (!plain || plain === copied.text) ? copied.structured : undefined;
   };
 
   /** Publishes the exact native endpoints before an asynchronous event can lag. */
-  const synchronizeSelection = (reactPanel: ReactPanelApi): void => {
+  const synchronizeSelection = (reactPanel: ClipboardEventPanel): void => {
     if (canvasSelection(reactPanel)) {
       return;
     }
@@ -178,19 +195,26 @@ export function registerClipboard(
    * and schedules DOM selection restoration only while the resulting selection remains current.
    *
    * @param reactPanel - Destination panel supplying selection and insertion operations.
-   * @param event - Native paste event supplying clipboard content.
+   * @param clipboard - Synchronous format access, or null when unavailable.
+   * @param inputRoot - Browser capabilities for the occurrence receiving this paste.
+   * @param inputRegistration - Routing lifetime captured by the initiating clipboard input.
    * @returns After invoking paste and scheduling any required selection restoration.
    * @throws If content parsing or delegated paste operations fail outside structured-data validation.
    */
-  const pasteClipboard = (reactPanel: ReactPanelApi, event: ClipboardEvent): void => {
+  const pasteClipboard = (
+    reactPanel: ClipboardEventPanel,
+    clipboard: ClipboardData | null,
+    inputRoot: Pick<InputRoot, "isAttached" | "clearSelection" | "focus">,
+    inputRegistration: PanelInputRegistration,
+  ): void => {
     const plainText = pasteAsPlainText;
     pasteAsPlainText = false;
     let structured: string | undefined;
     if (!plainText) {
       structured =
-        event.clipboardData?.getData(RIVTO_CLIPBOARD_MIME) ||
-        readClipboardEnvelope(event.clipboardData?.getData("text/html") ?? "") ||
-        fallbackStructuredClipboard(event);
+        clipboard?.read(RIVTO_CLIPBOARD_MIME) ||
+        readClipboardEnvelope(clipboard?.read("text/html") ?? "") ||
+        fallbackStructuredClipboard(clipboard);
     }
     const canvas = canvasSelection(reactPanel);
     // Paste has only two outcomes:
@@ -212,8 +236,8 @@ export function registerClipboard(
       // a text selection, so their blocks are inserted as new blocks.
       const parsed = reactPanel.editor.clipboardFormats.parseContent(
         {
-          html: event.clipboardData?.getData("text/html") ?? "",
-          text: event.clipboardData?.getData("text/plain") ?? "",
+          html: clipboard?.read("text/html") ?? "",
+          text: clipboard?.read("text/plain") ?? "",
         },
         {
           surface: reactPanel.getSurfaceType() === "edgeless" ? "edgeless" : "page",
@@ -257,13 +281,16 @@ export function registerClipboard(
     }
     // Plain text and native Rivto clipboard data share this path. Text updates
     // the current text selection; a bundle of whole blocks inserts new blocks.
+    if (!inputRegistration.isCurrent(inputRoot)) {
+      return;
+    }
     reactPanel.clipboard.paste({
       textTarget:
         canvas ??
         (active && hasBlockRanges(active) && !isStructuralSelection(active) ? active : undefined),
       defaultBlockType: resolveDefaultBlockType(),
       structured,
-      text: event.clipboardData?.getData("text/plain"),
+      text: clipboard?.read("text/plain"),
       bundle: sourceBundle,
       onPrepareError: options.onPrepareError,
       placement: {
@@ -272,17 +299,27 @@ export function registerClipboard(
         preserveNewlines: plainText || undefined,
       },
     });
+    if (!inputRegistration.isCurrent(inputRoot)) {
+      return;
+    }
     if (!canvas && isStructuralSelection(reactPanel.selection.get())) {
-      const root = reactPanel.getRoot();
       // The paste event started in the old contenteditable, whose native caret
       // would override the newly selected blocks on the next keyboard event.
       // Move keyboard ownership to the surface, as pointer block selection does.
-      root?.ownerDocument.getSelection()?.removeAllRanges();
-      root?.focus({ preventScroll: true });
+      inputRoot.clearSelection();
+      if (inputRegistration.isCurrent(inputRoot)) {
+        inputRoot.focus();
+      }
     }
     // Only restore DOM selection after paste; content insertion must stay outside this callback.
     const selectionManager = reactPanel.selection;
-    selectionManager.scheduleIfSelectionUnchanged(() => selectionManager.restoreDOM());
+    if (inputRegistration.isCurrent(inputRoot)) {
+      selectionManager.scheduleIfSelectionUnchanged(() => {
+        if (inputRegistration.isCurrent(inputRoot)) {
+          selectionManager.restoreDOM();
+        }
+      });
+    }
   };
 
   /**
@@ -290,7 +327,7 @@ export function registerClipboard(
    * @returns Portable payload, or undefined for an empty range.
    */
   const copyCurrent = (
-    reactPanel: ReactPanelApi,
+    reactPanel: ClipboardEventPanel,
     operation: "copy" | "cut" = "copy",
   ): ClipboardBundle | undefined => {
     const canvasElementIds = selectedCanvasElementIds(reactPanel);
@@ -303,15 +340,31 @@ export function registerClipboard(
 
   /**
    * Deletes copied content and restores the resulting block-local caret.
-   * @returns No value.
+   *
+   * @param reactPanel - Occurrence containing the copied selection.
+   * @param inputRoot - Root that received the cut input.
+   * @param inputRegistration - Routing lifetime captured by the cut input.
+   * @returns After deletion and, while current, scheduling caret restoration.
+   * @throws Propagates deletion, selection, and scheduling failures.
    */
-  const deleteCopiedSelection = (reactPanel: ReactPanelApi): void => {
+  const deleteCopiedSelection = (
+    reactPanel: ClipboardEventPanel,
+    inputRoot: Pick<InputRoot, "isAttached">,
+    inputRegistration: PanelInputRegistration,
+  ): void => {
     reactPanel.selection.delete();
+    if (!inputRegistration.isCurrent(inputRoot)) {
+      return;
+    }
     // Capture before a delayed native selectionchange can report old DOM offsets.
     const selection = reactPanel.selection.get();
     // Only restore the post-cut caret/selection; cutting content has already completed.
     const selectionManager = reactPanel.selection;
-    selectionManager.scheduleIfSelectionUnchanged(() => selectionManager.restoreDOM(selection));
+    selectionManager.scheduleIfSelectionUnchanged(() => {
+      if (inputRegistration.isCurrent(inputRoot)) {
+        selectionManager.restoreDOM(selection);
+      }
+    });
   };
 
   reactEditor.events.register(
@@ -319,15 +372,15 @@ export function registerClipboard(
       id: "clipboard.copy",
       type: "copy",
       scope: "surface",
-      when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
+      when: ({ clipboardTarget }) => !isIndependentClipboardTarget(clipboardTarget),
     },
-    ({ reactPanel, raw: event }) => {
+    ({ reactPanel, clipboard }) => {
       synchronizeSelection(reactPanel);
       const payload = copyCurrent(reactPanel);
       if (!payload) {
         return false;
       }
-      writeClipboard(reactPanel, event, payload);
+      writeClipboard(reactPanel, clipboard, payload);
       return true;
     },
   );
@@ -337,18 +390,21 @@ export function registerClipboard(
       id: "clipboard.cut",
       type: "cut",
       scope: "surface",
-      when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
+      when: ({ clipboardTarget }) => !isIndependentClipboardTarget(clipboardTarget),
     },
-    ({ reactPanel, raw: event }) => {
+    ({ reactPanel, clipboard, inputRoot, inputRegistration }) => {
       synchronizeSelection(reactPanel);
       const canvasElementIds = selectedCanvasElementIds(reactPanel);
       const payload = copyCurrent(reactPanel, "cut");
       if (!payload) {
         return false;
       }
-      writeClipboard(reactPanel, event, payload);
+      writeClipboard(reactPanel, clipboard, payload);
+      if (!inputRegistration.isCurrent(inputRoot)) {
+        return true;
+      }
       if (!canvasElementIds.length) {
-        deleteCopiedSelection(reactPanel);
+        deleteCopiedSelection(reactPanel, inputRoot, inputRegistration);
       }
       if (
         canvasElementIds.length &&
@@ -364,38 +420,57 @@ export function registerClipboard(
     },
   );
 
-  /** Handles Firefox clipboard events dispatched to body for block selection. */
+  /**
+   * Routes a document-level clipboard operation to the focused occurrence.
+   *
+   * Firefox can dispatch to the body while a panel owns a structural selection.
+   * Independent text hosts retain their native clipboard handling.
+   *
+   * @param reactPanel - Occurrence providing document operations and selection.
+   * @param operation - Copy, cut, or paste operation registered for this callback.
+   * @param target - Live browser target and focus checks, if supplied.
+   * @param insideRoot - Whether the input was already routed through the surface.
+   * @param inputRoot - Capability identifying the receiving occurrence and its focus.
+   * @param inputRegistration - Routing lifetime captured by the clipboard input.
+   * @param clipboard - Synchronous clipboard access, or null when unavailable.
+   * @returns True when the operation is handled by the editor.
+   * @throws Propagates clipboard, selection, and document operation failures.
+   */
   const handleDocumentClipboard = (
-    reactPanel: ReactPanelApi,
-    root: HTMLElement,
-    event: ClipboardEvent,
+    reactPanel: ClipboardEventPanel,
+    operation: ClipboardInput["type"],
+    target: ClipboardTarget | undefined,
     insideRoot: boolean,
+    inputRoot: Pick<InputRoot, "isAttached" | "clearSelection" | "focus" | "hasFocus">,
+    inputRegistration: PanelInputRegistration,
+    clipboard: ClipboardData | null,
   ): boolean => {
-    if (insideRoot || isNonBlockEditableClipboardEvent(event)) {
+    if (insideRoot || isIndependentClipboardTarget(target)) {
       return false;
     }
-    const activeElement = root.ownerDocument.activeElement;
-    const editorHasFocus =
-      activeElement === root || (activeElement !== null && root.contains(activeElement));
+    const editorHasFocus = inputRoot.hasFocus();
     const current = reactPanel.selection.get();
     const canvasElementIds = selectedCanvasElementIds(reactPanel);
     if (!editorHasFocus || (!canvasElementIds.length && !isStructuralSelection(current))) {
       return false;
     }
     let handled = false;
-    if (event.type === "paste") {
-      pasteClipboard(reactPanel, event);
+    if (operation === "paste") {
+      pasteClipboard(reactPanel, clipboard, inputRoot, inputRegistration);
       handled = true;
     } else {
-      const payload = copyCurrent(reactPanel, event.type === "cut" ? "cut" : "copy");
+      const payload = copyCurrent(reactPanel, operation === "cut" ? "cut" : "copy");
       if (payload) {
-        writeClipboard(reactPanel, event, payload);
-        if (!canvasElementIds.length && event.type === "cut") {
-          deleteCopiedSelection(reactPanel);
+        writeClipboard(reactPanel, clipboard, payload);
+        if (!inputRegistration.isCurrent(inputRoot)) {
+          return true;
+        }
+        if (!canvasElementIds.length && operation === "cut") {
+          deleteCopiedSelection(reactPanel, inputRoot, inputRegistration);
         }
         if (
           canvasElementIds.length &&
-          event.type === "cut" &&
+          operation === "cut" &&
           payload.blocks.every((block) => reactPanel.blocks.canRemove(block.id))
         ) {
           reactPanel.batchUpdates(() => {
@@ -416,8 +491,16 @@ export function registerClipboard(
       type: "copy",
       target: "document",
     },
-    ({ reactPanel, raw: event, insideRoot, root }) =>
-      handleDocumentClipboard(reactPanel, root, event, insideRoot),
+    ({ reactPanel, clipboardTarget, insideRoot, inputRoot, inputRegistration, clipboard }) =>
+      handleDocumentClipboard(
+        reactPanel,
+        "copy",
+        clipboardTarget,
+        insideRoot,
+        inputRoot,
+        inputRegistration,
+        clipboard,
+      ),
   );
   reactEditor.events.register(
     {
@@ -425,8 +508,16 @@ export function registerClipboard(
       type: "cut",
       target: "document",
     },
-    ({ reactPanel, raw: event, insideRoot, root }) =>
-      handleDocumentClipboard(reactPanel, root, event, insideRoot),
+    ({ reactPanel, clipboardTarget, insideRoot, inputRoot, inputRegistration, clipboard }) =>
+      handleDocumentClipboard(
+        reactPanel,
+        "cut",
+        clipboardTarget,
+        insideRoot,
+        inputRoot,
+        inputRegistration,
+        clipboard,
+      ),
   );
   reactEditor.events.register(
     {
@@ -434,8 +525,16 @@ export function registerClipboard(
       type: "paste",
       target: "document",
     },
-    ({ reactPanel, raw: event, insideRoot, root }) =>
-      handleDocumentClipboard(reactPanel, root, event, insideRoot),
+    ({ reactPanel, clipboardTarget, insideRoot, inputRoot, inputRegistration, clipboard }) =>
+      handleDocumentClipboard(
+        reactPanel,
+        "paste",
+        clipboardTarget,
+        insideRoot,
+        inputRoot,
+        inputRegistration,
+        clipboard,
+      ),
   );
 
   const pasteAsPlainTextKeys = ["Primary+Shift+v"] as const;
@@ -460,12 +559,19 @@ export function registerClipboard(
       type: "keyup",
       target: "window",
     },
-    ({ reactPanel, raw }) => {
+    ({ reactPanel, keyboardInput }) => {
+      if (!keyboardInput) {
+        return false;
+      }
       const binding = reactPanel.keyboard
         .list()
         .find((item) => item.id === KEYBOARD_BINDING_IDS.clipboardPasteAsPlainText);
       const keys = binding?.keys ?? pasteAsPlainTextKeys;
-      if (keys.some((key) => matchesShortcut(parseShortcut(key), raw))) {
+      if (
+        keys.some((key) =>
+          matchesShortcut(parseShortcut(key), keyboardInput, getBrowserPrimaryModifier()),
+        )
+      ) {
         return clearPasteAsPlainText();
       }
       return false;
@@ -485,11 +591,11 @@ export function registerClipboard(
       id: "clipboard.paste",
       type: "paste",
       scope: "surface",
-      when: ({ raw }) => !isNonBlockEditableClipboardEvent(raw),
+      when: ({ clipboardTarget }) => !isIndependentClipboardTarget(clipboardTarget),
     },
-    ({ reactPanel, raw: event }) => {
+    ({ reactPanel, clipboard, inputRoot, inputRegistration }) => {
       synchronizeSelection(reactPanel);
-      pasteClipboard(reactPanel, event);
+      pasteClipboard(reactPanel, clipboard, inputRoot, inputRegistration);
       return true;
     },
   );

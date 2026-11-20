@@ -147,7 +147,9 @@ starting pointer timing. Tall Kanban gaps must not be sampled at offscreen cente
 
 "Demo wrapper" dynamically installs an extension through
 editor.wrappers.register({ component, priority: 100 }). The decorator owns an ordinary
-BlockItem element with its own data-demo-wrapper ID and pointer-capture handler.
+BlockItem element with its own data-demo-wrapper ID and a normalized pointer-capture
+subscription registered through `bindInput`. Root owns the browser listener, and
+the binding releases its subscription and temporary marker when the wrapper unmounts.
 Clicking its content sets data-demo-wrapper-pointer only on the nearest wrapper;
 nested blocks retain their own elements. There is no shared BlockView ref/provider.
 Counter ownership remains on the outermost item for each node, including when a

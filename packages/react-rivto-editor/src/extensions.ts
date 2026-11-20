@@ -35,8 +35,10 @@ export {
 export { ContainerBlockBehavior, DefaultBlockBehavior } from "./block-behaviors";
 export type {
   BlockBehavior,
-  BlockBehaviorContext,
+  BlockEditingPanel,
+  BlockKeyboardContext,
   BlockOutlineContext,
+  BlockOutlinePanel,
   BlockBehaviorOutcome,
   BlockMoveContext,
 } from "./block-behaviors";
@@ -71,11 +73,8 @@ export {
   type TableCellProps,
 } from "./extensions/containers/table/table";
 
-export {
-  EMBEDDING_BLOCK_TYPE,
-  embeddingExtension,
-  type EmbeddingProps,
-} from "./extensions/embedding/embedding";
+export { EMBEDDING_BLOCK_TYPE, embeddingExtension } from "./extensions/embedding/embedding";
+export type { EmbeddingProps } from "./extensions/embedding/types";
 
 export { blockHandleExtension } from "./extensions/built-ins/block-handle/extension";
 export {

@@ -1,3 +1,5 @@
+import { EventDispatcher } from "@chulane/rivto-root";
+import type { EmbeddingEvents, EmbeddingProps } from "./types";
 import { clipboardContentBundle } from "../../managers/clipboard/clipboard-content";
 import { writeClipboardBundle } from "../../managers/clipboard/browser-clipboard";
 import { Link2Icon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
@@ -22,21 +24,21 @@ const EMBEDDING_CLASS = "rivto-embedding";
 const EMBEDDED_SURFACE_CLASS = "rivto-embedded-surface";
 const EMBEDDING_STATUS_CLASS = "rivto-embedding-status";
 const EMBEDDING_SETTINGS_HEADER_CLASS = "rivto-embedding-settings-header";
-const REFRESH_EVENT = "refresh";
 const ancestryContext = createContext<readonly string[]>([]);
-const refreshEventsContext = createContext<EventTarget | undefined>(undefined);
+const refreshEventsContext = createContext<EventDispatcher<EmbeddingEvents> | undefined>(undefined);
 
 /**
  * Shares refresh requests between one embedding's settings and body slots.
  *
- * The event target belongs to this rendered occurrence and adds no DOM wrapper.
+ * The dispatcher belongs to this rendered occurrence. Settings can refresh its
+ * body without notifying another reference to the same source or adding a DOM wrapper.
  *
  * @param props - Rendered embedding shell and its descendants.
  * @param props.children - Existing shell to render inside the refresh boundary.
- * @returns The unchanged shell with an occurrence-local refresh event target.
+ * @returns The unchanged shell with an occurrence-local refresh dispatcher.
  */
 function EmbeddingRefreshBoundary({ children }: { readonly children: ReactNode }) {
-  const [events] = useState(() => new EventTarget());
+  const [events] = useState(() => new EventDispatcher<EmbeddingEvents>());
   return <refreshEventsContext.Provider value={events}>{children}</refreshEventsContext.Provider>;
 }
 
@@ -54,13 +56,6 @@ function EmbeddingWrapper({ block, children }: BlockWrapperProps) {
   ) : (
     children
   );
-}
-
-/** Native embedding props; an empty target is an unconfigured reference. */
-export interface EmbeddingProps extends Record<string, unknown> {
-  /** Empty means search the containing document before other documents. */
-  readonly targetDocumentId: string;
-  readonly targetBlockId: string;
 }
 
 /** Renders the selectable reference anchor without adding a header above the source editor. */
@@ -138,7 +133,7 @@ function EmbeddingControls({ block }: BlockSlotProps) {
               aria-label="Refresh embedding"
               title="Refresh embedding"
               disabled={!refreshEvents || !props.targetBlockId}
-              onClick={() => refreshEvents?.dispatchEvent(new Event(REFRESH_EVENT))}
+              onClick={() => refreshEvents?.dispatch("refresh", undefined)}
             >
               <RefreshCwIcon aria-hidden="true" />
             </Button>
@@ -258,8 +253,7 @@ function EmbeddingBody({ block }: BlockSlotProps) {
       }));
       setRefreshVersion((version) => version + 1);
     };
-    refreshEvents?.addEventListener(REFRESH_EVENT, refresh);
-    return () => refreshEvents?.removeEventListener(REFRESH_EVENT, refresh);
+    return refreshEvents?.observe({ id: "embedding.body.refresh", type: "refresh" }, refresh);
   }, [refreshEvents, source]);
   const error = location.error ?? sourceError;
   let message = "Loading embedded block…";
@@ -363,7 +357,11 @@ export function embeddingExtension(): ReactEditorExtension {
             })),
           });
           bundle.sourceDocumentId = reactPanel.editor.getDocument().id;
-          await writeClipboardBundle(reactPanel.editor, bundle);
+          const inputRoot = reactPanel.inputRoot;
+          if (!inputRoot?.isAttached()) {
+            throw new Error("The invoking panel is no longer mounted");
+          }
+          await writeClipboardBundle(reactPanel.editor, bundle, inputRoot);
         },
       });
       const dispose = reactEditor.blockTypes.register({

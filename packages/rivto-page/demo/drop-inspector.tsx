@@ -126,9 +126,9 @@ class DropInspectorController {
     const next = this.editor.dropTargets.resolve(this.x, this.y);
     const resolveMs = performance.now() - start;
     this.output.dataset.resolveMs = String(resolveMs);
-    this.overlay.hidden = !next;
-    if (next) {
-      const rect = next.indicator ?? next.element.getBoundingClientRect();
+    const rect = next?.indicator ?? next?.anchor.readBounds();
+    this.overlay.hidden = !rect;
+    if (rect) {
       Object.assign(this.overlay.style, {
         transform: `translate(${rect.left}px, ${rect.top}px)`,
         width: `${rect.width}px`,
@@ -136,7 +136,9 @@ class DropInspectorController {
       });
     }
     if (
-      next?.element !== this.selected?.element ||
+      (next && this.selected
+        ? !next.anchor.isSame(this.selected.anchor)
+        : next !== this.selected) ||
       next?.destination !== this.selected?.destination
     ) {
       this.output.textContent = next ? JSON.stringify(next.destination) : "";

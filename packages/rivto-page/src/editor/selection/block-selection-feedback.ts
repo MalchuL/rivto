@@ -1,11 +1,14 @@
-import type { BlockInputEvent } from "../events/block-input-event";
-import type { BlockEditorEventsApi } from "../events/block-editor-events";
-import type { BlockKeyboardApi } from "../keyboard/block-keyboard";
+import type { InputRegion } from "@chulane/rivto-root";
+import { EDITOR_BOUNDARY_SELECTOR } from "../events/markers";
+import type { BlockInputEvent } from "../events/types";
+import type { BlockEditorEventsApi } from "../events/types";
+import type { BlockKeyboardApi } from "../keyboard/types";
 import type { BlockPointerSelection } from "./block-pointer-selection";
 
 /** Owns hovered-anchor feedback and its keyboard subscriptions. */
 export class BlockSelectionFeedback {
-  private feedbackAnchor: HTMLElement | null = null;
+  private feedbackAnchor: InputRegion | undefined;
+  private releaseFeedback: (() => void) | undefined;
 
   /**
    * Borrows only input observation, held keys and live toggle availability.
@@ -38,14 +41,21 @@ export class BlockSelectionFeedback {
       this.events.observe(
         "selection.feedback.over",
         { type: "pointerover", scope: "root", priority: 0 },
-        (event) => this.setFeedbackAnchor(event.selectionAnchor),
+        (event) =>
+          this.setFeedbackAnchor(
+            event.input.captureRegion(
+              "[data-block-selection-anchor]",
+              "[data-block-id]",
+              EDITOR_BOUNDARY_SELECTOR,
+            ),
+          ),
       );
       this.events.observe(
         "selection.feedback.out",
         { type: "pointerout", scope: "root", priority: 0 },
         this.onPointerOut,
       );
-      this.events.onDetach(() => this.setFeedbackAnchor(null));
+      this.events.onDetach(() => this.setFeedbackAnchor(undefined));
     } catch (error) {
       this.release(disposers, [error]);
     }
@@ -55,18 +65,12 @@ export class BlockSelectionFeedback {
   /**
    * Removes hover feedback when the pointer leaves its current anchor.
    *
-   * @param event - Native pointer transition in this occurrence.
+   * @param event - Normalized pointer transition in this occurrence.
    * @returns Feedback remains only when the related target is within the same anchor.
    */
   private onPointerOut = (event: BlockInputEvent<"pointerout">): void => {
-    const target = event.raw.relatedTarget;
-    const ElementType = event.root.ownerDocument.defaultView?.Element;
-    if (
-      !ElementType ||
-      !(target instanceof ElementType) ||
-      !this.feedbackAnchor?.contains(target)
-    ) {
-      this.setFeedbackAnchor(null);
+    if (!this.feedbackAnchor?.containsTarget(event.input.relatedTarget)) {
+      this.setFeedbackAnchor(undefined);
     }
   };
 
@@ -79,7 +83,7 @@ export class BlockSelectionFeedback {
    * @throws AggregateError when setup or any cleanup fails.
    */
   private release(disposers: Array<() => void>, errors: unknown[] = []): void {
-    for (const dispose of [...disposers.splice(0), () => this.setFeedbackAnchor(null)]) {
+    for (const dispose of [...disposers.splice(0), () => this.setFeedbackAnchor(undefined)]) {
       try {
         dispose();
       } catch (error) {
@@ -97,23 +101,30 @@ export class BlockSelectionFeedback {
    * @returns Only the hovered anchor reflects live held state; other blocks are untouched.
    */
   private updateFeedback = (): void => {
-    this.feedbackAnchor?.toggleAttribute(
-      "data-block-selecting",
+    const enabled =
       this.pointer.isToggleInstalled() &&
-        this.keyboard.isHeld(this.keyboard.capture(this.toggleBinding)),
-    );
+      this.keyboard.isHeld(this.keyboard.capture(this.toggleBinding));
+    if (enabled && this.feedbackAnchor && !this.releaseFeedback) {
+      this.releaseFeedback = this.feedbackAnchor.setTemporaryAttribute("data-block-selecting", "");
+    } else if (!enabled) {
+      const release = this.releaseFeedback;
+      this.releaseFeedback = undefined;
+      release?.();
+    }
   };
   /**
    * Moves cursor feedback to the hovered anchor without invalidating the entire editor subtree.
    *
-   * @param anchor - Current pointer anchor, or null after pointer exit or detachment.
+   * @param anchor - Current pointer anchor, or undefined after pointer exit or detachment.
    * @returns Previous feedback is removed and only the current anchor reflects held keys.
    */
-  private setFeedbackAnchor(anchor: HTMLElement | null): void {
-    if (anchor === this.feedbackAnchor) {
+  private setFeedbackAnchor(anchor: InputRegion | undefined): void {
+    if (anchor && this.feedbackAnchor?.isSame(anchor)) {
       return;
     }
-    this.feedbackAnchor?.removeAttribute("data-block-selecting");
+    const release = this.releaseFeedback;
+    this.releaseFeedback = undefined;
+    release?.();
     this.feedbackAnchor = anchor;
     this.updateFeedback();
   }

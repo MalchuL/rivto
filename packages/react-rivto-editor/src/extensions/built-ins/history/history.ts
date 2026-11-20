@@ -1,16 +1,20 @@
-import type { ReactPanelApi } from "../../../panels/types";
-import type { ReactEditorApi } from "../../../editor/types";
+import type { ReactEditorExtensionApi } from "../../../editor/types";
+import type { HistoryAction, HistoryPanel } from "./types";
 import { KEYBOARD_BINDING_IDS } from "../../../managers";
+import type { InputRoot, TextInputData } from "@chulane/rivto-root";
+import type { PanelInputRegistration } from "../../../panels/types";
 
-/** One document-history action recognized from a browser editing event. */
-type HistoryAction = "undo" | "redo";
-
-/** Resolves history requests emitted directly by a contenteditable element. */
-function inputHistoryAction(event: InputEvent): HistoryAction | undefined {
-  if (event.inputType === "historyUndo") {
+/**
+ * Resolves history requests emitted directly by a contenteditable element.
+ *
+ * @param input - Copied editing data, or undefined for a non-input event.
+ * @returns Undo or redo for a history request, otherwise undefined.
+ */
+function inputHistoryAction(input: TextInputData | undefined): HistoryAction | undefined {
+  if (input?.inputType === "historyUndo") {
     return "undo";
   }
-  if (event.inputType === "historyRedo") {
+  if (input?.inputType === "historyRedo") {
     return "redo";
   }
 }
@@ -60,22 +64,48 @@ export interface HistoryExtensionOptions {
 }
 
 export function registerHistory(
-  reactEditor: ReactEditorApi,
+  reactEditor: ReactEditorExtensionApi,
   options: HistoryExtensionOptions = {},
 ): void {
-  /** Executes one history step and restores focus after React renders it. */
-  const run = (reactPanel: ReactPanelApi, root: HTMLElement, action: HistoryAction): void => {
-    if (!root) {
+  /**
+   * Executes one history step and restores focus after React renders it.
+   *
+   * @param reactPanel - Panel whose document history is changed.
+   * @param inputRoot - Originating attachment, invalidated when its panel detaches.
+   * @param inputRegistration - Routing lifetime captured by the originating input.
+   * @param action - Undo or redo operation to perform.
+   * @returns History is updated and selection restoration is scheduled when still attached.
+   * @throws Propagates synchronous history or scheduling failures. Browser failures
+   * during restoration are raised by the scheduled callback.
+   */
+  const run = (
+    reactPanel: HistoryPanel,
+    inputRoot: Pick<InputRoot, "isAttached" | "clearSelection" | "focus">,
+    inputRegistration: PanelInputRegistration,
+    action: HistoryAction,
+  ): void => {
+    if (!inputRegistration.isCurrent(inputRoot)) {
       return;
     }
     reactPanel.document.history[action]();
+    if (!inputRegistration.isCurrent(inputRoot)) {
+      return;
+    }
     // Only restore selection and its focus here; undo/redo has already changed the document.
     reactPanel.selection.scheduleIfSelectionUnchanged(() => {
+      if (!inputRegistration.isCurrent(inputRoot)) {
+        return;
+      }
       if (reactPanel.selection.restoreDOM()) {
         return;
       }
-      root.ownerDocument.getSelection()?.removeAllRanges();
-      root.focus({ preventScroll: true });
+      if (!inputRegistration.isCurrent(inputRoot)) {
+        return;
+      }
+      inputRoot.clearSelection();
+      if (inputRegistration.isCurrent(inputRoot)) {
+        inputRoot.focus();
+      }
     });
   };
 
@@ -85,8 +115,8 @@ export function registerHistory(
       keys: options.undoKeys ?? ["Primary+z"],
       composing: "prevent",
     },
-    ({ reactPanel, root }) => {
-      run(reactPanel, root, "undo");
+    ({ reactPanel, inputRoot, inputRegistration }) => {
+      run(reactPanel, inputRoot, inputRegistration, "undo");
       return true;
     },
   );
@@ -97,8 +127,8 @@ export function registerHistory(
       keys: options.redoKeys ?? ["Primary+Shift+z", "Primary+y"],
       composing: "prevent",
     },
-    ({ reactPanel, root }) => {
-      run(reactPanel, root, "redo");
+    ({ reactPanel, inputRoot, inputRegistration }) => {
+      run(reactPanel, inputRoot, inputRegistration, "redo");
       return true;
     },
   );
@@ -109,14 +139,14 @@ export function registerHistory(
       type: "beforeinput",
       scope: "surface",
     },
-    ({ reactPanel, raw: event, root }) => {
-      const action = inputHistoryAction(event);
+    ({ reactPanel, textInput, inputRoot, inputRegistration }) => {
+      const action = inputHistoryAction(textInput);
       if (!action) {
         return false;
       }
 
-      if (!event.isComposing) {
-        run(reactPanel, root, action);
+      if (!textInput?.isComposing) {
+        run(reactPanel, inputRoot, inputRegistration, action);
       }
       return true;
     },

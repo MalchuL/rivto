@@ -2,7 +2,7 @@
  * Stateless matching, placement, and plain-text insertion helpers shared by
  * clipboard paste strategies.
  */
-import type { DocumentEditorAPI } from "../../../editor/types";
+import type { DocumentEditorOperations } from "../../../editor/types";
 import type { EditorPosition, Selection } from "../../selection-manager";
 import { isStructuralSelection } from "../../selection-manager";
 import type { PasteContext, PastePlacement, TextPasteTarget } from "./types";
@@ -14,7 +14,7 @@ import type { PasteContext, PastePlacement, TextPasteTarget } from "./types";
  * @returns Range including empty overlap slices, or undefined for structural/empty selection.
  */
 export function textRangeFromSelection(
-  editor: DocumentEditorAPI,
+  editor: DocumentEditorOperations,
   selection: Selection | undefined,
 ): TextPasteTarget | undefined {
   if (!selection || isStructuralSelection(selection)) {
@@ -100,7 +100,7 @@ export function isBlockPasteContext(
  * @returns Resulting caret, or undefined for empty input.
  */
 export function insertPlainText(
-  editor: DocumentEditorAPI,
+  editor: DocumentEditorOperations,
   value: string,
   defaultBlockType: string,
   splitNewlines: boolean,

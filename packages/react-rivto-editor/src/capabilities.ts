@@ -10,7 +10,7 @@ export type * from "./managers/blocks/renderers-api";
 export type * from "./managers/clipboard/api";
 export type * from "./managers/blocks/block-behaviors-api";
 export type * from "./managers/events/api";
-export type * from "./managers/keyboard/keyboard-api";
+export type { KeyboardApi } from "./managers/keyboard/types";
 export type * from "./managers/surfaces/api";
 export type * from "./managers/selection/api";
 export type * from "./managers/slash/api";

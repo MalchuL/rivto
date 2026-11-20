@@ -1,9 +1,11 @@
+import { parseHtmlFragment } from "@chulane/rivto-root/browser";
+import { parseClipboardHtml } from "./clipboard-html";
+export { clipboardHTMLText } from "./clipboard-html";
 import type {
   ClipboardBundle,
   EditorBlock,
   EditorBlockInput,
   EditorElementNode,
-  EditorElementInput,
 } from "@chulane/rivto";
 import type { RegistrationOwner } from "../extensions/types";
 import type {
@@ -244,67 +246,11 @@ export class ClipboardFormatRegistry {
       return { blocks: whole };
     }
     const converters = this.converters?.getParsers() ?? [];
-    if (data.html && typeof DOMParser !== "undefined") {
-      const document = new DOMParser().parseFromString(data.html, "text/html");
-      const blocks: EditorBlockInput[] = [];
-      const elements: EditorElementInput[] = [];
-      const visit = (node: Node, destination: EditorBlockInput[]): void => {
-        if (node.nodeType === 3) {
-          const content = node.textContent ?? "";
-          if (content.trim()) {
-            destination.push({ type: context.defaultBlockType, content });
-          }
-          return;
-        }
-        if (node.nodeType !== 1) {
-          return;
-        }
-        const element = node as Element;
-        if (["SCRIPT", "STYLE", "IFRAME", "OBJECT", "TEMPLATE"].includes(element.tagName)) {
-          return;
-        }
-        for (const converter of converters) {
-          const result = converter.parseHTML?.(element, context);
-          if (result === undefined) {
-            continue;
-          }
-          if (context.surface === "page" && result.elements?.length) {
-            throw new Error("Page clipboard parsers must return blocks");
-          }
-          destination.push(...(result.blocks ?? []));
-          elements.push(...(result.elements ?? []));
-          return;
-        }
-        if (element.tagName === "LI") {
-          const children: EditorBlockInput[] = [];
-          const own = [...element.childNodes].filter(
-            (child) => !(child.nodeType === 1 && ["UL", "OL"].includes((child as Element).tagName)),
-          );
-          const content = own.map(clipboardHTMLText).join("");
-          for (const child of [...element.children]) {
-            if (["UL", "OL"].includes(child.tagName)) {
-              visit(child, children);
-            }
-          }
-          const checkbox = element.querySelector('input[type="checkbox"]');
-          const listProps = checkbox
-            ? { type: "checkbox", checked: checkbox.hasAttribute("checked") }
-            : { type: element.parentElement?.tagName === "OL" ? "numbered_list" : "list" };
-          destination.push({ type: context.defaultBlockType, content, children, listProps });
-          return;
-        }
-        if (
-          ["P", "H1", "H2", "H3", "H4", "H5", "H6", "PRE"].includes(element.tagName) ||
-          (element.tagName === "DIV" && !element.querySelector("p,div,ul,ol,pre,section,article"))
-        ) {
-          destination.push({ type: context.defaultBlockType, content: clipboardHTMLText(element) });
-          return;
-        }
-        [...element.childNodes].forEach((child) => visit(child, destination));
-      };
-      [...document.body.childNodes].forEach((node) => visit(node, blocks));
-      if (blocks.length || elements.length) {
-        return { blocks, elements };
+    if (data.html) {
+      const nodes = parseHtmlFragment(data.html);
+      const parsed = nodes && parseClipboardHtml(nodes, converters, context);
+      if (parsed) {
+        return parsed;
       }
     }
     for (const converter of converters) {
@@ -332,22 +278,4 @@ function joinFormats(items: readonly PortableBlockFormats[]): PortableBlockForma
       .join("\n"),
     html: items.map((item) => item.html).join(""),
   };
-}
-
-/** Reads detached HTML text, preserving line breaks and ignoring executable or embedded content. */
-export function clipboardHTMLText(node: Node): string {
-  if (node.nodeType === 3) {
-    return node.textContent ?? "";
-  }
-  if (node.nodeType !== 1) {
-    return "";
-  }
-  const element = node as Element;
-  if (["SCRIPT", "STYLE", "IFRAME", "OBJECT", "TEMPLATE"].includes(element.tagName)) {
-    return "";
-  }
-  if (element.tagName === "BR") {
-    return "\n";
-  }
-  return [...node.childNodes].map(clipboardHTMLText).join("");
 }

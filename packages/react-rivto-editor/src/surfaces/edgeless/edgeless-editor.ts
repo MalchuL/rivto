@@ -5,7 +5,7 @@ import { getEdgelessRuntime } from "../../extensions/built-ins/selection/edgeles
 import { EdgelessCanvasAdapter } from "./canvas-adapter";
 
 /** Composes one Rivto occurrence's scene, document projection, tools and creation settings. */
-export class EdgelessEditor extends CanvasEditor<EdgelessToolContext> {
+export class EdgelessEditor extends CanvasEditor<EdgelessToolContext, EdgelessCanvasAdapter> {
   /**
    * Binds application dependencies without installing document or DOM subscriptions.
    *

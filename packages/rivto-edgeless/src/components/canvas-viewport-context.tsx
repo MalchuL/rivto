@@ -1,12 +1,8 @@
 import { createContext, useContext, useSyncExternalStore } from "react";
-import type { CanvasViewport, CanvasViewportLayers } from "../browser/canvas-viewport";
-
-/** Borrowed browser state and registrations; DOM attachment belongs to CanvasView. */
-export interface CanvasViewportApi {
-  readonly canvas: CanvasViewport["canvas"];
-  readonly layers: CanvasViewport["layers"];
-  readonly events: Pick<CanvasViewport["events"], "register">;
-}
+import type { CanvasViewport } from "../browser/canvas-viewport";
+import type { CanvasViewportCoordinates } from "../browser/types";
+import { canvasViewportAttachment } from "../browser/canvas-viewport-attachment";
+import type { CanvasViewportApi } from "./types";
 
 /** Shared browser attachment; kept separate from the framework-neutral editor class. */
 export const CanvasViewportContext = createContext<CanvasViewport | null>(null);
@@ -21,18 +17,35 @@ export function useCanvasViewport(): CanvasViewportApi | null {
 }
 
 /**
- * Observes mount and unmount of the receiving view's DOM layers.
+ * Observes whether the current canvas occurrence has an attached view.
  *
- * Sibling extensions inside CanvasEditorProvider observe the same attachment as
- * children of CanvasView. Camera and geometry updates do not replace this snapshot.
+ * Attachment changes notify sibling components without exposing browser layers.
+ * Server rendering and calls outside a viewport provider report false.
  *
- * @returns Mounted root and world plane, or null before mount, after detach and during SSR.
+ * @returns Whether this occurrence currently has an attached view.
  */
-export function useCanvasViewportLayers(): CanvasViewportLayers | null {
-  const viewport = useCanvasViewport();
+export function useCanvasViewportAttached(): boolean {
+  const viewport = useContext(CanvasViewportContext);
   return useSyncExternalStore(
-    (listener) => viewport?.layers.subscribe(listener) ?? (() => {}),
-    () => viewport?.layers.get() ?? null,
+    (listener) => viewport?.subscribeAttachment(listener) ?? (() => {}),
+    () => viewport?.isAttached() ?? false,
+    () => false,
+  );
+}
+
+/**
+ * Observes the current attachment-bound coordinate capability.
+ *
+ * A captured capability becomes inactive when its exact attachment is withdrawn,
+ * even if a later attachment reuses the same element.
+ *
+ * @returns Current coordinates capability, or null when unattached or outside a provider.
+ */
+export function useCanvasViewportCoordinates(): CanvasViewportCoordinates | null {
+  const viewport = useContext(CanvasViewportContext);
+  return useSyncExternalStore(
+    (listener) => (viewport ? canvasViewportAttachment(viewport).subscribe(listener) : () => {}),
+    () => (viewport ? (canvasViewportAttachment(viewport).get()?.coordinates ?? null) : null),
     () => null,
   );
 }

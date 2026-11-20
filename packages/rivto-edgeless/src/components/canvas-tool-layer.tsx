@@ -1,23 +1,11 @@
 import { ReactCanvasTool } from "../tools/react-canvas-tool";
-import { useCallback, useSyncExternalStore } from "react";
-import type { Canvas } from "../core/canvas";
-import type { CanvasTool } from "../core/tools/canvas-tool";
+import { subscribeCanvasToolCancellation } from "../browser/canvas-tool-cancellation";
+import { useCallback, useRef, useSyncExternalStore, type RefObject } from "react";
 import type { CanvasToolSession } from "../types/tool-session";
+import type { CanvasPointerInput } from "../browser/types";
+import type { CanvasToolAttachment, CanvasToolLayerProps, CanvasToolPreviewProps } from "./types";
+export type { CanvasToolPreviewProps } from "./types";
 import { useCanvasToolGesture } from "../hooks/use-canvas-tool-gesture";
-
-/** Preview subscriptions and zoom supplied to a registered React tool. */
-export interface CanvasToolPreviewProps {
-  readonly tool: CanvasTool;
-  readonly zoom: number;
-}
-
-/** World conversion and tool state borrowed by the transparent capture layer. */
-interface CanvasToolLayerProps {
-  readonly canvas: Pick<Canvas, "camera" | "snapping" | "toWorld">;
-  readonly root: HTMLElement;
-  readonly tool: CanvasTool;
-  readonly tools: Pick<CanvasToolSession, "reset">;
-}
 
 /**
  * Renders the active instance's local preview without rerendering the whole toolbar.
@@ -40,28 +28,50 @@ export function CanvasToolPreview({ tool, zoom }: CanvasToolPreviewProps) {
  * @param props - Canvas coordinates, receiving viewport and tool session.
  * @returns A transparent capture surface; the tool alone decides whether to accept a gesture.
  */
-export function CanvasToolLayer({ canvas, root, tool, tools }: CanvasToolLayerProps) {
-  const subscribeCancellation = useToolCancellation(root, tools);
-  const handlers = useCanvasToolGesture({
+export function CanvasToolLayer({
+  canvas,
+  rootIdentity,
+  viewport,
+  attachment: attachmentStore,
+  tool,
+  tools,
+}: CanvasToolLayerProps) {
+  const attachment = useSyncExternalStore(
+    attachmentStore.subscribe,
+    attachmentStore.get,
+    () => null,
+  );
+  const activeAttachment = useRef<CanvasToolAttachment | null>(null);
+  const subscribeCancellation = useToolCancellation(viewport, tools, attachment, activeAttachment);
+  const focus = useCallback(() => attachment?.focus(), [attachment]);
+  useCanvasToolGesture({
     tool,
     subscribeCancellation,
-    normalize: (event) => normalizeToolPointer(canvas, root, event),
+    events: viewport.events,
+    captureSelector: "[data-canvas-tool-capture]",
+    onCapture: focus,
+    normalize: (event) => {
+      if (
+        !attachment ||
+        attachment.rootIdentity !== rootIdentity ||
+        activeAttachment.current !== attachment ||
+        attachmentStore.get() !== attachment
+      ) {
+        return undefined;
+      }
+      const sample = normalizeToolPointer(canvas, attachment.coordinates, event);
+      if (activeAttachment.current !== attachment || attachmentStore.get() !== attachment) {
+        return undefined;
+      }
+      return sample;
+    },
   });
   return (
     <svg
       data-canvas-control=""
+      data-canvas-tool-capture=""
       aria-label="Tool capture"
       style={{ position: "absolute", inset: 0, width: "100%", height: "100%", touchAction: "none" }}
-      onPointerDown={(event) => {
-        handlers.pointerDown(event);
-        if (event.defaultPrevented) {
-          root.focus({ preventScroll: true });
-        }
-      }}
-      onPointerMove={handlers.pointerMove}
-      onPointerUp={handlers.pointerUp}
-      onPointerCancel={handlers.pointerCancel}
-      onPointerLeave={handlers.pointerLeave}
     >
       <rect width="100%" height="100%" fill="transparent" />
     </svg>
@@ -69,59 +79,57 @@ export function CanvasToolLayer({ canvas, root, tool, tools }: CanvasToolLayerPr
 }
 
 /**
- * Observes local Escape and browser blur for tool cancellation.
+ * Observes Escape and blur for the exact rendered attachment.
  *
- * @param root - Viewport receiving keyboard input.
+ * @param viewport - Borrowed normalized input observation.
  * @param tools - Session supplying the registered fallback tool.
- * @returns Stable subscriber that releases both listeners on cleanup.
+ * @param attachment - Exact attachment captured by this render, or null before mounting.
+ * @param activeAttachment - Records the attachment whose cancellation observers are installed.
+ * @returns Subscriber releasing both observations and invalidating the captured attachment.
  */
-function useToolCancellation(root: HTMLElement, tools: Pick<CanvasToolSession, "reset">) {
-  const subscribeCancellation = useCallback(
+function useToolCancellation(
+  viewport: CanvasToolLayerProps["viewport"],
+  tools: Pick<CanvasToolSession, "reset">,
+  attachment: CanvasToolAttachment | null,
+  activeAttachment: RefObject<CanvasToolAttachment | null>,
+) {
+  return useCallback(
     (cancel: () => boolean) => {
-      /**
-       * Cancels the captured preview before falling back to the default tool.
-       *
-       * @param event - Keyboard input within this canvas.
-       * @returns Escape cancels the local gesture or resets tool selection.
-       */
-      const key = (event: KeyboardEvent) => {
-        if (event.key === "Escape") {
-          if (!cancel()) {
-            tools.reset();
-          }
-          event.preventDefault();
-        }
-      };
-      root.addEventListener("keydown", key);
-      window.addEventListener("blur", cancel);
+      const release = subscribeCanvasToolCancellation(viewport.events, tools, cancel);
+      activeAttachment.current = attachment;
       return () => {
-        root.removeEventListener("keydown", key);
-        window.removeEventListener("blur", cancel);
+        if (activeAttachment.current === attachment) {
+          activeAttachment.current = null;
+        }
+        release();
       };
     },
-    [root, tools],
+    [viewport, tools, attachment, activeAttachment],
   );
-  return subscribeCancellation;
 }
 
 /**
- * Converts native pointer input to world coordinates and current snapping policy.
+ * Converts detached pointer input to world coordinates and current snapping policy.
  *
  * @param canvas - Scene supplying the live camera and snapping settings.
- * @param root - Viewport defining the client-coordinate origin.
- * @param event - Browser pointer sample.
- * @returns A tool sample with world coordinates and zoom-adjusted snapping threshold.
+ * @param coordinates - Captured occurrence converting client coordinates to world coordinates.
+ * @param event - Copied pointer coordinates and modifiers.
+ * @returns A tool sample with world coordinates and zoom-adjusted snapping threshold,
+ * or undefined when the viewport is no longer attached.
  */
 function normalizeToolPointer(
   canvas: CanvasToolLayerProps["canvas"],
-  root: HTMLElement,
-  event: PointerEvent,
+  coordinates: CanvasToolAttachment["coordinates"],
+  event: CanvasPointerInput,
 ) {
-  const rect = root.getBoundingClientRect();
+  const point = coordinates.clientToWorld({ x: event.clientX, y: event.clientY });
+  if (!point) {
+    return undefined;
+  }
   const zoom = canvas.camera.get().zoom;
   const snapping = canvas.snapping.get();
   return {
-    point: canvas.toWorld({ x: event.clientX - rect.left, y: event.clientY - rect.top }),
+    point,
     pointerId: event.pointerId,
     button: event.button,
     shiftKey: event.shiftKey,

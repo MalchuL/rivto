@@ -22,7 +22,7 @@ Handler получает `EditorEvent` со properties `raw`, `panel`, `root`, `
 
 - `delete(id)` принимает registration ID, возвращает `boolean`, не throws для missing ID.
 - `ReactPanel.setRoot(root)` принимает `HTMLElement | null` и обновляет root конкретного отображения через его контроллер; общие surface/document/window listeners переподключаются через реестр. Этот lifecycle method остаётся у контроллера панели и не входит в `ReactPanelApi`; ref поверхности получает его от владельца панели.
-- `reactPanel.getRoot()` возвращает root этого отображения или `null`.
+- `reactPanel.inputRoot` предоставляет возможности текущего отображения; до регистрации и после отключения оно отсутствует.
 - `runtime.panels.getActive()` возвращает последнее активированное отображение либо undefined до первого взаимодействия.
 - `runtime.panels.getDefault()` выбирает full-document view, затем первое subtree. Fallback явно записывается вызывающим кодом: `getActive() ?? getDefault()`.
 - `reactPanel.getSurfaceType()` возвращает mode отображаемой поверхности, а без root — mode панели.

@@ -202,6 +202,16 @@ export interface DocumentBlockManagerApi {
   hasChildren(id: string): boolean;
   /** @param id - Block identifier. @returns Parent ID, null for roots, or undefined when absent. */
   getParentId(id: string): string | null | undefined;
+  /**
+   * Resolves placed block parents for a group of identities.
+   *
+   * During a transaction the result reflects the current hierarchy. Duplicate
+   * input IDs are read once; missing or unplaced IDs are omitted.
+   *
+   * @param ids - Block identities whose immediate parents are needed.
+   * @returns Parent IDs keyed by block ID, with null for document roots.
+   */
+  getParentIds(ids: readonly string[]): ReadonlyMap<string, string | null>;
   /** @param id - Block identifier. @returns True when the block exists and has no parent. */
   isRootBlock(id: string): boolean;
   /**

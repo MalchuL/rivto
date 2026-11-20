@@ -8,7 +8,6 @@
  * @module
  */
 export { ContainerBlockBehavior } from "./container-block-behavior";
-export { createBlockBehaviorContext } from "./utils/context";
 export { DefaultBlockBehavior } from "./default-block-behavior";
 export { focusCaret, scheduleBlockFocus } from "./utils/focus-ops";
 export {
@@ -20,8 +19,14 @@ export {
 export type {
   BlockBehavior,
   BlockBehaviorAction,
-  BlockBehaviorContext,
+  BlockEditingPanel,
+  BlockKeyboardContext,
+  ContainerWritingContext,
+  BlockSnapshotContext,
+  BlockSnapshotPanel,
+  BlockRelocationDocument,
   BlockOutlineContext,
+  BlockOutlinePanel,
   BlockBehaviorData,
   BlockBehaviorAvailabilityContext,
   BlockBehaviorOutcome,

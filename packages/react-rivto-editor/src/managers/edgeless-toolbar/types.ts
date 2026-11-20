@@ -1,10 +1,9 @@
-import type { EdgelessCreationTool } from "../edgeless-tools/edgeless-creation-tool";
 import type {
   ElementCreationDefaults,
   RememberedElementProperties,
 } from "../elements/creation-defaults-types";
-import type { ComponentType, ReactNode, PointerEvent } from "react";
-import type { EdgelessToolButtonProps } from "../../components/edgeless/tool-button";
+import type { ComponentType, ReactNode } from "react";
+import type { EdgelessToolButtonProps } from "../../components/edgeless/types";
 import type { EdgelessOperations } from "../elements/edgeless-operations";
 import type { EdgelessTool, EdgelessToolOptions } from "../edgeless-tools/edgeless-tool";
 import type { EdgelessToolContext } from "../edgeless-tools/edgeless-tool-context";
@@ -44,45 +43,8 @@ export interface EdgelessToolbarTool {
   readonly createTool: (options: EdgelessToolOptions) => EdgelessTool;
   /** Optional preview override; ordinary registrations use the instance's renderPreview method. */
   readonly preview?: ComponentType<{ readonly tool: EdgelessTool; readonly zoom: number }>;
-  /**
-   * Supplies optional pointer bindings, for example existing draggable placement presets.
-   * Keyboard activation normally uses activate. A supplied click handler may preventDefault
-   * when a pointer gesture has already activated the tool, avoiding duplicate activation.
-   * @param context - Receiving panel, shared operations and mounted preset-drag services.
-   * @returns Native pointer handlers and optional button class for the common renderer.
-   */
-  readonly getButtonProps?: (
-    context: EdgelessToolbarRenderContext,
-  ) => Pick<
-    EdgelessToolButtonProps,
-    "onClick" | "onPointerDown" | "onPointerMove" | "onPointerUp" | "onPointerCancel" | "className"
-  >;
-}
-
-/** Pointer placement services available while the toolbar is mounted. */
-export interface EdgelessToolbarRenderContext extends EdgelessToolbarContext {
-  /**
-   * Captures the primary pointer for a built-in placement preset without inserting content.
-   * @param event - Pointer-down event from the shared tool button.
-   * @param tool - Registered surface instance supporting toolbar placement; movement starts its detached preview.
-   */
-  readonly startPresetDrag: (
-    event: PointerEvent<HTMLButtonElement>,
-    tool: EdgelessCreationTool,
-  ) => void;
-  /**
-   * Moves the captured preview and snap guides without document writes.
-   * @param event - Pointer-move event; events for another pointer are ignored.
-   */
-  readonly movePresetDrag: (event: PointerEvent<HTMLButtonElement>) => void;
-  /**
-   * Releases capture, removes the preview and optionally completes placement.
-   * A drag inserts only when released over the canvas, outside editor controls.
-   * A click activates placement for the next canvas gesture without inserting an element.
-   * @param event - Pointer-up or pointer-cancel event for the captured pointer.
-   * @param commit - Defaults to true; pass false on cancellation to avoid insertion or activation.
-   */
-  readonly endPresetDrag: (event: PointerEvent<HTMLButtonElement>, commit?: boolean) => void;
+  /** Optional styling applied to the shared tool button. */
+  readonly className?: string;
 }
 
 /** Resolved group member; use its activation and button so extension tools share interaction and accessibility. */

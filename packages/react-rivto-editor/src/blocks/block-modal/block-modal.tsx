@@ -10,13 +10,16 @@
  * @module
  */
 import { editorControlProps } from "../../constants";
+import { getBrowserElementIdentity } from "@chulane/rivto-root/browser";
+import type { RegionIdentity } from "@chulane/rivto-root";
+import { focusBlockModalToggle } from "./block-modal-focus";
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { Maximize2Icon, Minimize2Icon } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
 import { EditorEmbed } from "../../components/editor-embed/editor-embed";
 import { PageSurface } from "../../surfaces/page/page-surface";
-import { useReactPanel } from "../../hooks/editor/use-react-panel";
+import { useReactPanelContext } from "../../hooks/editor/use-react-panel-context";
 const DIALOG_CLASS = "rivto-block-modal";
 const EXPAND_CLASS = "rivto-block-modal-expand";
 const ExpandContext = createContext<{
@@ -50,9 +53,9 @@ export function BlockModal({
   children: ReactNode;
   label: string;
 }) {
-  const inline = useRef<HTMLDivElement>(null);
+  const inline = useRef<RegionIdentity | undefined>(undefined);
   const parent = useContext(ExpandContext);
-  const panel = useReactPanel();
+  const panel = useReactPanelContext().reactPanel;
   const [expanded, setExpanded] = useState(false);
   if (parent?.expanded && parent.blockId === blockId) {
     return children;
@@ -62,7 +65,14 @@ export function BlockModal({
       value={{ blockId, expanded, label, toggle: () => setExpanded(!expanded) }}
     >
       <Dialog open={expanded} onOpenChange={setExpanded}>
-        <div ref={inline} className={DIALOG_CLASS} role="group" aria-label={`${label} board`}>
+        <div
+          ref={(element) => {
+            inline.current = element ? getBrowserElementIdentity(element) : undefined;
+          }}
+          className={DIALOG_CLASS}
+          role="group"
+          aria-label={`${label} board`}
+        >
           {!expanded && children}
         </div>
         {expanded && (
@@ -73,7 +83,7 @@ export function BlockModal({
             aria-modal="true"
             onCloseAutoFocus={(event) => {
               event.preventDefault();
-              inline.current?.querySelector<HTMLButtonElement>(`.${EXPAND_CLASS}`)?.focus();
+              focusBlockModalToggle(panel, inline.current, `.${EXPAND_CLASS}`);
             }}
           >
             <DialogTitle className="sr-only">Expanded {label}</DialogTitle>

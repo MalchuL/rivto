@@ -1,20 +1,21 @@
 /**
- * Resolves the document and DOM boundaries used by page-style navigation.
+ * Resolves the document boundaries used by page-style navigation.
  * Block mode walks the document root, while structural and horizontal edgeless
  * navigation remains inside the owning card. Vertical caret movement and text
  * extension use the shared surface order so they can reach offscreen cards.
+ * Rendered occurrence boundaries are captured separately through Root.
  *
  * @module
  */
 import type { EditorBlock, EditorElementNode, DocumentEditorAPI } from "@chulane/rivto";
-import type { ReactPanelApi } from "../../../../../panels/types";
+import type { NavigationCardSource, NavigationParentSource, NavigationScopePanel } from "./types";
 import { blockIdsOf } from "../../../../../elements/block-element-projection";
-import { findRenderedBlock } from "../../../../../blocks/block-dom";
-
-const EDGELESS_ROOT_SELECTOR = "[data-edgeless-root]";
 
 /** Walks to the document root that owns `blockId`. */
-export function owningRootId(editor: ReactPanelApi | DocumentEditorAPI, blockId: string): string {
+export function owningRootId(
+  editor: NavigationParentSource | DocumentEditorAPI,
+  blockId: string,
+): string {
   let rootId = blockId;
   for (
     let parentId = editor.blocks.getParentId(rootId);
@@ -28,7 +29,7 @@ export function owningRootId(editor: ReactPanelApi | DocumentEditorAPI, blockId:
 
 /** Finds the edgeless card element whose root range includes `blockId`. */
 export function owningBlockElement(
-  editor: ReactPanelApi | DocumentEditorAPI,
+  editor: NavigationCardSource | DocumentEditorAPI,
   blockId: string,
 ): EditorElementNode | undefined {
   const rootId = owningRootId(editor, blockId);
@@ -48,14 +49,14 @@ export function owningBlockElement(
  * document mode because they have no DOM occurrence.
  */
 export function navigationOutlineBlocks(
-  editor: ReactPanelApi | DocumentEditorAPI,
+  editor: NavigationScopePanel | DocumentEditorAPI,
   blockId: string,
 ): EditorBlock[] {
   const roots = editor.blocks.getBlocks();
   let outline = roots;
   // Navigation follows the rendered view, which can be a page in an edgeless document.
   // Core-only callers have no view and use the complete block outline.
-  const mode = "events" in editor ? editor.getSurfaceType() : "block";
+  const mode = "getSurfaceType" in editor ? editor.getSurfaceType() : "block";
   if (mode === "edgeless") {
     const element = owningBlockElement(editor, blockId);
     if (!element) {
@@ -72,19 +73,4 @@ export function navigationOutlineBlocks(
     }
   }
   return outline;
-}
-
-/**
- * DOM scope for editable-block walks (`findNext` / vertical caret).
- *
- * Edgeless cards expose their own `[data-edgeless-root]` host, so querying from
- * that host cannot see siblings on other cards.
- * Embedded sources keep their document-view root even when rendered inside a
- * host card, so navigation cannot escape into the host's document.
- */
-export function navigationDomRoot(surfaceRoot: HTMLElement, blockId: string): HTMLElement {
-  const card = findRenderedBlock(surfaceRoot, blockId)?.closest<HTMLElement>(
-    EDGELESS_ROOT_SELECTOR,
-  );
-  return card && surfaceRoot.contains(card) ? card : surfaceRoot;
 }

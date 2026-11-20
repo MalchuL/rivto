@@ -1,26 +1,24 @@
 import { useLayoutEffect, useMemo, useSyncExternalStore } from "react";
-import type { CanvasApi } from "../core/canvas";
-import { CanvasTransformControls } from "./transform-controls";
+import { CanvasTransformControls } from "./browser/transform-controls";
 import { CanvasTransformAdapter } from "./canvas-transform-adapter";
-
-/** Scene and mounted layers borrowed by the default transform controls. */
-interface DefaultControlsProps {
-  readonly canvas: CanvasApi;
-  readonly root: HTMLElement;
-  readonly plane: HTMLElement;
-}
+import { useCanvasViewport } from "./canvas-viewport-context";
+import { useCanvasViewportLayers } from "./browser/use-canvas-viewport-layers";
+import type { CanvasTransformInput, DefaultControlsProps } from "./types";
 
 /**
  * Connects generic transform controls to the canvas preview and commit lifecycle.
  *
- * @param props - Independent canvas and its mounted DOM layers.
+ * @param props - Independent canvas using the mounted viewport.
  * @param props.canvas - Scene owning selection and transforms.
- * @param props.root - Focusable viewport receiving native drag input.
- * @param props.plane - World layer containing the geometry hosts.
  * @returns Default transform controls; consumers with document policies may supply their own adapter.
  */
-export function DefaultControls({ canvas, root, plane }: DefaultControlsProps) {
-  const adapter = useMemo(() => new CanvasTransformAdapter(canvas, plane), [canvas, plane]);
+export function DefaultControls({ canvas }: DefaultControlsProps) {
+  const viewport = useCanvasViewport();
+  const layers: CanvasTransformInput | null = useCanvasViewportLayers();
+  const adapter = useMemo(
+    () => (layers ? new CanvasTransformAdapter(canvas, layers) : null),
+    [canvas, layers],
+  );
   const transforming = useSyncExternalStore(
     canvas.transform.subscribe,
     () => canvas.transform.get() !== null,
@@ -28,19 +26,18 @@ export function DefaultControls({ canvas, root, plane }: DefaultControlsProps) {
   useLayoutEffect(() => {
     if (!transforming) {
       // Cancellation restores element DOM during React commit; measure it afterwards.
-      adapter.stop();
+      adapter?.stop();
     }
   }, [adapter, transforming]);
   useLayoutEffect(() => {
-    /**
-     * Forwards native drag admission to this surface's transform adapter.
-     *
-     * @param event - Mouse input inside the viewport.
-     * @returns Eligible targets begin a move preview.
-     */
-    const startDrag = (event: MouseEvent) => adapter.startDrag(event, root);
-    root.addEventListener("mousedown", startDrag);
-    return () => root.removeEventListener("mousedown", startDrag);
-  }, [adapter, root]);
-  return <CanvasTransformControls canvas={canvas} plane={plane} adapter={adapter} />;
+    if (!adapter || !viewport) {
+      return;
+    }
+    return viewport.events.register({
+      id: "canvas.controls.default-drag",
+      type: "mousedown",
+      handle: (event) => adapter.startDrag(event),
+    });
+  }, [adapter, viewport]);
+  return adapter ? <CanvasTransformControls canvas={canvas} adapter={adapter} /> : null;
 }

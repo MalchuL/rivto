@@ -1,3 +1,4 @@
+import type { BlockContextMenuProps } from "./types";
 import { useSyncExternalStore } from "react";
 import type {
   BlockContextMenuContext,
@@ -126,24 +127,6 @@ function MenuEntries({
     });
 }
 
-/** Captured invocation coordinates and focus ownership for an active block menu. */
-interface BlockContextMenuProps {
-  /** Invoking panel and captured target IDs, retained while menu focus moves. */
-  context: BlockContextMenuContext;
-  /** Horizontal anchor coordinate in viewport CSS pixels. */
-  x: number;
-  /** Vertical anchor coordinate in viewport CSS pixels. */
-  y: number;
-  /**
-   * Requests dismissal of this menu without changing its captured targets.
-   *
-   * @returns No value after the owning handle has been notified.
-   */
-  close: () => void;
-  /** Button receiving focus on dismissal, or null if it is no longer mounted. */
-  handle: HTMLButtonElement | null;
-}
-
 /**
  * Mounts an open, nonmodal menu at the captured pointer or keyboard anchor.
  *
@@ -157,10 +140,10 @@ interface BlockContextMenuProps {
  * @param props.x - Horizontal viewport anchor coordinate in CSS pixels.
  * @param props.y - Vertical viewport anchor coordinate in CSS pixels.
  * @param props.close - Callback asking the owning handle to unmount the menu.
- * @param props.handle - Button to refocus on close, or null when unavailable.
+ * @param props.restoreFocus - Requests focus on the original handle when its owner remains available.
  * @returns The controlled shadcn/ui menu and its portaled contents.
  */
-export function BlockContextMenu({ context, x, y, close, handle }: BlockContextMenuProps) {
+export function BlockContextMenu({ context, x, y, close, restoreFocus }: BlockContextMenuProps) {
   const registry = context.reactPanel.editor.blockContextMenu;
   useSyncExternalStore(
     (listener) => registry.subscribe(listener),
@@ -188,7 +171,7 @@ export function BlockContextMenu({ context, x, y, close, handle }: BlockContextM
         collisionPadding={8}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
-          handle?.focus();
+          restoreFocus();
         }}
       >
         <MenuEntries

@@ -1,6 +1,6 @@
 import { BlockDropTarget } from "../../drag-and-drop/block-drop-target";
 import { BlockWrapper } from "../block-wrapper/block-wrapper";
-import { useBlockRegion } from "./use-block-region";
+import { useBlockIdentityRegion } from "./use-block-identity-region";
 import { memo, useCallback, useId, useMemo, useSyncExternalStore } from "react";
 import type { BlockRendererProps, BlockLayout } from "../../renderers/types";
 import type { BlockEditorNodeSnapshot } from "../../../adapter/types";
@@ -63,7 +63,7 @@ const BlockLayoutRenderer = memo(function BlockLayoutRenderer({
  * @throws Propagates registry and host component failures.
  */
 function BlockNodeView({ blockId, node, block, selected }: BlockNodeViewProps) {
-  const shellRef = useBlockRegion(blockId, "shell");
+  const shellRef = useBlockIdentityRegion(blockId, "shell");
   const { slots, renderers } = useBlockEditorController();
   const subscribeSlots = useCallback((listener: () => void) => slots.subscribe(listener), [slots]);
   const readSlots = useCallback(() => slots.getSnapshot(), [slots]);

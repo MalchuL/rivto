@@ -1,195 +1,120 @@
-import { BLOCK_EDITOR_CLASSES } from "../../block-editor-classes";
+import type { InputRegion, InputRoot, RegionIdentity } from "@chulane/rivto-root";
+import type { BlockLayoutRegion, MountedRegion, RegisteredLayoutRegion } from "./types";
+export type { BlockLayoutRegion } from "./types";
 
-/** Mounted layout roles shared by hover, selection and drop geometry. */
-export type BlockLayoutRegion = "shell" | "row" | "content" | "children" | "body" | "slot" | "item";
-
-/** Registration attached to an element without retaining detached DOM globally. */
-interface MountedRegion {
-  readonly blockId: string;
-  readonly role: BlockLayoutRegion;
-  readonly registry: Pick<BlockLayoutRegions, "get">;
-}
-
-const mounted = new WeakMap<HTMLElement, MountedRegion>();
-
-/** Owns addressed layout elements for one editor occurrence; refs own their registrations. */
+/** Owns addressed layout identities for one editor occurrence; refs own their registrations. */
 export class BlockLayoutRegions {
-  private readonly owners = new Map<string, Set<HTMLElement>>();
+  private readonly owners = new Map<string, Set<MountedRegion>>();
+  private readonly identities = new WeakMap<RegionIdentity, MountedRegion>();
 
   /**
-   * Registers the actual element supplied by a primitive's committed ref.
+   * Registers the identity supplied by a primitive's committed ref.
    *
    * Multiple slots/items are allowed. Disposing an older registration cannot
-   * erase a replacement registration on the same element.
+   * erase a replacement registration for the same identity.
    *
    * @param blockId - Owner within this editor occurrence.
    * @param role - Layout responsibility, independent of DOM depth.
-   * @param element - Mounted primitive element.
+   * @param identity - Opaque identity of the mounted primitive.
    * @returns Idempotent disposer releasing only this registration.
    */
-  register(blockId: string, role: BlockLayoutRegion, element: HTMLElement): () => void {
-    const entry = { blockId, role, registry: this };
-    const elements = this.owners.get(blockId) ?? new Set<HTMLElement>();
-    elements.add(element);
-    this.owners.set(blockId, elements);
-    mounted.set(element, entry);
+  register(blockId: string, role: BlockLayoutRegion, identity: RegionIdentity): () => void {
+    const previous = this.identities.get(identity);
+    if (previous) {
+      const previousOwners = this.owners.get(previous.blockId);
+      previousOwners?.delete(previous);
+      if (!previousOwners?.size) {
+        this.owners.delete(previous.blockId);
+      }
+    }
+    const entry = { blockId, role, identity };
+    const entries = this.owners.get(blockId) ?? new Set<MountedRegion>();
+    entries.add(entry);
+    this.owners.set(blockId, entries);
+    this.identities.set(identity, entry);
     return () => {
-      if (mounted.get(element) !== entry) {
+      if (this.identities.get(identity) !== entry) {
         return;
       }
-      mounted.delete(element);
-      elements.delete(element);
-      if (!elements.size) {
+      this.identities.delete(identity);
+      entries.delete(entry);
+      if (!entries.size) {
         this.owners.delete(blockId);
       }
     };
   }
 
   /**
-   * Reads one owner's mounted region without walking its child blocks.
+   * Resolves a role within an active owner without exposing its browser element.
    *
-   * @param blockId - Addressed owner identity.
-   * @param role - Requested layout responsibility.
-   * @param within - Optional containing shell, distinguishing nested occurrences.
-   * @returns First matching region, or undefined when omitted by the layout.
+   * Only registered regions contained by this exact owner are eligible. Root
+   * captures each candidate for the current occurrence before containment is checked.
+   *
+   * @param owner - Attachment-bound region for the registered owner.
+   * @param role - Layout role to find within that owner.
+   * @param root - Borrowed Root capable of capturing registered identities.
+   * @returns Registration status and the matching region identity when present.
+   * @throws Propagates Root ownership and containment failures.
    */
-  get(blockId: string, role: BlockLayoutRegion, within?: HTMLElement): HTMLElement | undefined {
-    for (const element of this.owners.get(blockId) ?? []) {
-      const entry = mounted.get(element);
-      if (
-        entry?.registry === this &&
-        entry.blockId === blockId &&
-        entry.role === role &&
-        (!within || within.contains(element))
-      ) {
-        return element;
+  getRegionIdentity(
+    owner: InputRegion,
+    role: BlockLayoutRegion,
+    root: Pick<InputRoot, "captureRegionByIdentity">,
+  ): RegisteredLayoutRegion {
+    const identity = owner.getIdentity();
+    const entry = identity && this.identities.get(identity);
+    if (!entry) {
+      return { registered: false };
+    }
+    for (const candidate of this.getIdentities(entry.blockId, role)) {
+      const region = root.captureRegionByIdentity(candidate);
+      if (region && owner.containsRegion(region)) {
+        return { registered: true, identity: candidate };
       }
     }
-    return undefined;
+    return { registered: true, identity: undefined };
+  }
+
+  /**
+   * Reads the owner and role registered for an opaque mounted identity.
+   *
+   * @param identity - Identity of a region in this editor occurrence.
+   * @returns Its active registration, or undefined when it is not registered.
+   */
+  getRegistration(
+    identity: RegionIdentity,
+  ): Readonly<Pick<MountedRegion, "blockId" | "role">> | undefined {
+    return this.identities.get(identity);
+  }
+
+  /**
+   * Lists the registered identities for one block and layout role in registration order.
+   *
+   * @param blockId - Owner within this editor occurrence.
+   * @param role - Layout responsibility to find.
+   * @returns Opaque identities of the matching mounted regions.
+   */
+  getIdentities(blockId: string, role: BlockLayoutRegion): readonly RegionIdentity[] {
+    const identities: RegionIdentity[] = [];
+    for (const entry of this.owners.get(blockId) ?? []) {
+      if (entry.role === role) {
+        identities.push(entry.identity);
+      }
+    }
+    return identities;
   }
 
   /**
    * Releases region references when the host destroys this editor.
    *
-   * @returns No mounted elements remain owned by this registry.
+   * @returns No mounted identities remain owned by this registry.
    */
   destroy(): void {
-    for (const elements of this.owners.values()) {
-      for (const element of elements) {
-        if (mounted.get(element)?.registry === this) {
-          mounted.delete(element);
-        }
+    for (const entries of this.owners.values()) {
+      for (const entry of entries) {
+        this.identities.delete(entry.identity);
       }
     }
     this.owners.clear();
   }
-}
-
-/**
- * Finds the owning primary row for a native hit on an explicitly placed slot.
- *
- * @param hit - Native element hit within an editor occurrence.
- * @returns Owner row for a registered slot/body, or undefined for ordinary content.
- */
-export function blockSlotRow(hit: Element): HTMLElement | undefined {
-  for (let element: Element | null = hit; element; element = element.parentElement) {
-    const entry = mounted.get(element as HTMLElement);
-    if (entry?.role === "slot" || entry?.role === "body") {
-      return entry.registry.get(entry.blockId, "row");
-    }
-    if (element.matches("[data-block-id], [data-rivto-block-editor]")) {
-      break;
-    }
-  }
-  return undefined;
-}
-
-/**
- * Finds one canonical child placement inside a mounted list without scanning the document.
- *
- * @param host - Child host containing the neighbor's placement.
- * @param blockId - Canonical neighbor identity from a validated destination.
- * @returns Outermost matching item or shell, or undefined when hidden/unmounted.
- */
-export function blockLayoutNeighbor(host: HTMLElement, blockId: string): HTMLElement | undefined {
-  const entry = mounted.get(host);
-  if (entry) {
-    const shell = entry.registry.get(blockId, "shell", host);
-    if (!shell) {
-      return undefined;
-    }
-    let item = shell;
-    while (item.parentElement && item.parentElement !== host) {
-      item = item.parentElement;
-    }
-    return item;
-  }
-  for (const element of host.children) {
-    const child = element as HTMLElement;
-    if (child.dataset.blockItemId === blockId || child.dataset.blockId === blockId) {
-      return child;
-    }
-  }
-  return undefined;
-}
-
-const selectors: Record<BlockLayoutRegion, string> = {
-  shell: "[data-block-id]",
-  row: `.${BLOCK_EDITOR_CLASSES.row}`,
-  content: `.${BLOCK_EDITOR_CLASSES.content}`,
-  children: `.${BLOCK_EDITOR_CLASSES.children}`,
-  body: '[data-slot-position="body"]',
-  slot: "[data-slot-position]",
-  item: "[data-block-item-id]",
-};
-
-/**
- * Resolves an owner's region independently of intervening layout wrappers.
- *
- * Registered shells and items use addressed lookup. Standalone DOM consumers use bounded
- * traversal that stops at child shells and nested editors, never borrowing a
- * descendant's row or slot. No geometry is measured by this lookup.
- *
- * @param shell - Registered layout owner (shell or item), or a canonical block shell for standalone DOM lookup.
- * @param role - Region to locate inside that shell.
- * @returns Owned region, or undefined when the layout omits it.
- */
-export function blockLayoutRegion(
-  shell: HTMLElement,
-  role: BlockLayoutRegion,
-): HTMLElement | undefined {
-  const owner = mounted.get(shell);
-  if (owner) {
-    return owner.registry.get(owner.blockId, role, shell);
-  }
-  const pending = Array.from(shell.children);
-  while (pending.length) {
-    const element = pending.shift()!;
-    if (element.matches("[data-block-id], [data-rivto-block-editor]")) {
-      continue;
-    }
-    if (element.matches(selectors[role])) {
-      return element as HTMLElement;
-    }
-    pending.unshift(...element.children);
-  }
-  return undefined;
-}
-
-/**
- * Reads an explicitly registered owner's region without traversing fallback DOM.
- *
- * Pointer geometry uses this bounded lookup so an unregistered anchor cannot
- * borrow a descendant block's body or scan a large editor subtree.
- *
- * @param element - Existing anchor registered by a layout primitive.
- * @param role - Owned region to read within that anchor and editor occurrence.
- * @returns Current registered region, or undefined for unregistered/omitted regions.
- */
-export function registeredBlockRegion(
-  element: HTMLElement,
-  role: BlockLayoutRegion,
-): HTMLElement | undefined {
-  const owner = mounted.get(element);
-  return owner?.registry.get(owner.blockId, role, element);
 }

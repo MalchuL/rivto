@@ -1,21 +1,17 @@
 import { Canvas } from "./canvas";
 import type { CanvasSource } from "./canvas-source";
-import type { CanvasOptions } from "../types/canvas";
+import type { CanvasEditorOptions } from "./types";
 import type { CanvasToolSession } from "../types/tool-session";
 import { releaseResources } from "../utils/release-resources";
 
-/** Explicit dependencies of one independent edgeless editing session. */
-export interface CanvasEditorOptions<Tools extends CanvasToolSession> {
-  readonly source: CanvasSource;
-  readonly tools: Tools;
-  readonly canvas?: CanvasOptions;
-}
-
 /** Owns a scene and the mounted lifetime of its source and tool session. */
-export class CanvasEditor<Tools extends CanvasToolSession = CanvasToolSession> {
+export class CanvasEditor<
+  Tools extends CanvasToolSession = CanvasToolSession,
+  Source extends CanvasSource = CanvasSource,
+> {
   readonly canvas: Canvas;
   readonly tools: Tools;
-  readonly source: CanvasSource;
+  readonly source: Source;
   private state: "disconnected" | "connecting" | "connected" | "disconnecting" | "disposed" =
     "disconnected";
   private releaseConnection?: () => void;
@@ -26,7 +22,7 @@ export class CanvasEditor<Tools extends CanvasToolSession = CanvasToolSession> {
    * @param options - Source, isolated tool session and geometry/commit policies.
    * @throws If canvas limits or initial geometry are invalid, or the source read fails.
    */
-  constructor(options: CanvasEditorOptions<Tools>) {
+  constructor(options: CanvasEditorOptions<Tools, Source>) {
     this.canvas = new Canvas(options.canvas);
     this.tools = options.tools;
     this.source = options.source;

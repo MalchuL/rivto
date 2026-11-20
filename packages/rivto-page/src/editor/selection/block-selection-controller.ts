@@ -1,13 +1,7 @@
-import type { BlockSelectionBindings, BlockSelectionFeature } from "./block-selection-extensions";
-import { BlockPointerSelection, type BlockPointerSelectionHost } from "./block-pointer-selection";
+import type { BlockSelectionBindings, BlockSelectionFeature, BlockSelectionHost } from "./types";
+import { BlockPointerSelection } from "./block-pointer-selection";
 import { BlockNativeSelection } from "./block-native-selection";
 import { BlockSelectionFeedback } from "./block-selection-feedback";
-import type { BlockKeyboardApi } from "../keyboard/block-keyboard";
-
-/** Combined capabilities borrowed by pointer, native and feedback selection. */
-interface BlockSelectionHost extends BlockPointerSelectionHost {
-  readonly keyboard: Pick<BlockKeyboardApi, "capture" | "isHeld" | "subscribeHeld" | "subscribe">;
-}
 
 /** Coordinates independently installed selection features with one pointer owner. */
 export class BlockSelectionController {
@@ -24,7 +18,12 @@ export class BlockSelectionController {
    */
   constructor(editor: BlockSelectionHost, bindings: BlockSelectionBindings) {
     this.pointer = new BlockPointerSelection(editor, bindings);
-    this.native = new BlockNativeSelection(editor.events, editor.adapter.selection, this.pointer);
+    this.native = new BlockNativeSelection(
+      editor.events,
+      editor.adapter.selection,
+      this.pointer,
+      editor.browserSelection,
+    );
     this.feedback = new BlockSelectionFeedback(
       editor.events,
       editor.keyboard,

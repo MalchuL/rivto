@@ -1,21 +1,30 @@
-import type { ComponentProps, ComponentType, ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { CanvasTool } from "../core/tools/canvas-tool";
 import type { ReactCanvasToolEntry, ReactCanvasToolGroupEntry } from "./react-tool-registry";
 import type { CanvasToolContext } from "../core/tools/canvas-tool-context";
 import type { CanvasToolRegistry } from "../core/tools/canvas-tool-registry";
 
 /** Accessible button contract; applications may supply their own icon and styling system. */
-export interface CanvasToolButtonProps extends ComponentProps<"button"> {
+export interface CanvasToolButtonProps {
   readonly label: string;
   readonly icon?: ReactNode;
   readonly pressed?: boolean;
+  readonly children?: ReactNode;
+  readonly className?: string;
+  /** Registered tool identity used by the toolbar's normalized input routing. */
+  readonly toolId?: string;
+  /** ID of an open group menu, when this button opens one. */
+  readonly menuId?: string;
+  /** Whether this button's group menu is open; omitted for ordinary tools. */
+  readonly menuOpen?: boolean;
+  /**
+   * Activates a tool or toggles its group menu.
+   *
+   * @returns The toolbar has applied its activation or menu action.
+   * @throws Propagates tool activation failures.
+   */
+  readonly onActivate: () => void;
 }
-
-/** Native pointer bindings supplied by a tool registration or application placement adapter. */
-export type CanvasToolButtonBindings = Pick<
-  CanvasToolButtonProps,
-  "onClick" | "onPointerDown" | "onPointerMove" | "onPointerUp" | "onPointerCancel" | "className"
->;
 
 /** Resolved member passed to registered group renderers. */
 export interface CanvasToolbarItem<Registration> {
@@ -50,7 +59,7 @@ export interface CanvasToolbarGroupContent<Group, Registration> {
   readonly group: Group;
   readonly items: readonly CanvasToolbarItem<Registration>[];
   /**
-   * Renders a member through the shared button and pointer bindings.
+   * Renders a member through the shared button and activation behavior.
    *
    * @param item - Registered member of this group.
    * @param children - Optional replacement for the title; null keeps only its icon.
@@ -76,24 +85,12 @@ export interface CanvasToolbarProps<
     | "activateGroup"
     | "getGroup"
     | "getGroupTool"
-    | "getTool"
   >;
   readonly registry: Pick<
     CanvasToolRegistry<Registration, GroupRegistration>,
     "subscribe" | "revision" | "getTools" | "getGroups" | "getGroup" | "getEntries"
   >;
   readonly Button?: ComponentType<CanvasToolButtonProps>;
-  /**
-   * Supplies application-specific pointer bindings, such as document placement.
-   *
-   * @param registration - Shared immutable tool definition.
-   * @param tool - Surface-local instance, if available.
-   * @returns Optional native handlers merged with common activation behavior.
-   */
-  readonly getButtonProps?: (
-    registration: Registration,
-    tool: Tool | undefined,
-  ) => CanvasToolButtonBindings;
   /**
    * Renders registered group contents using the common member buttons.
    *

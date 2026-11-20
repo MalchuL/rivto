@@ -1,4 +1,4 @@
-import type { DocumentEditorAPI } from "../editor/types";
+import type { DocumentEditorOperations } from "../editor/types";
 import type {
   EditorBlock,
   EditorBlockInput,
@@ -23,7 +23,7 @@ export interface PanelOptions {
 /** Framework-neutral editing operations bound permanently to one document and its selected subtrees. */
 export interface PanelAPI {
   /** Whole-document operations; the panel borrows this editor and never destroys it. */
-  readonly document: DocumentEditorAPI;
+  readonly document: DocumentEditorOperations;
   /**
    * Observes the shared document editor's change stream without filtering by panel boundaries.
    * Changes outside this panel and block-definition changes can also notify the listener.

@@ -1,17 +1,35 @@
-import { CanvasViewport } from "@chulane/rivto-edgeless/browser";
+import type { CanvasApi } from "@chulane/rivto-edgeless";
+import { useEdgelessCanvas } from "../../surfaces/edgeless/edgeless-tools-context";
+import type { CanvasControlHandle } from "@chulane/rivto-edgeless/react";
 import { flushSync } from "react-dom";
 import { useReactPanel } from "../../hooks/editor/use-react-panel";
 import { createElement, useContext, useLayoutEffect, useMemo } from "react";
 import { EDITOR_CONTROL_SELECTOR, PREVENT_TEXT_EDITING_SELECTOR } from "../../constants";
-import type { ReactPanelApi } from "../../panels/types";
-import type { ReactEditorApi } from "../../editor/types";
+import type { PanelInputRegistration, ReactPanelApi } from "../../panels/types";
+import type { ReactEditorExtensionApi } from "../../editor/types";
 import type { EditorEvent } from "../../managers/events/editor-event";
 import { EdgelessCreationDefaultsContext } from "../../surfaces/edgeless/edgeless-tools-context";
 import type { EdgelessCreationDefaults } from "../../managers/elements/edgeless-creation-defaults";
 import { SurfaceContext } from "../../surfaces/surface";
 import { EdgelessTransformControls } from "./edgeless-transform-controls";
 import { ElementGeometry } from "../../elements/element-geometry";
-import type { ConnectorOverlayNode, ElementTransformPreview, TransformStart } from "./types";
+import type {
+  ConnectorTransformPreview,
+  ElementTransformPreview,
+  PointerTransformTarget,
+  TransformPreviewTarget,
+  TransformStart,
+  TransformControlsRegistration,
+} from "./types";
+import type {
+  InputRegion,
+  InputRegionStyleSession,
+  InputRoot,
+  InputTarget,
+  PointerInput,
+} from "@chulane/rivto-root";
+import type { CSSProperties } from "react";
+import { EDGELESS_TRANSFORMING_ATTRIBUTE } from "../../surfaces/edgeless/markers";
 /**
  * Delegated move, resize, and rotate for edgeless cards, visuals, and groups.
  *
@@ -52,10 +70,11 @@ import {
 function TransformControls() {
   const mode = useContext(SurfaceContext);
   const creationDefaults = useContext(EdgelessCreationDefaultsContext);
+  const canvas = useEdgelessCanvas();
   const reactPanel = useReactPanel();
   const controller = useMemo(
-    () => new EdgelessTransformController(reactPanel.editor, creationDefaults),
-    [reactPanel, creationDefaults],
+    () => new EdgelessTransformController(reactPanel.editor, creationDefaults, canvas),
+    [reactPanel, creationDefaults, canvas],
   );
   // Claim object gestures before the passive marquee selection handlers change selection.
   useLayoutEffect(
@@ -74,13 +93,9 @@ const BLOCK_SELECTOR = "[data-block-id]";
 // Bento edge handles are not buttons. Exclude them so card transform does not
 // steal pointerdown before the tile can preview a width.
 const CONTROL_SELECTOR = `[data-block-content], [data-edgeless-ui], ${EDITOR_CONTROL_SELECTOR}, ${PREVENT_TEXT_EDITING_SELECTOR}, [contenteditable=true], [data-bento-resize-edge]`;
-const CONNECTOR_PREVIEW_CLASS = "edgeless-connector-live-preview";
-const CONNECTOR_LABEL_CLASS = "edgeless-connector-label";
-const CONNECTOR_LABEL_PREVIEW_CLASS = "edgeless-connector-label-preview";
-const SVG_NS = "http://www.w3.org/2000/svg";
 
 /** Adds one delegated move/resize path for cards, visuals, and nested groups. */
-export function registerEdgelessTransform(reactEditor: ReactEditorApi): () => void {
+export function registerEdgelessTransform(reactEditor: ReactEditorExtensionApi): () => void {
   return reactEditor.extensions.mount(TransformControls);
 }
 
@@ -104,84 +119,40 @@ export class EdgelessTransformController {
     return getEdgelessRuntime(this.reactPanel ?? this.reactEditor);
   }
 
-  private controls = new Map<
-    ReactPanelApi,
-    {
-      /**
-       * Sets and measures the DOM targets before starting a native drag.
-       *
-       * @param targets - DOM hosts participating in the transform gesture.
-       */
-      prepareDrag(targets: HTMLElement[]): void;
-      /**
-       * Starts transform controls from a native mouse or touch event.
-       *
-       * @param event - Native or React event supplying the current input.
-       */
-      dragStart(event: MouseEvent | TouchEvent): void;
-      /**
-       * Stops an active transform-control gesture.
-       */
-      stop(): void;
-    }
-  >();
+  private controls = new Map<ReactPanelApi, TransformControlsRegistration>();
 
   /**
    * Registers the mounted view's Moveable instance for drags started by editor selection.
    * @param reactPanel - View whose DOM targets and gestures the controls own.
-   * @param controls - Prepares selected hosts, forwards native mouse/touch starts,
+   * @param controls - Prepares selected hosts, starts during browser input delivery,
    * and stops library tracking on cancellation.
+   * @param inputRoot - Root borrowed by these controls and any gesture they start.
+   * @param inputRegistration - Exact routing lifetime owning these controls.
    * @returns Cleanup that cancels this view's gesture and releases the registration.
    */
   registerControls(
     reactPanel: ReactPanelApi,
-    controls: {
-      /**
-       * Sets and measures the DOM targets before starting a native drag.
-       *
-       * @param targets - DOM hosts participating in the transform gesture.
-       */
-      prepareDrag(targets: HTMLElement[]): void;
-      /**
-       * Starts transform controls from a native mouse or touch event.
-       *
-       * @param event - Native or React event supplying the current input.
-       */
-      dragStart(event: MouseEvent | TouchEvent): void;
-      /**
-       * Stops an active transform-control gesture.
-       */
-      stop(): void;
-    },
+    controls: CanvasControlHandle,
+    inputRoot: Pick<InputRoot, "isAttached">,
+    inputRegistration: PanelInputRegistration,
   ): () => void {
-    this.controls.set(reactPanel, controls);
+    if (!inputRegistration.isCurrent(inputRoot)) {
+      return () => {};
+    }
+    const registration = { controls, inputRegistration };
+    this.controls.set(reactPanel, registration);
     return () => {
-      this.finishControls(reactPanel, false);
+      if (this.controls.get(reactPanel) !== registration) {
+        return;
+      }
       this.controls.delete(reactPanel);
+      this.finishControls(reactPanel, false, 1, inputRegistration);
     };
   }
 
   /**
-   * Resolves mounted leaves for Moveable's single or group target.
-   * Groups expand recursively; their hit areas follow the preview and are not Moveable targets.
-   * @param reactPanel - View supplying the selected element tree.
-   * @param root - DOM root restricting the search to this mounted view.
-   * @param ids - Selected element or group IDs, in selection order.
-   * @returns Unique mounted leaf hosts for the supplied selection; missing elements are skipped.
-   */
-  getMoveTargets(
-    reactPanel: ReactPanelApi,
-    root: HTMLElement,
-    ids: readonly string[],
-  ): HTMLElement[] {
-    const leaves = new Set(this.getMoveTargetIds(reactPanel, ids));
-    return [...root.querySelectorAll<HTMLElement>(OBJECT_SELECTOR)].filter((host) =>
-      leaves.delete(host.dataset.edgelessObjectId!),
-    );
-  }
-
-  /**
    * Expands selected groups into concrete leaf identities without requiring mounted DOM.
+   * Groups expand recursively; their hit areas follow the preview and are not Moveable targets.
    * @param reactPanel - Occurrence supplying the selected element tree.
    * @param ids - Selected element or group IDs in selection order.
    * @returns Unique existing leaf IDs, including offscreen participants.
@@ -209,58 +180,99 @@ export class EdgelessTransformController {
    * @returns False for content editing, controls, or a gesture owned by another view.
    */
   isMoving(reactPanel: ReactPanelApi): boolean {
-    return this.reactPanel === reactPanel && this.start?.kind === "move";
+    const active = this.start;
+    return Boolean(
+      this.reactPanel === reactPanel &&
+      active?.kind === "move" &&
+      active.inputRegistration.isCurrent(active.inputRoot),
+    );
   }
 
   private releaseCanvasPins?: () => void;
   private sourceRotations = new Map<string, number>();
   private start: TransformStart | null = null;
-  private previewTargets: HTMLElement[] | null = null;
-  private hiddenConnectors: HTMLElement[] = [];
-  private translatedConnectors: HTMLElement[] = [];
-  private overlayLabels: HTMLElement[] = [];
-  private overlaySvg: SVGSVGElement | null = null;
-  private overlayNodes = new Map<string, ConnectorOverlayNode>();
-  private connectorHosts = new Map<string, HTMLElement | null>();
+  private previewTargets: TransformPreviewTarget[] | null = null;
+  private hiddenConnectors = new Map<string, InputRegionStyleSession>();
+  private translatedConnectors = new Map<string, TransformPreviewTarget>();
+  private connectorPreview: readonly ConnectorTransformPreview[] = [];
+  private readonly connectorPreviewListeners = new Set<() => void>();
+  private connectorHosts = new Map<string, InputRegion | null>();
   private readonly geometry = new ElementGeometry(
     (id) => this.elements.getElementNode(id),
     (id) => this.rotation(id),
   );
 
   /**
+   * Observes this controller's detached connector preview data.
+   *
+   * @param listener - Callback notified when transform preview data changes.
+   * @returns Disposer removing this subscription.
+   */
+  subscribeConnectorPreview = (listener: () => void): (() => void) => {
+    this.connectorPreviewListeners.add(listener);
+    return () => this.connectorPreviewListeners.delete(listener);
+  };
+
+  /**
+   * Reads the current connector transform preview for this panel occurrence.
+   *
+   * @returns Stable snapshot until the next preview update or cleanup.
+   */
+  getConnectorPreview = (): readonly ConnectorTransformPreview[] => this.connectorPreview;
+
+  /**
    * Creates gesture controls with optional surface-owned creation settings.
    *
    * @param reactEditor - Runtime receiving transform events and document commands.
    * @param creationDefaults - Settings updated after committed resizes; omitted controls do not remember dimensions.
+   * @param canvas - Surface-owned scene used to pin transform participants, or null outside the surface.
    */
   constructor(
-    private readonly reactEditor: ReactEditorApi,
-    private readonly creationDefaults?: EdgelessCreationDefaults | null,
+    private readonly reactEditor: ReactEditorExtensionApi,
+    private readonly creationDefaults: EdgelessCreationDefaults | null,
+    private readonly canvas: Pick<CanvasApi, "pin"> | null,
   ) {}
 
   /**
    * Captures editor state when a Moveable edge or handle starts a move, resize, or rotation.
    * No document writes occur until finishControls commits the final geometry.
    * @param reactPanel - View owning the selected element and its Panel coordinates.
-   * @param root - Mounted edgeless viewport containing the target and connector previews.
+   * @param inputRoot - Root captured when the controls were rendered.
    * @param ids - Selected element or group IDs; missing elements and standalone connectors are rejected.
    * Group children are expanded recursively without changing their stored parentage.
    * @param kind - Move, size change, or rotation requested by a library control.
    * @param stop - Stops Moveable's pointer tracking if Escape cancels the gesture.
+   * @param inputRegistration - Exact routing lifetime captured by the controls.
    * @returns Whether the editor accepted the gesture.
+   * @throws Propagates geometry, marker, pinning, focus, and cleanup failures.
    */
   beginControls(
     reactPanel: ReactPanelApi,
-    root: HTMLElement,
+    inputRoot:
+      Pick<InputRoot, "focus" | "isAttached" | "setTemporaryAttribute" | "findRegions"> | undefined,
     ids: readonly string[],
     kind: "move" | "resize" | "rotate",
     stop: () => void,
+    inputRegistration: PanelInputRegistration | undefined,
   ): boolean {
+    if (
+      !inputRoot ||
+      !inputRegistration?.isCurrent(inputRoot) ||
+      reactPanel.inputRoot !== inputRoot
+    ) {
+      return false;
+    }
     if (this.start) {
       this.finish(false);
+      if (this.start) {
+        return false;
+      }
     }
     this.reactPanel = reactPanel;
     if (
+      !inputRoot.isAttached() ||
+      !inputRegistration.isCurrent(inputRoot) ||
+      reactPanel.inputRoot !== inputRoot ||
       !ids.length ||
       ids.some((id) => {
         const element = this.elements.getElementNode(id);
@@ -274,7 +286,7 @@ export class EdgelessTransformController {
     const moving = new Set(this.leaves(ids));
     this.sourceRotations = new Map([...moving].map((id) => [id, this.rotation(id)]));
     flushSync(() => {
-      this.releaseCanvasPins = CanvasViewport.forElement(root)?.canvas.pin([...moving]);
+      this.releaseCanvasPins = this.canvas?.pin([...moving]);
     });
     const frames = new Map<string, EditorElementFrame>();
     [...ids, ...moving].forEach((item) => {
@@ -293,9 +305,20 @@ export class EdgelessTransformController {
       node.childIds.forEach(visitGroups);
     };
     ids.forEach(visitGroups);
+    const releaseTransformMarker = this.acquireTransformMarker(
+      reactPanel,
+      inputRoot,
+      inputRegistration,
+      kind,
+    );
+    if (!releaseTransformMarker) {
+      return false;
+    }
     this.start = {
+      inputRoot,
+      inputRegistration,
       groupRotations,
-      root,
+      releaseTransformMarker,
       kind,
       stopMoveable: stop,
       ids: [...ids],
@@ -306,12 +329,9 @@ export class EdgelessTransformController {
       moving,
       attachedConnectors: this.connectorTargets(moving, new Set(ids), kind),
     };
-    root.dataset.transforming = kind;
-    root.focus({ preventScroll: true });
     // Moveable previews write size and transform while left/top stay fixed; lock
     // those styles so React cannot clobber opposite-corner-stable geometry mid-drag.
-    this.lockGeometry(root, ids);
-    return true;
+    return this.prepareTransformPreview(reactPanel, inputRoot, ids, kind);
   }
 
   /**
@@ -326,6 +346,10 @@ export class EdgelessTransformController {
   previewControls(previews: readonly ElementTransformPreview[], rotationDelta = 0): void {
     const active = this.start;
     if (!active || active.kind === "move") {
+      return;
+    }
+    if (!active.inputRegistration.isCurrent(active.inputRoot)) {
+      this.finish(false);
       return;
     }
     const next = new Map(previews.map((preview) => [preview.id, preview]));
@@ -364,18 +388,20 @@ export class EdgelessTransformController {
       );
     });
     this.previewTargets?.forEach((target) => {
-      const id = this.targetId(target);
+      const id = target.id;
       const preview = active.previews!.get(id);
       if (!preview) {
         return;
       }
       const { frame, rotation } = preview;
-      target.style.width = `${frame.width}px`;
-      target.style.height = `${frame.height}px`;
-      target.style.transform =
-        preview.transform ?? `translate(${frame.x}px, ${frame.y}px) rotate(${rotation}deg)`;
+      target.styles.set({
+        width: `${frame.width}px`,
+        height: `${frame.height}px`,
+        transform:
+          preview.transform ?? `translate(${frame.x}px, ${frame.y}px) rotate(${rotation}deg)`,
+      });
     });
-    this.previewAttachedConnectors(active.root, active, 0, 0);
+    this.previewAttachedConnectors(active, 0, 0);
   }
 
   /**
@@ -384,9 +410,19 @@ export class EdgelessTransformController {
    * @param reactPanel - View that mounted the Moveable controls.
    * @param commit - False on unmount, pointer cancellation, or explicit cancellation.
    * @param eventDetail - Click count used to preserve double-click text editing.
+   * @param inputRegistration - When supplied, only finish a gesture from this registration.
    */
-  finishControls(reactPanel: ReactPanelApi, commit: boolean, eventDetail = 1): void {
-    if (this.reactPanel === reactPanel && this.start) {
+  finishControls(
+    reactPanel: ReactPanelApi,
+    commit: boolean,
+    eventDetail = 1,
+    inputRegistration?: PanelInputRegistration,
+  ): void {
+    if (
+      this.reactPanel === reactPanel &&
+      this.start &&
+      (!inputRegistration || this.start.inputRegistration === inputRegistration)
+    ) {
       this.finish(commit, eventDetail);
     }
   }
@@ -399,6 +435,10 @@ export class EdgelessTransformController {
   previewMove(dx: number, dy: number): void {
     const active = this.start;
     if (!active || active.kind !== "move") {
+      return;
+    }
+    if (!active.inputRegistration.isCurrent(active.inputRoot)) {
+      this.finish(false);
       return;
     }
     active.dx = dx;
@@ -418,11 +458,13 @@ export class EdgelessTransformController {
     }
     active.moved = true;
     this.previewTargets?.forEach((target) => {
-      const id = this.targetId(target);
+      const id = target.id;
       const frame = active.frames.get(id)!;
-      target.style.transform = `translate(${frame.x + dx}px, ${frame.y + dy}px) rotate(${this.rotation(id)}deg)`;
+      target.styles.set({
+        transform: `translate(${frame.x + dx}px, ${frame.y + dy}px) rotate(${this.rotation(id)}deg)`,
+      });
     });
-    this.previewAttachedConnectors(active.root, active, dx, dy);
+    this.previewAttachedConnectors(active, dx, dy);
   }
 
   /** Mounts per-view Moveable controls and installs move handlers; destruction cancels previews. */
@@ -460,7 +502,7 @@ export class EdgelessTransformController {
           preventDefault: false,
           mode: "edgeless",
         },
-        this.onPointerDown,
+        (delivery) => this.onPointerDown(reactPanel, delivery),
       ),
     );
     disposers.push(
@@ -471,11 +513,14 @@ export class EdgelessTransformController {
           capture: true,
           mode: "edgeless",
         },
-        ({ raw, reactPanel }) => {
-          if (!this.isMoving(reactPanel)) {
+        (event) => {
+          if (
+            !this.isMoving(reactPanel) ||
+            this.start?.inputRegistration !== event.inputRegistration
+          ) {
             return false;
           }
-          this.controls.get(reactPanel)?.dragStart(raw);
+          this.controls.get(reactPanel)?.controls.dragStart();
           return true;
         },
       ),
@@ -488,11 +533,14 @@ export class EdgelessTransformController {
           capture: true,
           mode: "edgeless",
         },
-        ({ raw, reactPanel }) => {
-          if (!this.isMoving(reactPanel)) {
+        (event) => {
+          if (
+            !this.isMoving(reactPanel) ||
+            this.start?.inputRegistration !== event.inputRegistration
+          ) {
             return false;
           }
-          this.controls.get(reactPanel)?.dragStart(raw);
+          this.controls.get(reactPanel)?.controls.dragStart();
           return true;
         },
       ),
@@ -505,7 +553,7 @@ export class EdgelessTransformController {
           target: "window",
           mode: "edgeless",
         },
-        () => this.finish(false),
+        (event) => event.inputRegistration === this.start?.inputRegistration && this.finish(false),
       ),
     );
     disposers.push(
@@ -595,30 +643,56 @@ export class EdgelessTransformController {
    */
   private transformFrame = (id: string): EditorElementFrame | undefined => this.geometry.frame(id);
   /**
-   * Finds rendered hosts for selected elements and their leaves, including hidden connector hosts for resize and rotation.
+   * Captures rendered participants and connector regions in this occurrence.
    *
-   * @param root - Mounted surface root, or null when clearing its registration.
-   * @param ids - Selected element IDs whose DOM hosts should be collected.
-   * @returns DOM hosts participating in the current transform preview.
+   * @param inputRoot - Registration owning the rendered regions.
+   * @param ids - Selected element IDs whose previews need geometry locks.
+   * @param kind - Gesture deciding whether connector hosts are selected targets.
+   * @returns Captured preview targets with their style sessions and lock cleanup.
+   * @throws Propagates region lookup, style capture, and marker failures.
    */
-  private rendered = (root: HTMLElement, ids: readonly string[]): HTMLElement[] => {
+  private rendered(
+    inputRoot: Pick<InputRoot, "findRegions">,
+    ids: readonly string[],
+    kind: TransformStart["kind"],
+  ): TransformPreviewTarget[] {
     const included = new Set([...ids, ...this.leaves(ids)]);
-    return [
-      ...root.querySelectorAll<HTMLElement>("[data-edgeless-root], [data-edgeless-object-id]"),
-    ].filter((element) => {
-      const id = element.dataset.edgelessRoot ?? element.dataset.edgelessObjectId ?? "";
-      if (!included.has(id)) {
-        return false;
+    const targets: TransformPreviewTarget[] = [];
+    this.previewTargets = targets;
+    const regions = inputRoot.findRegions(
+      "[data-edgeless-root], [data-edgeless-object-id]",
+      "[data-rivto-block-editor]",
+    );
+    for (const region of regions) {
+      const objectId = region.readAttribute("data-edgeless-object-id");
+      if (objectId && !this.connectorHosts.has(objectId)) {
+        this.connectorHosts.set(objectId, region);
+      }
+      const id = region.readAttribute("data-edgeless-root") ?? objectId;
+      if (!id || !included.has(id)) {
+        continue;
       }
       // Moves draw connectors from their attachments. Rotation and resize must
       // also transform hidden connector hosts because Moveable measures them.
-      return (
-        this.start?.kind === "rotate" ||
-        this.start?.kind === "resize" ||
-        this.elements.getElementNode(id)?.type !== "connector"
-      );
-    });
-  };
+      if (kind === "move" && this.elements.getElementNode(id)?.type === "connector") {
+        continue;
+      }
+      const styles = region.captureStyles(["left", "top", "width", "height", "transform"]);
+      if (styles) {
+        try {
+          targets.push({
+            id,
+            styles,
+            releaseLock: region.setTemporaryAttribute("data-edgeless-geometry-lock", "true"),
+          });
+        } catch (error) {
+          styles.finish({});
+          throw error;
+        }
+      }
+    }
+    return targets;
+  }
   /**
    * Reads preview geometry or derives a translated frame for an active move.
    *
@@ -651,119 +725,51 @@ export class EdgelessTransformController {
     return base;
   };
   /**
-   * Reads the persisted element ID associated with a transform host.
+   * Restores connector hosts and clears the portal's connector preview.
    *
-   * @param target - DOM host or proxied owner being accessed.
-   * @returns Element ID, or an empty string when the host has no marker.
-   */
-  private targetId = (target: HTMLElement): string =>
-    target.dataset.edgelessRoot ?? target.dataset.edgelessObjectId ?? "";
-  /**
-   * Returns the rendered connector host, caching the query for the gesture.
-   *
-   * @param root - Edgeless viewport.
-   * @param id - Connector element ID.
-   * @returns Host node, or null when it is not mounted.
-   */
-  private hostFor = (root: HTMLElement, id: string): HTMLElement | null => {
-    if (!this.connectorHosts.has(id)) {
-      this.connectorHosts.set(
-        id,
-        root.querySelector<HTMLElement>(`[data-edgeless-object-id="${id}"]`),
-      );
-    }
-    return this.connectorHosts.get(id) ?? null;
-  };
-  /**
-   * Restores connector hosts and removes the reused preview overlay.
-   *
-   * @returns Nothing.
+   * @returns Host styles and cached lookups are cleared and preview subscribers are notified.
    */
   private clearConnectorPreview = () => {
-    this.hiddenConnectors.forEach((host) => host.style.removeProperty("visibility"));
-    this.hiddenConnectors = [];
-    this.translatedConnectors.forEach((host) => {
-      host.style.removeProperty("transform");
-      delete host.dataset.edgelessGeometryLock;
-    });
-    this.translatedConnectors = [];
-    this.overlayLabels.forEach((label) => label.remove());
-    this.overlayLabels = [];
-    this.overlayNodes.clear();
+    const hidden = this.hiddenConnectors;
+    const translated = this.translatedConnectors;
+    this.hiddenConnectors = new Map();
+    this.translatedConnectors = new Map();
     this.connectorHosts.clear();
-    this.overlaySvg?.remove();
-    this.overlaySvg = null;
-  };
-  /**
-   * Creates the connector preview SVG once per gesture, with a persistent defs node.
-   *
-   * @param root - Edgeless viewport that owns the plane.
-   * @returns Connected overlay svg, or null when the plane is missing.
-   */
-  private ensureOverlay = (root: HTMLElement) => {
-    const plane = CanvasViewport.forElement(root)?.layers.get()?.plane;
-    if (!plane) {
-      return null;
+    const errors: unknown[] = [];
+    const cleanups = [
+      ...[...hidden.values()].map((styles) => () => styles.finish({ visibility: null })),
+      ...[...translated.values()].flatMap((target) => [
+        () => target.styles.finish({ transform: null }),
+        target.releaseLock,
+      ]),
+      () => this.setConnectorPreview([]),
+    ];
+    for (const cleanup of cleanups) {
+      try {
+        cleanup();
+      } catch (error) {
+        errors.push(error);
+      }
     }
-    if (this.overlaySvg?.isConnected) {
-      return this.overlaySvg;
+    if (errors.length === 1) {
+      throw errors[0];
     }
-    const svg = root.ownerDocument.createElementNS(SVG_NS, "svg");
-    svg.setAttribute("data-edgeless-connector-preview", "true");
-    svg.setAttribute("class", CONNECTOR_PREVIEW_CLASS);
-    svg.append(root.ownerDocument.createElementNS(SVG_NS, "defs"));
-    plane.append(svg);
-    this.overlaySvg = svg;
-    return svg;
-  };
-  /**
-   * Appends a reusable arrow marker to the overlay defs.
-   *
-   * The triangle tip at (8, 4) extends one stroke width beyond the path endpoint for both orientations.
-   *
-   * @param defs - Overlay defs element.
-   * @param id - Marker element ID, stable for the gesture.
-   * @param stroke - Fill color matching the connector stroke.
-   * @param start - True for the source-end marker.
-   * @returns Appends the marker with its outward tip offset to the overlay definitions.
-   */
-  private appendMarker = (
-    defs: SVGDefsElement,
-    id: string,
-    stroke: string,
-    start: boolean,
-  ): void => {
-    const marker = defs.ownerDocument.createElementNS(SVG_NS, "marker");
-    marker.setAttribute("id", id);
-    marker.setAttribute("markerWidth", "8");
-    marker.setAttribute("markerHeight", "8");
-    marker.setAttribute("refX", "7");
-    marker.setAttribute("refY", "4");
-    marker.setAttribute("orient", start ? "auto-start-reverse" : "auto");
-    const tip = defs.ownerDocument.createElementNS(SVG_NS, "path");
-    tip.setAttribute("d", "M0 0L8 4L0 8z");
-    tip.setAttribute("fill", stroke);
-    marker.append(tip);
-    defs.append(marker);
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Connector preview cleanup failed");
+    }
   };
   /**
    * Updates live connector previews from the pointerdown snapshot.
    *
    * Empty membership is a no-op so a shape drag never mounts an overlay.
-   * Path nodes are created once and then only have `d` / label position written.
+   * The renderer receives detached path and label data without a world-layer element.
    *
-   * @param root - Edgeless viewport.
    * @param active - Gesture whose attached connectors were snapshotted at start.
    * @param dx - Preview translation X in canvas units.
    * @param dy - Preview translation Y in canvas units.
-   * @returns Nothing.
+   * @returns Connector host positions and detached preview data reflect the gesture.
    */
-  private previewAttachedConnectors = (
-    root: HTMLElement,
-    active: TransformStart,
-    dx: number,
-    dy: number,
-  ) => {
+  private previewAttachedConnectors = (active: TransformStart, dx: number, dy: number) => {
     const attached = active.attachedConnectors;
     if (!attached.length) {
       return;
@@ -772,26 +778,27 @@ export class EdgelessTransformController {
       if (item.kind !== "translate") {
         continue;
       }
-      const host = this.hostFor(root, item.id);
-      if (!host) {
-        continue;
+      let target = this.translatedConnectors.get(item.id);
+      if (!target) {
+        const region = this.connectorHosts.get(item.id);
+        const styles = region?.captureStyles(["transform"]);
+        if (!region || !styles) {
+          continue;
+        }
+        target = {
+          id: item.id,
+          styles,
+          releaseLock: region.setTemporaryAttribute("data-edgeless-geometry-lock", "true"),
+        };
+        this.translatedConnectors.set(item.id, target);
       }
-      host.dataset.edgelessGeometryLock = "true";
-      host.style.transform = `translate(${dx}px, ${dy}px)`;
-      if (!this.translatedConnectors.includes(host)) {
-        this.translatedConnectors.push(host);
-      }
+      target.styles.set({ transform: `translate(${dx}px, ${dy}px)` });
     }
     const pathItems = attached.filter((item) => item.kind === "path");
     if (!pathItems.length) {
       return;
     }
-    const overlay = this.ensureOverlay(root);
-    const plane = overlay?.parentElement;
-    const defs = overlay?.querySelector<SVGDefsElement>("defs");
-    if (!overlay || !plane || !defs) {
-      return;
-    }
+    const previews: ConnectorTransformPreview[] = [];
     for (const item of pathItems) {
       const element = this.elements.getElementNode(item.id);
       const source = element?.props.source;
@@ -868,57 +875,14 @@ export class EdgelessTransformController {
         routeSourceFrame,
         routeTargetFrame,
       );
-      let nodes = this.overlayNodes.get(item.id);
-      if (!nodes) {
-        const host = this.hostFor(root, item.id);
-        if (host) {
-          host.style.visibility = "hidden";
-          this.hiddenConnectors.push(host);
+      if (!this.hiddenConnectors.has(item.id)) {
+        const styles = this.connectorHosts.get(item.id)?.captureStyles(["visibility"]);
+        if (styles) {
+          styles.set({ visibility: "hidden" });
+          this.hiddenConnectors.set(item.id, styles);
         }
-        const stroke = typeof element.props.stroke === "string" ? element.props.stroke : "#52525b";
-        const lineStyle =
-          element.props.lineStyle === "dashed" || element.props.lineStyle === "dashed-animated"
-            ? element.props.lineStyle
-            : "solid";
-        const startStyle = element.props.startStyle === "arrow" ? "arrow" : "none";
-        const endStyle = element.props.endStyle === "arrow" ? "arrow" : "none";
-        const markerEndId = `connector-preview-end-${element.id}`;
-        const markerStartId = `connector-preview-start-${element.id}`;
-        if (endStyle === "arrow") {
-          this.appendMarker(defs, markerEndId, stroke, false);
-        }
-        if (startStyle === "arrow") {
-          this.appendMarker(defs, markerStartId, stroke, true);
-        }
-        const path = root.ownerDocument.createElementNS(SVG_NS, "path");
-        path.setAttribute("data-edgeless-connector-preview-stroke", "true");
-        path.setAttribute("data-line-style", lineStyle);
-        path.setAttribute("fill", "none");
-        path.setAttribute("stroke", stroke);
-        path.setAttribute(
-          "stroke-width",
-          String(typeof element.props.strokeWidth === "number" ? element.props.strokeWidth : 2),
-        );
-        path.setAttribute(
-          "opacity",
-          String(typeof element.props.opacity === "number" ? element.props.opacity : 1),
-        );
-        path.setAttribute("vector-effect", "non-scaling-stroke");
-        if (startStyle === "arrow") {
-          path.setAttribute("marker-start", `url(#${markerStartId})`);
-        }
-        if (endStyle === "arrow") {
-          path.setAttribute("marker-end", `url(#${markerEndId})`);
-        }
-        overlay.append(path);
-        nodes = { path, label: null };
-        this.overlayNodes.set(item.id, nodes);
       }
-      nodes.path.setAttribute("d", d);
       const text = typeof element.props.text === "string" ? element.props.text : "";
-      if (!text) {
-        continue;
-      }
       const textRotation = (
         element.props.textRotation === "90" ||
         element.props.textRotation === "180" ||
@@ -930,120 +894,151 @@ export class EdgelessTransformController {
       ) as ConnectorTextRotation;
       const labelAt = connectorLabelPoint(absPoints, route);
       const degrees = connectorLabelCssDegrees(absPoints, route, textRotation);
-      let label = nodes.label;
-      if (!label) {
-        label = root.ownerDocument.createElement("div");
-        label.className = `${CONNECTOR_LABEL_CLASS} ${CONNECTOR_LABEL_PREVIEW_CLASS}`;
-        label.dataset.edgelessConnectorPreviewLabel = element.id;
-        label.dataset.textRotation = textRotation;
-        label.textContent = text;
-        label.style.color =
-          typeof element.props.color === "string" ? element.props.color : "#222222";
-        label.style.fontFamily =
-          typeof element.props.fontFamily === "string" ? element.props.fontFamily : "inherit";
-        label.style.fontSize =
-          typeof element.props.fontSize === "number" ? `${element.props.fontSize}px` : "14px";
-        label.style.textAlign =
-          typeof element.props.align === "string" ? element.props.align : "center";
-        label.style.zIndex = "2147483639";
-        plane.append(label);
-        this.overlayLabels.push(label);
-        nodes.label = label;
-      }
-      label.style.left = `${labelAt.x}px`;
-      label.style.top = `${labelAt.y}px`;
-      label.style.transform = degrees ? `rotate(${degrees}deg)` : "";
+      previews.push({
+        id: item.id,
+        path: d,
+        stroke: typeof element.props.stroke === "string" ? element.props.stroke : "#52525b",
+        strokeWidth: typeof element.props.strokeWidth === "number" ? element.props.strokeWidth : 2,
+        opacity: typeof element.props.opacity === "number" ? element.props.opacity : 1,
+        lineStyle:
+          element.props.lineStyle === "dashed" || element.props.lineStyle === "dashed-animated"
+            ? element.props.lineStyle
+            : "solid",
+        startArrow: element.props.startStyle === "arrow",
+        endArrow: element.props.endStyle === "arrow",
+        label: text
+          ? {
+              text,
+              textRotation,
+              x: labelAt.x,
+              y: labelAt.y,
+              degrees,
+              color: typeof element.props.color === "string" ? element.props.color : "#222222",
+              fontFamily:
+                typeof element.props.fontFamily === "string" ? element.props.fontFamily : "inherit",
+              fontSize: typeof element.props.fontSize === "number" ? element.props.fontSize : 14,
+              align:
+                typeof element.props.align === "string"
+                  ? (element.props.align as CSSProperties["textAlign"])
+                  : "center",
+            }
+          : undefined,
+      });
     }
+    this.setConnectorPreview(previews);
   };
+
+  /**
+   * Publishes connector geometry to the isolated preview renderer.
+   *
+   * @param previews - Detached connector data for this gesture, or an empty array to clear it.
+   * @returns Current preview snapshot is replaced and subscribers are notified.
+   */
+  private setConnectorPreview(previews: readonly ConnectorTransformPreview[]): void {
+    if (!previews.length && !this.connectorPreview.length) {
+      return;
+    }
+    this.connectorPreview = previews;
+    this.connectorPreviewListeners.forEach((listener) => listener());
+  }
+
   /**
    * Clears transform locks and connector previews, optionally restoring pre-gesture geometry.
    *
    * @param restoreGeometry - Whether to restore original geometry; false retains the committed geometry while releasing locks.
+   * @param active - Gesture whose preview is being cleared; defaults to the current gesture.
+   * @param releasePins - Releases this gesture's canvas pins before geometry is finalized.
+   * @returns Preview targets, connector feedback, and the transform marker have been offered cleanup.
+   * @throws A cleanup failure, or an AggregateError when multiple operations fail.
    */
-  private clearPreview = (restoreGeometry = true) => {
-    const root = this.start?.root;
-    if (!root) {
+  private clearPreview = (
+    restoreGeometry = true,
+    active = this.start,
+    releasePins?: () => void,
+  ) => {
+    if (!active) {
       return;
     }
-    (this.previewTargets ?? this.rendered(root, this.start?.ids ?? [])).forEach((element) => {
-      const id = this.targetId(element);
-      if (this.elements.getElementNode(id)?.type === "connector") {
-        // The SVG overlay owns the visible path; discard its target's temporary
-        // CSS transform before React renders the committed endpoint geometry.
-        const frame = this.start?.frames.get(id);
-        if (frame) {
-          element.style.left = `${frame.x}px`;
-          element.style.top = `${frame.y}px`;
-          element.style.width = `${frame.width}px`;
-          element.style.height = `${frame.height}px`;
-        }
-        element.style.removeProperty("transform");
-        delete element.dataset.edgelessGeometryLock;
-        return;
-      }
-      // Keep committed handle geometry: React may already have rendered the preview.
-      if (restoreGeometry || this.start?.kind === "move") {
-        const frame = this.transformFrame(id);
-        if (frame) {
-          element.style.transform = `translate(${frame.x}px, ${frame.y}px) rotate(${this.rotation(id)}deg)`;
-        }
-      }
-      delete element.dataset.edgelessGeometryLock;
-      if (this.start?.kind !== "move" && restoreGeometry) {
-        const frame = this.start?.frames.get(id);
-        if (frame) {
-          element.style.left = "0px";
-          element.style.top = "0px";
-          element.style.width = `${frame.width}px`;
-          element.style.height = `${frame.height}px`;
-        }
-      }
-    });
-    this.clearConnectorPreview();
+    const capturedTargets = this.previewTargets;
     this.previewTargets = null;
-    delete root.dataset.transforming;
+    const errors: unknown[] = [];
+    try {
+      this.clearConnectorPreview();
+    } catch (error) {
+      errors.push(error);
+    }
+    for (const release of [active.releaseTransformMarker, releasePins]) {
+      try {
+        release?.();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    for (const target of capturedTargets ?? []) {
+      let restoreTarget = restoreGeometry || errors.length > 0;
+      try {
+        restoreTarget ||= !active.inputRegistration.isCurrent(active.inputRoot);
+      } catch (error) {
+        errors.push(error);
+        restoreTarget = true;
+      }
+      try {
+        this.clearPreviewTarget(target, active, restoreTarget);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    // Moveable remeasures its handles when stopped, so restore every target first.
+    errors.push(...this.stopCancelledControls(active, restoreGeometry || errors.length > 0));
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Transform preview cleanup failed");
+    }
   };
   /**
-   * Locks selected DOM hosts against React geometry updates during the transform preview.
+   * Captures and locks the selected regions for the transform preview.
    *
-   * @param root - Mounted surface root, or null when clearing its registration.
+   * @param inputRoot - Registration that owns the rendered participants.
    * @param ids - Stable IDs of the elements or blocks to include.
+   * @param kind - Gesture determining which connector hosts participate.
+   * @returns The controller retains the captured style sessions.
+   * @throws Propagates region lookup, style capture, or marker failures.
    */
-  private lockGeometry = (root: HTMLElement, ids: readonly string[]) => {
-    this.previewTargets = this.rendered(root, ids);
-    this.previewTargets.forEach((element) => {
-      element.dataset.edgelessGeometryLock = "true";
-    });
-  };
+  private lockGeometry(
+    inputRoot: Pick<InputRoot, "findRegions">,
+    ids: readonly string[],
+    kind: TransformStart["kind"],
+  ): void {
+    this.previewTargets = this.rendered(inputRoot, ids, kind);
+  }
   /**
    * Ends a transform gesture, committing final geometry when requested or restoring the preview on cancellation.
    *
    * @param commit - Whether to commit the gesture; false cancels without creating or updating document entities.
    * @param eventDetail - Native click count; defaults to one and prevents drill-out during double clicks.
    * @returns Whether a gesture was committed, cancelled, or used to return selection to its group.
+   * @throws Propagates cleanup, control, model, and command failures.
    */
   private finish = (commit: boolean, eventDetail = 1): boolean => {
     const active = this.start;
-    const root = active?.root;
-    if (!root || !active) {
+    if (!active) {
       return false;
     }
-    // Keep the final absolute translation when releasing the React style lock.
-    if (commit && active.previews) {
-      this.previewTargets?.forEach((target) => {
-        const preview = active.previews!.get(this.targetId(target));
-        if (!preview || this.elements.getElementNode(preview.id)?.type === "connector") {
-          return;
-        }
-        target.style.transform = `translate(${preview.frame.x}px, ${preview.frame.y}px) rotate(${preview.rotation}deg)`;
-      });
+    let shouldCommit: boolean;
+    try {
+      shouldCommit = commit && active.inputRegistration.isCurrent(active.inputRoot);
+    } catch (error) {
+      try {
+        this.releaseTransformResources(active, false);
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Transform cancellation failed");
+      }
+      throw error;
     }
-    this.clearPreview(!commit);
-    this.start = null;
-    this.releaseCanvasPins?.();
-    this.releaseCanvasPins = undefined;
-    if (!commit) {
-      active.stopMoveable?.();
+    this.releaseTransformResources(active, shouldCommit);
+    if (!shouldCommit || !active.inputRegistration.isCurrent(active.inputRoot)) {
       return true;
     }
     if (active.kind !== "move") {
@@ -1112,132 +1107,234 @@ export class EdgelessTransformController {
     return true;
   };
 
-  /** Resolves click/drill-in selection and starts a permitted object move. */
-  private onPointerDown = ({
-    raw: event,
-    root,
-    reactPanel,
-  }: EditorEvent<"surface", "pointerdown">): boolean => {
-    if (event.button !== 0 || !(event.target instanceof Element)) {
+  /**
+   * Resolves click and drill-in selection before starting a permitted object move.
+   *
+   * Pointer admission uses live normalized target queries. Preview presentation
+   * remains bound to the captured input registration.
+   *
+   * @param reactPanel - Panel whose registration owns the transform controls.
+   * @param delivery - Normalized pointer input from that panel's registration.
+   * @param delivery.pointerInput - Pointer data and synchronous target capabilities.
+   * @param delivery.inputRoot - Attachment-bound focus capability.
+   * @returns True when the click is consumed or a move has been prepared.
+   * @throws Propagates selection, geometry, and control preparation failures.
+   */
+  private onPointerDown = (
+    reactPanel: ReactPanelApi,
+    delivery: EditorEvent<"surface", "pointerdown">,
+  ): boolean => {
+    const { pointerInput: event, inputRoot, inputRegistration } = delivery;
+    const target = event?.target;
+    if (!Object.is(reactPanel.inputRoot, inputRoot) || !inputRegistration.isCurrent(inputRoot)) {
       return false;
     }
-    if (root.dataset.panningReady === "true" || root.dataset.edgelessPanTool === "true") {
+    if (!event || event.button !== 0 || !event.isCurrentRealmElement() || !target) {
       return false;
     }
-    if (event.target.closest("[data-edgeless-ui]")) {
+    if (
+      inputRoot.readAttribute("data-panning-ready") === "true" ||
+      inputRoot.readAttribute("data-edgeless-pan-tool") === "true" ||
+      !Object.is(reactPanel.inputRoot, inputRoot) ||
+      !inputRoot.isAttached() ||
+      !inputRegistration.isCurrent(inputRoot) ||
+      target.hasAncestor("[data-edgeless-ui]")
+    ) {
       return false;
     }
-    const card = event.target.closest<HTMLElement>(ROOT_SELECTOR);
-    const object = event.target.closest<HTMLElement>(OBJECT_SELECTOR);
-    let id = card?.dataset.edgelessRoot ?? object?.dataset.edgelessObjectId;
-    if (!id) {
+    const cardId = target.ancestorAttribute(ROOT_SELECTOR, "data-edgeless-root");
+    const objectId = target.ancestorAttribute(OBJECT_SELECTOR, "data-edgeless-object-id");
+    const childId = cardId ?? objectId;
+    if (!childId) {
       return false;
     }
     this.reactPanel = reactPanel;
-    const childId = id;
-    const parent = this.parentId(id);
     const current = this.selection.get().items;
     const primary = event.ctrlKey || event.metaKey;
-    /**
-     * AFFiNE-style progressive group selection (single clicks only).
-     *
-     * Purpose: let users enter a group one level at a time, then edit children,
-     * without double-click stack-cycling (which stole dblclick from text/sticky edit).
-     *
-     * Flow when the hit target is a grouped child and Ctrl/Cmd is not held:
-     * 1. Outside drill-in → select the parent group (first click targets the group).
-     * 2. Group or a sibling already selected → drill into / switch to this child.
-     * 3. This child already selected → keep it for drag/resize; click-without-drag
-     *    later returns to the group (except editable labels — text/sticker/shape/connector —
-     *    which stay selected so double-click can enter edit mode).
-     * Moveable handles target the concrete selection through beginControls;
-     * they do not enter this pointer-based group selection path.
-     */
-    let returnToGroup: string | undefined;
-    if (parent && !primary) {
-      const selectedId = current.length === 1 ? current[0] : undefined;
-      const inActiveGroup = Boolean(
-        selectedId && (selectedId === parent || this.parentId(selectedId) === parent),
-      );
-      if (selectedId === childId) {
-        // Purpose: allow drag on the drilled child; non-label shapes bounce back to group on click.
-        id = childId;
-        const kind = this.elements.getElementNode(childId)?.type;
-        if (!this.reactEditor.elementTypes.get(kind ?? "")?.behavior?.editableLabel) {
-          returnToGroup = parent;
-        }
-      } else if (inActiveGroup) {
-        // Purpose: second click (or sibling click) enters/switches the child under the active group.
-        id = childId;
-      } else {
-        // Purpose: first click on any grouped child selects the group shell first.
-        id = parent;
-      }
-    }
-    const hitBlock = event.target.closest<HTMLElement>(BLOCK_SELECTOR);
-    const element = this.elements.getElementNode(id);
-    const hitBlockId = hitBlock?.dataset.blockId ?? "";
-    // Nested/indented hits must count: card ranges store roots only, and the
-    // row hover strip (::before) often lands on a child block, not the root.
-    const movable =
-      !event.target.closest(CONTROL_SELECTOR) &&
-      (!card ||
-        !hitBlock ||
-        (element?.type === "block" &&
-          elementContainsBlock(
-            reactPanel.blocks,
-            element,
-            reactPanel.blocks.getRootIds(),
-            hitBlockId,
-          )));
-    if (!movable) {
+    const { id, returnToGroup } = this.resolvePointerTarget(childId, current, primary);
+    if (!this.canMovePointerTarget(target, reactPanel, id)) {
       return false;
     }
     event.stopPropagation();
     const selected = current.includes(id);
     if (primary) {
-      // Primary toggles membership only — never start a move (that wiped multi-select
-      // when adding a shape to an existing group selection for nested grouping).
-      // Preserve canvas focus for clipboard shortcuts; this click does not start Moveable.
-      event.preventDefault();
-      root.focus({ preventScroll: true });
-      this.selection.set(selected ? current.filter((item) => item !== id) : [...current, id]);
+      this.togglePointerSelection(id, current, selected, inputRoot, inputRegistration, event);
       return true;
     }
     if (!selected) {
       this.selection.set([id]);
     }
-    const ids = selected ? [...current] : [id];
-    const frames = new Map<string, EditorElementFrame>();
-    ids.forEach((item) => {
-      const frame = this.transformFrame(item);
-      if (frame) {
-        frames.set(item, { ...frame });
-      }
-    });
+    if (!inputRegistration.isCurrent(inputRoot)) {
+      return true;
+    }
+    return this.preparePointerMove(
+      reactPanel,
+      inputRoot,
+      inputRegistration,
+      selected ? [...current] : [id],
+      returnToGroup,
+    );
+  };
+
+  /**
+   * Toggles one object without starting a Moveable gesture.
+   *
+   * Primary toggles membership only — never start a move (that wiped multi-select
+   * when adding a shape to an existing group selection for nested grouping).
+   * Preserve canvas focus for clipboard shortcuts; this click does not start Moveable.
+   *
+   * @param id - Object identity selected by the pointer policy.
+   * @param current - Existing selection before the pointer action.
+   * @param selected - Whether the object is already selected.
+   * @param inputRoot - Attachment-bound focus capability.
+   * @param inputRegistration - Routing lifetime captured by the pointer input.
+   * @param input - Pointer delivery whose native default is cancelled.
+   * @returns Object membership and focus reflect the additive click.
+   * @throws Propagates browser focus and selection failures.
+   */
+  private togglePointerSelection(
+    id: string,
+    current: readonly string[],
+    selected: boolean,
+    inputRoot: Pick<InputRoot, "focus" | "isAttached">,
+    inputRegistration: PanelInputRegistration,
+    input: Pick<PointerInput, "preventDefault">,
+  ): void {
+    input.preventDefault();
+    inputRoot.focus();
+    if (inputRegistration.isCurrent(inputRoot)) {
+      this.selection.set(selected ? current.filter((item) => item !== id) : [...current, id]);
+    }
+  }
+
+  /**
+   * Resolves progressive group selection for one pointer hit.
+   *
+   * AFFiNE-style progressive group selection (single clicks only).
+   *
+   * Purpose: let users enter a group one level at a time, then edit children,
+   * without double-click stack-cycling (which stole dblclick from text/sticky edit).
+   *
+   * Flow when the hit target is a grouped child and Ctrl/Cmd is not held:
+   * 1. Outside drill-in → select the parent group (first click targets the group).
+   * 2. Group or a sibling already selected → drill into / switch to this child.
+   * 3. This child already selected → keep it for drag/resize; click-without-drag
+   *    later returns to the group (except editable labels — text/sticker/shape/connector —
+   *    which stay selected so double-click can enter edit mode).
+   * Moveable handles target the concrete selection through beginControls;
+   * they do not enter this pointer-based group selection path.
+   *
+   * @param childId - Object directly under the pointer.
+   * @param current - Current selected object identities.
+   * @param primary - Whether additive selection is requested.
+   * @returns Selection identity and optional parent for click-without-drag.
+   */
+  private resolvePointerTarget(
+    childId: string,
+    current: readonly string[],
+    primary: boolean,
+  ): PointerTransformTarget {
+    const parent = this.parentId(childId);
+    if (!parent || primary) {
+      return { id: childId };
+    }
+    const selectedId = current.length === 1 ? current[0] : undefined;
+    if (selectedId === childId) {
+      // Purpose: allow drag on the drilled child; non-label shapes bounce back to group on click.
+      const kind = this.elements.getElementNode(childId)?.type;
+      const editable = this.reactEditor.elementTypes.get(kind ?? "")?.behavior?.editableLabel;
+      return { id: childId, returnToGroup: editable ? undefined : parent };
+    }
+    if (selectedId && (selectedId === parent || this.parentId(selectedId) === parent)) {
+      // Purpose: second click (or sibling click) enters/switches the child under the active group.
+      return { id: childId };
+    }
+    // Purpose: first click on any grouped child selects the group shell first.
+    return { id: parent };
+  }
+
+  /**
+   * Checks whether a pointer hit can move its selected canvas object.
+   *
+   * Nested/indented hits must count: card ranges store roots only, and the
+   * row hover strip (::before) often lands on a child block, not the root.
+   *
+   * @param target - Live normalized pointer target queries.
+   * @param panel - Receiving panel providing block hierarchy.
+   * @param id - Object identity selected by the group policy.
+   * @returns False for controls or card block hits outside the selected card.
+   */
+  private canMovePointerTarget(target: InputTarget, panel: ReactPanelApi, id: string): boolean {
+    const card = target.hasAncestor(ROOT_SELECTOR);
+    const hitBlock = target.hasAncestor(BLOCK_SELECTOR);
+    const element = this.elements.getElementNode(id);
+    const blockId = target.ancestorAttribute(BLOCK_SELECTOR, "data-block-id") ?? "";
+    return (
+      !target.hasAncestor(CONTROL_SELECTOR) &&
+      (!card ||
+        !hitBlock ||
+        (element?.type === "block" &&
+          elementContainsBlock(panel.blocks, element, panel.blocks.getRootIds(), blockId)))
+    );
+  }
+
+  /**
+   * Captures source geometry and prepares Moveable for one selected pointer gesture.
+   *
+   * @param reactPanel - Panel whose controls prepare the selected targets.
+   * @param inputRoot - Occurrence capability used to request focus.
+   * @param inputRegistration - Routing lifetime that admitted the pointer input.
+   * @param ids - Selected top-level object identities to move together.
+   * @param returnToGroup - Parent to reselect after a click without dragging.
+   * @returns True when controls exist and the move is prepared.
+   * @throws Propagates geometry, pinning, focus, or control preparation failures.
+   */
+  private preparePointerMove(
+    reactPanel: ReactPanelApi,
+    inputRoot: Pick<InputRoot, "focus" | "setTemporaryAttribute" | "isAttached" | "findRegions">,
+    inputRegistration: PanelInputRegistration,
+    ids: string[],
+    returnToGroup?: string,
+  ): boolean {
+    const frames = this.capturePointerFrames(ids);
     // Cache leaf frames so attached connector previews stay accurate for groups.
     const moving = new Set(this.leaves(ids));
     moving.forEach((item) => {
-      if (frames.has(item)) {
-        return;
-      }
-      const frame = this.transformFrame(item);
-      if (frame) {
-        frames.set(item, { ...frame });
+      if (!frames.has(item)) {
+        const frame = this.transformFrame(item);
+        if (frame) {
+          frames.set(item, { ...frame });
+        }
       }
     });
-    const controls = this.controls.get(reactPanel);
-    if (!controls) {
+    const registration = this.controls.get(reactPanel);
+    if (
+      !registration ||
+      registration.inputRegistration !== inputRegistration ||
+      !inputRegistration.isCurrent(inputRoot)
+    ) {
       return false;
     }
+    const controls = registration.controls;
     const kind = "move" as const;
     this.sourceRotations = new Map([...moving].map((id) => [id, this.rotation(id)]));
     flushSync(() => {
-      this.releaseCanvasPins = CanvasViewport.forElement(root)?.canvas.pin([...moving]);
+      this.releaseCanvasPins = this.canvas?.pin([...moving]);
     });
     const attachedConnectors = this.connectorTargets(moving, new Set(ids), kind);
+    const releaseTransformMarker = this.acquireTransformMarker(
+      reactPanel,
+      inputRoot,
+      inputRegistration,
+      kind,
+    );
+    if (!releaseTransformMarker) {
+      return false;
+    }
     this.start = {
-      root,
+      inputRoot,
+      inputRegistration,
+      releaseTransformMarker,
       kind,
       stopMoveable: controls.stop,
       dx: 0,
@@ -1249,12 +1346,82 @@ export class EdgelessTransformController {
       returnToGroup,
       moved: false,
     };
-    root.dataset.transforming = this.start.kind;
-    root.focus({ preventScroll: true });
-    this.lockGeometry(root, ids);
-    controls.prepareDrag(this.getMoveTargets(reactPanel, root, ids));
-    return true;
-  };
+    return this.prepareTransformPreview(reactPanel, inputRoot, ids, kind, () => {
+      controls.prepareDrag(this.getMoveTargetIds(reactPanel, ids));
+    });
+  }
+
+  /**
+   * Focuses the originating occurrence and captures its preview presentation.
+   *
+   * Failed preparation cancels only the gesture that began this operation.
+   *
+   * @param panel - Panel receiving this gesture.
+   * @param inputRoot - Root captured by the gesture.
+   * @param ids - Selected element IDs.
+   * @param kind - Requested transform kind.
+   * @param prepareControls - Optional synchronous Moveable target preparation.
+   * @returns True when the same gesture is still prepared and attached.
+   * @throws Propagates preparation failures and combines failed rollback.
+   */
+  private prepareTransformPreview(
+    panel: ReactPanelApi,
+    inputRoot: Pick<InputRoot, "focus" | "isAttached" | "findRegions">,
+    ids: readonly string[],
+    kind: TransformStart["kind"],
+    prepareControls?: () => void,
+  ): boolean {
+    const active = this.start;
+    if (!active) {
+      return false;
+    }
+    try {
+      inputRoot.focus();
+      if (this.start !== active) {
+        return false;
+      }
+      if (panel.inputRoot !== inputRoot || !active.inputRegistration.isCurrent(inputRoot)) {
+        this.finish(false);
+        return false;
+      }
+      this.lockGeometry(inputRoot, ids, kind);
+      prepareControls?.();
+      if (this.start !== active) {
+        return false;
+      }
+      if (panel.inputRoot !== inputRoot || !active.inputRegistration.isCurrent(inputRoot)) {
+        this.finish(false);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      if (this.start === active) {
+        try {
+          this.finish(false);
+        } catch (cleanupError) {
+          throw new AggregateError([error, cleanupError], "Transform preview preparation failed");
+        }
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Captures selected frames used by group and connector previews.
+   *
+   * @param ids - Selected roots whose transforms are moving.
+   * @returns Copied frames for every source that currently has geometry.
+   */
+  private capturePointerFrames(ids: readonly string[]): Map<string, EditorElementFrame> {
+    const frames = new Map<string, EditorElementFrame>();
+    for (const id of ids) {
+      const frame = this.transformFrame(id);
+      if (frame) {
+        frames.set(id, { ...frame });
+      }
+    }
+    return frames;
+  }
   /** Includes ancestor groups whose derived bounds change when a child moves. */
   private connectorTargets(
     moving: ReadonlySet<string>,
@@ -1319,5 +1486,194 @@ export class EdgelessTransformController {
     };
     // Connectors store endpoints, not a rotated HTML host.
     return { source: transform(element.props.source), target: transform(element.props.target) };
+  }
+
+  /**
+   * Restores one preview target and releases its geometry lock.
+   *
+   * @param target - Captured transform target whose styles were previewed.
+   * @param active - Gesture whose captured geometry is being restored.
+   * @param restoreGeometry - Whether cancellation should restore the original size.
+   * @returns The target's temporary styles and lock reflect the completed gesture.
+   * @throws Propagates model reads and browser style mutation failures.
+   */
+  private clearPreviewTarget(
+    target: TransformPreviewTarget,
+    active: TransformStart,
+    restoreGeometry: boolean,
+  ): void {
+    const { id } = target;
+    const styles: Record<string, string | null> = {};
+    if (this.elements.getElementNode(id)?.type === "connector") {
+      // The SVG overlay owns the visible path; discard its target's temporary
+      // CSS transform before React renders the committed endpoint geometry.
+      const frame = active.frames.get(id);
+      if (frame) {
+        styles.left = `${frame.x}px`;
+        styles.top = `${frame.y}px`;
+        styles.width = `${frame.width}px`;
+        styles.height = `${frame.height}px`;
+      }
+      styles.transform = null;
+    } else {
+      // Keep committed handle geometry: React may already have rendered the preview.
+      if (restoreGeometry || active.kind === "move") {
+        const frame = this.transformFrame(id);
+        if (frame) {
+          styles.transform = `translate(${frame.x}px, ${frame.y}px) rotate(${this.rotation(id)}deg)`;
+        }
+      }
+      if (active.kind !== "move" && restoreGeometry) {
+        const frame = active.frames.get(id);
+        if (frame) {
+          styles.left = "0px";
+          styles.top = "0px";
+          styles.width = `${frame.width}px`;
+          styles.height = `${frame.height}px`;
+        }
+      }
+    }
+    try {
+      target.styles.finish(styles);
+    } finally {
+      target.releaseLock();
+    }
+  }
+
+  /**
+   * Releases preview, pin, and cancelled control resources for a gesture.
+   *
+   * @param active - Gesture whose resources are being released.
+   * @param commit - Whether preview geometry will be committed.
+   * @returns All relevant cleanup operations have been attempted.
+   * @throws A cleanup failure, or an AggregateError when multiple operations fail.
+   */
+  private releaseTransformResources(active: TransformStart, commit: boolean): void {
+    const errors: unknown[] = [];
+    this.start = null;
+    const releasePins = this.releaseCanvasPins;
+    this.releaseCanvasPins = undefined;
+    try {
+      // Keep the final absolute translation when releasing the React style lock.
+      if (commit && active.previews) {
+        this.previewTargets?.forEach((target) => {
+          const preview = active.previews!.get(target.id);
+          if (!preview || this.elements.getElementNode(preview.id)?.type === "connector") {
+            return;
+          }
+          target.styles.set({
+            transform: `translate(${preview.frame.x}px, ${preview.frame.y}px) rotate(${preview.rotation}deg)`,
+          });
+        });
+      }
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      this.clearPreview(!commit || errors.length > 0, active, releasePins);
+    } catch (error) {
+      errors.push(error);
+    }
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Transform cleanup failed");
+    }
+  }
+
+  /**
+   * Acquires the gesture marker for the current registration after pinning its targets.
+   *
+   * If registration changes or acquisition fails, the marker and canvas pins
+   * are released before the gesture is abandoned.
+   *
+   * @param panel - Panel whose current input registration owns the gesture.
+   * @param inputRoot - Root captured before preparing the gesture.
+   * @param inputRegistration - Routing lifetime captured before preparing the gesture.
+   * @param kind - Move, resize, or rotation marker to publish.
+   * @returns Marker cleanup, or undefined when the registration is no longer current.
+   * @throws Propagates acquisition and cleanup failures, combining multiple errors.
+   */
+  private acquireTransformMarker(
+    panel: Pick<ReactPanelApi, "inputRoot">,
+    inputRoot: Pick<InputRoot, "isAttached" | "setTemporaryAttribute">,
+    inputRegistration: PanelInputRegistration,
+    kind: TransformStart["kind"],
+  ): (() => void) | undefined {
+    let release: (() => void) | undefined;
+    let current: boolean;
+    try {
+      release = inputRoot.setTemporaryAttribute(EDGELESS_TRANSFORMING_ATTRIBUTE, kind);
+      current =
+        panel.inputRoot === inputRoot &&
+        inputRegistration.isCurrent(inputRoot) &&
+        panel.inputRoot === inputRoot;
+    } catch (error) {
+      this.cleanupTransformPreparation(release, [error]);
+      return undefined;
+    }
+    if (!current) {
+      this.cleanupTransformPreparation(release);
+      return undefined;
+    }
+    return release;
+  }
+
+  /**
+   * Releases an abandoned marker and canvas pins even when either cleanup fails.
+   *
+   * @param releaseMarker - Marker cleanup, omitted when acquisition failed first.
+   * @param errors - Earlier acquisition errors to preserve with cleanup failures.
+   * @returns Preparation resources have been offered cleanup.
+   * @throws The original failure, or an AggregateError when multiple operations fail.
+   */
+  private cleanupTransformPreparation(releaseMarker?: () => void, errors: unknown[] = []): void {
+    const releasePins = this.releaseCanvasPins;
+    this.releaseCanvasPins = undefined;
+    for (const release of [releaseMarker, releasePins]) {
+      try {
+        release?.();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Transform preparation cleanup failed");
+    }
+  }
+
+  /**
+   * Stops cancelled controls after their target geometry has been restored.
+   *
+   * Cleanup may synchronously start a replacement that reuses the control handle.
+   * Its tracking must not be stopped by the older gesture's cleanup.
+   *
+   * @param active - Gesture whose resources are being released.
+   * @param cancel - Whether earlier cleanup already requires cancellation.
+   * @returns Failures collected after all applicable cleanup attempts.
+   */
+  private stopCancelledControls(
+    active: TransformStart,
+    cancel: boolean,
+  ): unknown[] {
+    const errors: unknown[] = [];
+    try {
+      cancel ||= errors.length > 0 || !active.inputRegistration.isCurrent(active.inputRoot);
+    } catch (error) {
+      errors.push(error);
+      cancel = true;
+    }
+    if (cancel && (!this.start || this.start.stopMoveable !== active.stopMoveable)) {
+      try {
+        active.stopMoveable?.();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    return errors;
   }
 }

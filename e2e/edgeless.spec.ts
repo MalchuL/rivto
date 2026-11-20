@@ -1583,6 +1583,7 @@ test("draws presets, erases whole objects, and connects moving objects", async (
   await page.mouse.move(drawingBox.x + drawingBox.width + 5, drawingBox.y + drawingBox.height / 2, {
     steps: 6,
   });
+  await expect(drawing).toHaveAttribute("data-edgeless-erase-target", "true");
   await page.mouse.up();
   await expect(page.locator('[data-edgeless-visual-kind="drawing"]')).toHaveCount(drawingsBefore);
 

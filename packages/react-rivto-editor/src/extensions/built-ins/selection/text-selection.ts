@@ -1,5 +1,5 @@
 import { PageTextSelectionBoundary } from "../../../surfaces/page/page-selection-boundary";
-import type { ReactEditorApi } from "../../../editor/types";
+import type { ReactEditorExtensionApi } from "../../../editor/types";
 
 /**
  * Publishes exact text endpoints and structural block gestures to core.
@@ -27,6 +27,6 @@ import type { ReactEditorApi } from "../../../editor/types";
  * </EditorPanel>
  * ```
  */
-export function registerTextSelection(reactEditor: ReactEditorApi): () => void {
+export function registerTextSelection(reactEditor: ReactEditorExtensionApi): () => void {
   return reactEditor.surfaces.registerEditorWrapper(PageTextSelectionBoundary);
 }

@@ -65,6 +65,7 @@ export {
   edgelessVisualsExtension,
 } from "./extensions/edgeless";
 export { useEdgelessElementStyle } from "./hooks/elements/use-edgeless-element-style";
+export type { EdgelessElementStyle } from "./hooks/elements/types";
 export type { EdgelessPresetOptions } from "./extensions/edgeless";
 export { EdgelessSnappingStore } from "./surfaces/edgeless";
 export type { EdgelessSnappingSnapshot, EdgelessSurfaceOptions } from "./surfaces/edgeless";
@@ -118,9 +119,7 @@ export {
   KEYBOARD_BINDING_IDS,
   SLOT_POSITIONS,
   parseShortcut,
-  readEditorDOMSelection,
-  restoreEditorDOMSelection,
-  shortcutFromKeyboardEvent,
+  formatKeyboardShortcut,
 } from "./managers";
 export type {
   BlockClipboardConverter,
@@ -131,16 +130,26 @@ export type {
   BlockSlotRegistration,
   ClipboardContent,
   ClipboardCopyContext,
+  ClipboardPanel,
   ClipboardFormatContext,
   ClipboardFormatter,
   ClipboardParseContext,
   ClipboardParser,
   ClipboardPasteContext,
+  ContentBounds,
+  ContentCaret,
+  ContentCaretGeometry,
+  ContentHostIdentity,
+  ContentInput,
+  ContentViewport,
   DOMEventDefinition,
   DOMEventName,
   DOMEventScope,
   DOMEventTarget,
   EditorEventHandler,
+  EditorEventInputRoot,
+  EventEditor,
+  EventPanel,
   ElementClipboardConverter,
   ElementClipboardFields,
   ElementClipboardFormatContext,
@@ -149,7 +158,10 @@ export type {
   ExtensionMountPosition,
   KeyboardBindingSnapshot,
   KeyboardEventDefinition,
+  KeyboardEventInputRoot,
+  KeyboardPanel,
   KeyboardShortcut,
+  KeyboardTargetState,
   KeymapOverrides,
   PortableBlockFormats,
   ReactBlockDefinition,
@@ -177,8 +189,14 @@ export {
 export { ContainerBlockBehavior, DefaultBlockBehavior } from "./block-behaviors";
 export type {
   BlockBehavior,
-  BlockBehaviorContext,
+  BlockEditingPanel,
+  BlockKeyboardContext,
+  ContainerWritingContext,
+  BlockSnapshotContext,
+  BlockSnapshotPanel,
+  BlockRelocationDocument,
   BlockOutlineContext,
+  BlockOutlinePanel,
   BlockBehaviorData,
   BlockBehaviorAvailabilityContext,
   BlockBehaviorOutcome,
@@ -215,11 +233,8 @@ export {
   type TableCellProps,
 } from "./extensions/containers/table/table";
 
-export {
-  EMBEDDING_BLOCK_TYPE,
-  embeddingExtension,
-  type EmbeddingProps,
-} from "./extensions/embedding/embedding";
+export { EMBEDDING_BLOCK_TYPE, embeddingExtension } from "./extensions/embedding/embedding";
+export type { EmbeddingProps } from "./extensions/embedding/types";
 
 export { EdgelessSurface } from "./surfaces/edgeless/edgeless-surface";
 export { PageSurface } from "./surfaces/page/page-surface";
@@ -232,10 +247,16 @@ export type { EditorPanelProps } from "./components/editor-panel/types";
 export type { PanelBlocksAPI } from "@chulane/rivto";
 export type { PanelDestination } from "@chulane/rivto";
 export type { PanelElementsAPI } from "@chulane/rivto";
-export type { EditorStorageOptions, EditorAcquisition, ReactEditorApi } from "./editor/types";
+export type {
+  EditorStorageOptions,
+  EditorAcquisition,
+  ReactEditorApi,
+  ReactEditorExtensionApi,
+  ReactEditorHostApi,
+} from "./editor/types";
 export { useReactEditor } from "./hooks/editor/use-react-editor";
 export type { ReactEditorState, UseReactEditorOptions } from "./hooks/editor/types";
-export type { ReactPanelApi } from "./types";
+export type { PanelInputRegistration, ReactPanelApi } from "./types";
 
 export { EditorEmbed } from "./components/editor-embed/editor-embed";
 export type { EditorEmbedProps } from "./components/editor-embed/types";
@@ -258,12 +279,11 @@ export type {
   EdgelessToolbarGroup,
   EdgelessToolbarTool,
   EdgelessToolbarContext,
-  EdgelessToolbarRenderContext,
   EdgelessToolbarGroupProps,
   EdgelessToolbarItem,
 } from "./managers/edgeless-toolbar/types";
 export { EdgelessToolButton } from "./components/edgeless/tool-button";
-export type { EdgelessToolButtonProps, EdgelessToolIcon } from "./components/edgeless/tool-button";
+export type { EdgelessToolButtonProps, EdgelessToolIcon } from "./components/edgeless/types";
 
 export {
   BlockHandle,

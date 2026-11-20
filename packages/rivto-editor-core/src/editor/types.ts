@@ -87,3 +87,6 @@ export interface DocumentEditorAPI {
    */
   destroy(): Promise<void>;
 }
+
+/** Document editor operations borrowed without authority to destroy the runtime. */
+export type DocumentEditorOperations = Omit<DocumentEditorAPI, "destroy">;

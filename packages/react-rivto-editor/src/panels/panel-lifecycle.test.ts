@@ -14,6 +14,7 @@ import {
 import { EdgelessSurfaceRegistration } from "../surfaces/edgeless/register";
 import { ChildrenPanel } from "@chulane/rivto";
 import { EmbeddingPanel } from "@chulane/rivto";
+import type { InputRoot } from "@chulane/rivto-root";
 
 async function eventually(assertion: () => void): Promise<void> {
   for (let attempt = 0; ; attempt += 1) {
@@ -296,7 +297,9 @@ test.each(["block", "edgeless"] as const)(
       () => calls.push("cancelled"),
     );
     api.selection.scheduleIfSelectionUnchanged(() => {
-      expect(f.editor.panels.getActiveRoot() ?? f.editor.panels.getDefaultRoot()).toBe(panelRoot);
+      expect(f.editor.panels.getActiveInputRoot() ?? f.editor.panels.getDefaultInputRoot()).toBe(
+        reactPanel.inputRoot,
+      );
       calls.push("new");
     });
     expect(calls).toEqual(["cancelled"]);
@@ -344,7 +347,8 @@ test("replacing a root cancels only its restoration and retains another panel's 
     () => calls.push("cancelled"),
   );
   second.getSnapshot().api!.selection.scheduleIfSelectionUnchanged(() => {
-    expect(second.getSnapshot().api!.getRoot()).toBe(second.getRoot());
+    expect(second.inputRoot).toBeDefined();
+    expect(second.getSnapshot().api!.inputRoot).toBe(second.inputRoot);
     calls.push("second");
   });
   first.setRoot(root(realm));
@@ -352,11 +356,13 @@ test("replacing a root cancels only its restoration and retains another panel's 
   expect(frames.size).toBe(1);
   expect(first.getSnapshot().api!.selection.hasPendingSelectionCallback).toBe(false);
   expect(second.getSnapshot().api!.selection.hasPendingSelectionCallback).toBe(true);
-  const activeRoot = f.editor.panels.getActiveRoot() ?? f.editor.panels.getDefaultRoot();
+  const activeRoot = f.editor.panels.getActiveInputRoot() ?? f.editor.panels.getDefaultInputRoot();
   for (const callback of frames.values()) {
     callback(0);
   }
-  expect(f.editor.panels.getActiveRoot() ?? f.editor.panels.getDefaultRoot()).toBe(activeRoot);
+  expect(f.editor.panels.getActiveInputRoot() ?? f.editor.panels.getDefaultInputRoot()).toBe(
+    activeRoot,
+  );
   expect(calls).toEqual(["cancelled", "second"]);
   closeFirst();
   closeSecond();
@@ -514,7 +520,7 @@ test("panel-local events and shortcuts reuse IDs, dispatch once, and preserve se
   f.editor.events.register(
     { id: "initial.document", type: "keydown", target: "window" },
     (value) => {
-      if (value.raw.key === "initial") {
+      if (value.keyboardInput?.key === "initial") {
         unfocusedDocument = f.editor.blocks.getBlockNode("same-id")?.content;
       }
       return false;
@@ -617,14 +623,17 @@ test("hover routes to the pointed panel without activating it or clearing select
   const closeFull = full.destroy;
   const closeNested = nested.destroy;
   await eventually(() => expect(nested.getSnapshot().retained).toBe(true));
-  const pointed: HTMLElement[] = [];
+  const pointed: Pick<InputRoot, "isAttached">[] = [];
   for (const reactPanel of [full, nested]) {
     reactPanel
       .getSnapshot()
-      .api!.events.register({ id: "hover", type: "pointermove", target: "window" }, ({ root }) => {
-        pointed.push(root);
-        return false;
-      });
+      .api!.events.register(
+        { id: "hover", type: "pointermove", target: "window" },
+        ({ inputRoot }) => {
+          pointed.push(inputRoot);
+          return false;
+        },
+      );
   }
   fullRoot.dispatchEvent(event("focusin", fullRoot));
   f.editor.selection.set(createStructuralSelection(["same-id"]));
@@ -639,18 +648,24 @@ test("hover routes to the pointed panel without activating it or clearing select
   });
   realm.defaultView.dispatchEvent(event("pointermove", nestedRoot));
   realm.defaultView.dispatchEvent(event("pointermove", fullRoot));
-  expect(pointed).toEqual([nestedRoot, fullRoot]);
-  expect(f.editor.panels.getActiveRoot() ?? f.editor.panels.getDefaultRoot()).toBe(fullRoot);
+  expect(pointed).toEqual([nested.inputRoot, full.inputRoot]);
+  expect(f.editor.panels.getActiveInputRoot() ?? f.editor.panels.getDefaultInputRoot()).toBe(
+    full.inputRoot,
+  );
   expect(f.editor.selection.get()).toEqual(selection);
   expect(changes).toBe(0);
   expect(deactivations).toBe(0);
   nestedRoot.dispatchEvent(event("pointerdown", nestedRoot));
-  expect(f.editor.panels.getActiveRoot() ?? f.editor.panels.getDefaultRoot()).toBe(nestedRoot);
+  expect(f.editor.panels.getActiveInputRoot() ?? f.editor.panels.getDefaultInputRoot()).toBe(
+    nested.inputRoot,
+  );
   expect(deactivations).toBe(1);
   realm.defaultView.dispatchEvent(event("pointermove", fullRoot));
-  expect(pointed.at(-1)).toBe(nestedRoot);
+  expect(pointed.at(-1)).toBe(nested.inputRoot);
   realm.defaultView.dispatchEvent(event("pointerup", fullRoot));
-  expect(f.editor.panels.getActiveRoot() ?? f.editor.panels.getDefaultRoot()).toBe(nestedRoot);
+  expect(f.editor.panels.getActiveInputRoot() ?? f.editor.panels.getDefaultInputRoot()).toBe(
+    nested.inputRoot,
+  );
   stopSelection();
   closeNested();
   closeFull();
@@ -1195,7 +1210,9 @@ test("retained slash and clipboard APIs keep their surface without changing the 
     title: "Explicit panel",
     execute: ({ reactPanel }) => {
       calls.push(reactPanel.getSurfaceType());
-      expect(f.editor.panels.getActiveRoot() ?? f.editor.panels.getDefaultRoot()).toBe(canvasRoot);
+      expect(f.editor.panels.getActiveInputRoot() ?? f.editor.panels.getDefaultInputRoot()).toBe(
+        canvas.inputRoot,
+      );
     },
   });
   await Promise.resolve();
@@ -1206,7 +1223,9 @@ test("retained slash and clipboard APIs keep their surface without changing the 
   f.editor.events.register({ id: "panel.hover", type: "pointermove" }, ({ reactPanel, mode }) => {
     expect(reactPanel).toBe(pageApi);
     expect(mode).toBe("block");
-    expect(f.editor.panels.getActiveRoot() ?? f.editor.panels.getDefaultRoot()).toBe(canvasRoot);
+    expect(f.editor.panels.getActiveInputRoot() ?? f.editor.panels.getDefaultInputRoot()).toBe(
+      canvas.inputRoot,
+    );
     return false;
   });
   pageRoot.dispatchEvent(event("pointermove", pageRoot));
@@ -1242,7 +1261,9 @@ test("retained slash and clipboard APIs keep their surface without changing the 
   expect(f.editor.elements.getElementNodes().filter(({ type }) => type === "text")).toHaveLength(
     before + 1,
   );
-  expect(f.editor.panels.getActiveRoot() ?? f.editor.panels.getDefaultRoot()).toBe(canvasRoot);
+  expect(f.editor.panels.getActiveInputRoot() ?? f.editor.panels.getDefaultInputRoot()).toBe(
+    canvas.inputRoot,
+  );
   removeStrategy();
   disposeCommand();
   closePage();

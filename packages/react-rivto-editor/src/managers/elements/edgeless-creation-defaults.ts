@@ -1,4 +1,4 @@
-import type { ReactEditorApi } from "../../editor/types";
+import type { ReactEditorExtensionApi } from "../../editor/types";
 import type { ReactElementRegistration } from "./types";
 import type { EdgelessToolbarGroup } from "../edgeless-toolbar/types";
 import { RevisionStore } from "../../internal-store";
@@ -16,7 +16,7 @@ export class EdgelessCreationDefaults {
    *
    * @param editor - Editor supplying live type and toolbar-group registrations.
    */
-  constructor(private readonly editor: ReactEditorApi) {}
+  constructor(private readonly editor: ReactEditorExtensionApi) {}
 
   /**
    * Subscribes to settings and displayed preview changes, including commits affecting both scopes.

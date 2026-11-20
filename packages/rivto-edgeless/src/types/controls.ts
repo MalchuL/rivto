@@ -1,25 +1,51 @@
 import type { TransformChange, TransformKind } from "./canvas";
+import type { CanvasApi } from "../core/canvas";
+
+/** Scene and consumer behavior for canvas-owned transform controls. */
+export interface CanvasTransformControlsProps {
+  /** Canvas supplying current selection and geometry. */
+  readonly canvas: CanvasApi;
+  /** Host transform policies and callbacks. */
+  readonly adapter: CanvasControlsAdapter;
+}
 
 /** Temporary geometry with the library's transform relative to the original DOM layout. */
 export interface ControlPreview extends TransformChange {
   readonly transform?: string;
+}
+
+/**
+ * Host interaction markers applied to the canvas-owned control box and handles.
+ *
+ * Attribute names must not use the reserved `data-canvas-` prefix; canvas owns
+ * those markers and retains them when host markers are removed.
+ */
+export interface CanvasControlMarkers {
+  /** Data attributes applied to the control box. */
+  readonly box: Readonly<Record<`data-${string}`, string>>;
+  /** Data attribute whose value is the resize direction. */
+  readonly resizeHandle: `data-${string}`;
+  /** Data attribute applied to the rotation handle with value `true`. */
+  readonly rotationHandle: `data-${string}`;
 }
 /** Imperative operations exposed to a host that admits drags through its own event system. */
 export interface CanvasControlHandle {
   /**
    * Mounts the concrete targets before a gesture begins.
    *
-   * @param targets - Live geometry hosts.
+   * @param ids - Stable identities of participants, including unmounted ones.
    * @returns Targets and handles have been measured synchronously.
    */
-  prepareDrag(targets: HTMLElement[]): void;
+  prepareDrag(ids: readonly string[]): void;
   /**
-   * Forwards an admitted native gesture to the transform library.
+   * Starts an admitted gesture using the canvas-owned current browser input.
    *
-   * @param event - Originating mouse or touch input.
-   * @returns Pointer tracking has started.
+   * This capability is synchronous: outside the current mouse or touch start
+   * delivery, it does nothing and retains no usable input.
+   *
+   * @returns Pointer tracking has started when matching input is being delivered.
    */
-  dragStart(event: MouseEvent | TouchEvent): void;
+  dragStart(): void;
   /**
    * Cancels library tracking and refreshes handles.
    *
@@ -36,19 +62,6 @@ export interface CanvasControlsAdapter {
    */
   getTargetIds(): readonly string[];
   readonly groupRotation?: number;
-  /**
-   * Resolves concrete DOM participants for the current selection.
-   *
-   * @returns Mounted unique geometry hosts.
-   */
-  getTargets(): HTMLElement[];
-  /**
-   * Reads stable identity from a consumer's geometry host.
-   *
-   * @param target - HTML or SVG transform target.
-   * @returns Consumer element ID.
-   */
-  targetId(target: HTMLElement | SVGElement): string;
   /**
    * Connects imperative controls to the host event dispatcher.
    *
@@ -101,15 +114,13 @@ export interface CanvasControlsAdapter {
    */
   finish(commit: boolean, detail?: number): void;
   /**
-   * Adds host-specific accessibility or interaction markers to the controls.
+   * Describes host-specific interaction markers for the controls.
    *
-   * Canvas has already marked resize handles with `data-canvas-resize-handle`
-   * containing their direction, and rotation handles with `data-canvas-rotation-handle`.
-   * Consumers can decorate these markers without depending on library CSS classes.
+   * Canvas applies these attributes to its own control box and handles. Canvas
+   * also retains its own resize and rotation markers and accessibility labels.
    *
-   * @param box - Library-owned control box.
    * @param id - Single selected ID, absent for multiple selection.
-   * @returns Host markers have been applied.
+   * @returns Data attributes to apply while this selection is active.
    */
-  decorateControls?(box: HTMLElement, id?: string): void;
+  getControlMarkers?(id?: string): CanvasControlMarkers;
 }

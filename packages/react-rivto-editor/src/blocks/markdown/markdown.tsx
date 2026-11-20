@@ -129,7 +129,9 @@ export function MarkdownContent({
           {...props}
           href={href}
           tabIndex={-1}
-          onClick={(event) => onLinkClick?.({ blockId, href, event })}
+          onClick={(event) =>
+            onLinkClick?.({ blockId, href, preventDefault: () => event.preventDefault() })
+          }
         />
       ),
       pre: (props) => (

@@ -1,6 +1,5 @@
 import type { BlockBehaviorAvailabilityContext } from "./types";
 import type { BlockDestination } from "@chulane/document-model";
-import type { ReactPanelApi } from "../panels/types";
 /**
  * Generic outline behavior shared by every unregistered or unconstrained block.
  *
@@ -12,20 +11,15 @@ import type { ReactPanelApi } from "../panels/types";
  * @module
  */
 import { removeEmptyBlockAfterStructuralPredecessor } from "../extensions/built-ins/page/block-merge/utils";
-import { navigationDomRoot } from "../extensions/built-ins/page/navigation/utils/scope";
 import type { KeyboardSelectionTarget } from "../managers/keyboard/selection";
-import {
-  findNextEditableBlock,
-  findParentBlock,
-  findPreviousEditableBlock,
-  findRenderedBlock,
-} from "../blocks/block-dom";
 import { scheduleBlockFocus } from "./utils/focus-ops";
 import { createBlockOutlineContext } from "./utils/context";
 import { mergeBlocks, resetToWritingType, splitBlock } from "./utils/text-ops";
 import type {
   BlockBehavior,
-  BlockBehaviorContext,
+  BlockOutlinePanel,
+  BlockKeyboardContext,
+  BlockSnapshotContext,
   BlockOutlineContext,
   BlockBehaviorOutcome,
 } from "./types";
@@ -57,7 +51,7 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * @returns `"handled"` after insertion or an outdent attempt, including when a parent behavior prevents the move.
    * @throws If delegated block mutation, hierarchy, or list-property validation fails.
    */
-  onSplit(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
+  onSplit(context: BlockKeyboardContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
     return splitBlock(context, target);
   }
 
@@ -152,14 +146,14 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * @throws If hierarchy reads, a behavior, a delegated mutation, or focus scheduling fails.
    */
   onOutdentAtStart(
-    context: BlockBehaviorContext,
+    context: BlockKeyboardContext,
     target: KeyboardSelectionTarget,
   ): BlockBehaviorOutcome {
-    const rendered = findRenderedBlock(context.root, target.blockId);
-    if (!rendered || !findParentBlock(rendered)) {
+    if (!context.reactPanel.selection.isRenderedBlockNested(target.blockId)) {
       return "unhandled";
     }
     const { reactPanel } = context;
+    const attachment = context.inputRoot ?? reactPanel.inputRoot;
     const outlineContext = createBlockOutlineContext(
       reactPanel,
       target.blockId,
@@ -170,7 +164,7 @@ export class DefaultBlockBehavior implements BlockBehavior {
         reactPanel.editor.blockBehaviors.dispatch("onOutdent", outlineContext, [target.blockId]),
       );
     }
-    scheduleBlockFocus(context.reactPanel, context.root, target.blockId, 0);
+    scheduleBlockFocus(reactPanel, target.blockId, 0, attachment, context.inputRegistration);
     return "handled";
   }
 
@@ -182,24 +176,30 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * @returns `"handled"` when a merge or structural removal ran; `"unhandled"` when this method cannot apply the operation.
    */
   onMergeBackward(
-    context: BlockBehaviorContext,
+    context: BlockKeyboardContext,
     target: KeyboardSelectionTarget,
   ): BlockBehaviorOutcome {
-    const { reactPanel, root } = context;
-    const rendered = findRenderedBlock(root, target.blockId);
-    if (rendered && findParentBlock(rendered)) {
+    const { reactPanel, inputRoot } = context;
+    const attachment = inputRoot ?? reactPanel.inputRoot;
+    if (reactPanel.selection.isRenderedBlockNested(target.blockId)) {
       return "unhandled";
     }
-    const scope = navigationDomRoot(root, target.blockId);
-    if (removeEmptyBlockAfterStructuralPredecessor(reactPanel, scope, target.blockId)) {
+    if (
+      removeEmptyBlockAfterStructuralPredecessor(
+        reactPanel,
+        target.blockId,
+        inputRoot,
+        context.inputRegistration,
+      )
+    ) {
       return "handled";
     }
-    const previous = findPreviousEditableBlock(scope, target.blockId);
+    const previous = reactPanel.selection.adjacentEditableBlockId(target.blockId, "previous");
     if (!previous) {
       return "unhandled";
     }
-    const joinOffset = mergeBlocks(reactPanel, previous.blockId, target.blockId);
-    scheduleBlockFocus(reactPanel, root, previous.blockId, joinOffset);
+    const joinOffset = mergeBlocks(reactPanel, previous, target.blockId);
+    scheduleBlockFocus(reactPanel, previous, joinOffset, attachment, context.inputRegistration);
     return "handled";
   }
 
@@ -211,24 +211,31 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * @returns `"handled"` when a merge or structural removal ran; `"unhandled"` when this method cannot apply the operation.
    */
   onMergeForward(
-    context: BlockBehaviorContext,
+    context: BlockKeyboardContext,
     target: KeyboardSelectionTarget,
   ): BlockBehaviorOutcome {
-    const { reactPanel, block, root } = context;
+    const { reactPanel, block, inputRoot } = context;
+    const attachment = inputRoot ?? reactPanel.inputRoot;
     // Forward Delete must not merge across a collapsed branch whose children are hidden from the caret.
     if (!reactPanel.editor.blockBehaviors.childrenVisible(block)) {
       return "unhandled";
     }
-    const scope = navigationDomRoot(root, block.id);
-    if (removeEmptyBlockAfterStructuralPredecessor(reactPanel, scope, block.id)) {
+    if (
+      removeEmptyBlockAfterStructuralPredecessor(
+        reactPanel,
+        block.id,
+        inputRoot,
+        context.inputRegistration,
+      )
+    ) {
       return "handled";
     }
-    const next = findNextEditableBlock(scope, target.blockId);
+    const next = reactPanel.selection.adjacentEditableBlockId(target.blockId, "next");
     if (!next) {
       return "unhandled";
     }
-    const joinOffset = mergeBlocks(reactPanel, block.id, next.blockId);
-    scheduleBlockFocus(reactPanel, root, block.id, joinOffset);
+    const joinOffset = mergeBlocks(reactPanel, block.id, next);
+    scheduleBlockFocus(reactPanel, block.id, joinOffset, attachment, context.inputRegistration);
     return "handled";
   }
 
@@ -242,10 +249,11 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * @returns `"handled"` when the type was reset; `"unhandled"` for nonempty blocks, writing blocks, or blocks with an editable predecessor.
    */
   onResetEmpty(
-    context: BlockBehaviorContext,
+    context: BlockKeyboardContext,
     target: KeyboardSelectionTarget,
   ): BlockBehaviorOutcome {
-    const { reactPanel, block, root } = context;
+    const { reactPanel, block, inputRoot } = context;
+    const attachment = inputRoot ?? reactPanel.inputRoot;
     if (block.content !== "") {
       return "unhandled";
     }
@@ -254,12 +262,11 @@ export class DefaultBlockBehavior implements BlockBehavior {
     if (defaultWritingBlockFactory.isEmptyBlock(candidate)) {
       return "unhandled";
     }
-    const scope = navigationDomRoot(root, block.id);
-    if (findPreviousEditableBlock(scope, target.blockId)) {
+    if (reactPanel.selection.adjacentEditableBlockId(target.blockId, "previous")) {
       return "unhandled";
     }
     resetToWritingType(reactPanel, block.id);
-    scheduleBlockFocus(reactPanel, root, block.id, 0);
+    scheduleBlockFocus(reactPanel, block.id, 0, attachment, context.inputRegistration);
     return "handled";
   }
 
@@ -270,7 +277,7 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * @param ids - Unused structural selection.
    * @returns `"unhandled"` so the shared selection-deletion path proceeds.
    */
-  onStructuralDelete(context: BlockBehaviorContext, ids: readonly string[]): BlockBehaviorOutcome {
+  onStructuralDelete(context: BlockSnapshotContext, ids: readonly string[]): BlockBehaviorOutcome {
     return "unhandled";
   }
 
@@ -281,7 +288,7 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * @param ids - Selected identifiers, possibly unordered or including descendants.
    * @returns Existing top-level roots; single-block requests avoid an outline traversal.
    */
-  private getMoveRoots(reactPanel: ReactPanelApi, ids: readonly string[]): string[] {
+  private getMoveRoots(reactPanel: BlockOutlinePanel, ids: readonly string[]): string[] {
     if (ids.length <= 1) {
       return ids.filter((id) => reactPanel.blocks.getBlockNode(id));
     }
@@ -311,7 +318,7 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * @throws If a registered semantic move permission throws.
    */
   private canMoveRoots(
-    reactPanel: ReactPanelApi,
+    reactPanel: BlockOutlinePanel,
     ids: readonly string[],
     destination: BlockDestination,
   ): boolean {

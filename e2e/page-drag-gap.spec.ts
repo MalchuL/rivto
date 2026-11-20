@@ -693,7 +693,11 @@ test("shows the only-child outdent line on its parent's bottom edge", async ({ p
     await parent.evaluate((element) => element.scrollIntoView({ block: "center" }));
     const parentRow = parent.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
     await holdDragAt(page, source, async () => {
-      await parentRow.evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await parentRow.evaluate((element) => {
+        element.scrollIntoView({ block: "center" });
+        // Keep the parent's bottom edge outside the viewport's auto-scroll band.
+        window.scrollBy(0, 60);
+      });
       const box = (await parent.boundingBox())!;
       return { x: box.x + CHILD_DROP_INDENT / 2, y: box.y + box.height - 2 };
     });

@@ -1,7 +1,23 @@
+import type {
+  FrameClock,
+  InputEvent,
+  InputRoot,
+  InputRegion,
+  RectangleOverlay,
+  KeyInput,
+  MouseInput,
+  PointerInput,
+  WheelInput,
+} from "@chulane/rivto-root";
 import type { CanvasEvents } from "./canvas-events";
-import type { CanvasInputOptions, CanvasInputScene } from "./types";
+import type {
+  CanvasInputOptions,
+  CanvasInputScene,
+  CanvasMarqueeGesture,
+  CanvasPanGesture,
+  CanvasWheelPan,
+} from "./types";
 import type { Point } from "../types/canvas";
-import { CanvasViewport } from "./canvas-viewport";
 
 /** Normalized line/page wheel deltas up to this many CSS pixels per axis follow input directly. */
 const DIRECT_WHEEL_PAN_LIMIT = 32;
@@ -11,28 +27,43 @@ export class CanvasInputController {
   private connected = false;
   private readonly eventReleases: (() => void)[] = [];
   private disposed = true;
+  private clock?: FrameClock;
+  private viewport?: InputRegion;
   private space = false;
   private primaryPointerId?: number;
-  private pan?: { point: Point; x: number; y: number; pointer: number; moved: boolean };
-  private panFrame?: number;
-  private pendingPan?: Pick<PointerEvent, "clientX" | "clientY">;
-  private wheelPan?: { target: Point; frame?: number };
-  private marquee?: { point: Point; base: readonly string[]; pointer: number };
+  private releasePointerCapture?: () => void;
+  private pan?: CanvasPanGesture;
+  private panFrame?: () => void;
+  private pendingPan?: Pick<PointerInput, "clientX" | "clientY">;
+  private wheelPan?: CanvasWheelPan;
+  private marquee?: CanvasMarqueeGesture;
   private releaseFocus?: () => void;
-  private rect!: HTMLDivElement;
+  private rect!: RectangleOverlay;
 
   /**
    * Binds one browser viewport to a scene without installing listeners.
    *
+   * The event registrar must be attached to the same occurrence as the borrowed Root.
+   * The viewport owner retains the Root and releases it after disconnecting input.
+   *
    * @param canvas - Scene receiving normalized camera and selection changes.
-   * @param root - Fixed browser viewport for this controller.
    * @param events - Borrowed registration API attached by the browser viewport owner.
+   * @param inputRoot - Mounted Root whose capabilities and lifetime are borrowed.
    * @param options - Live native-input admission policies and notifications.
    */
   constructor(
     private readonly canvas: CanvasInputScene,
-    private readonly root: HTMLElement,
     private readonly events: Pick<CanvasEvents, "register">,
+    private readonly inputRoot: Pick<
+      InputRoot,
+      | "captureFrameClock"
+      | "getElementIdentity"
+      | "isAttached"
+      | "captureFocusedRegion"
+      | "focus"
+      | "captureRegionByIdentity"
+      | "createRectangleOverlay"
+    >,
     private options: CanvasInputOptions = {},
   ) {}
 
@@ -80,22 +111,28 @@ export class CanvasInputController {
    * @returns Cleanup for this connection's native resources.
    */
   private connectEvents(): () => void {
-    const win = this.root.ownerDocument.defaultView;
-    if (!win) {
-      throw new Error("Canvas input requires a document with a window");
+    const identity = this.inputRoot.getElementIdentity?.();
+    const viewport = identity && this.inputRoot.captureRegionByIdentity(identity);
+    const clock = this.inputRoot.captureFrameClock();
+    if (!clock || !viewport) {
+      throw new Error("Canvas input requires an attached Root with a window");
     }
+    this.clock = clock;
+    this.viewport = viewport;
     this.disposed = false;
     this.space = false;
-    this.rect = this.root.ownerDocument.createElement("div");
-    Object.assign(this.rect.style, {
-      position: "absolute",
-      pointerEvents: "none",
-      border: "1px solid #5292ff",
-      background: "#5292ff22",
-      display: "none",
-      zIndex: "1000",
+    this.rect = this.inputRoot.createRectangleOverlay({
+      className: "",
+      attributes: {},
+      container: "root",
+      properties: {
+        position: "absolute",
+        "pointer-events": "none",
+        border: "1px solid #5292ff",
+        background: "#5292ff22",
+        "z-index": "1000",
+      },
     });
-    this.root.append(this.rect);
     try {
       this.registerEvents();
     } catch (error) {
@@ -124,6 +161,8 @@ export class CanvasInputController {
         this.releaseFocus?.();
       } finally {
         this.releaseFocus = undefined;
+        this.clock = undefined;
+        this.viewport = undefined;
         this.rect.remove();
       }
     }
@@ -248,11 +287,14 @@ export class CanvasInputController {
    * Converts a native pointer position to viewport-local CSS pixels.
    *
    * @param event - Native client coordinates.
-   * @returns Position relative to the current viewport origin.
+   * @returns Position relative to the current viewport origin, or undefined after detachment.
    */
-  private readonly toViewportPoint = (event: { clientX: number; clientY: number }): Point => {
-    const box = this.root.getBoundingClientRect();
-    return { x: event.clientX - box.left, y: event.clientY - box.top };
+  private readonly toViewportPoint = (event: {
+    clientX: number;
+    clientY: number;
+  }): Point | undefined => {
+    const box = this.viewport?.readBounds();
+    return box ? { x: event.clientX - box.left, y: event.clientY - box.top } : undefined;
   };
 
   /**
@@ -261,13 +303,10 @@ export class CanvasInputController {
    * @param event - Input whose target is inspected.
    * @returns Whether the target belongs to interactive content.
    */
-  private readonly isInteractive = (event: Event) =>
-    event.target instanceof Element &&
-    Boolean(
-      event.target.closest(
-        "input,textarea,select,button,[contenteditable]:not([contenteditable=false]),[data-canvas-control]",
-      ),
-    );
+  private readonly isInteractive = (event: InputEvent) =>
+    event.target?.hasAncestor(
+      "input,textarea,select,button,[contenteditable]:not([contenteditable=false]),[data-canvas-control]",
+    ) ?? false;
 
   /**
    * Applies host camera policy or the default native-content exclusion.
@@ -275,7 +314,7 @@ export class CanvasInputController {
    * @param event - Pointer or wheel event inside the viewport.
    * @returns Whether the camera may consume this event.
    */
-  private readonly allowsCamera = (event: PointerEvent | WheelEvent) => {
+  private readonly allowsCamera = (event: PointerInput | WheelInput) => {
     if (this.options.allowCamera) {
       return this.options.allowCamera(event);
     }
@@ -299,13 +338,7 @@ export class CanvasInputController {
    * @param event - Native pointerdown originating in this viewport.
    * @returns The chosen gesture is captured or the event remains available to content.
    */
-  private readonly onPointerDown = (event: PointerEvent) => {
-    if (
-      event.target instanceof Element &&
-      CanvasViewport.forElement(event.target)?.canvas !== this.canvas
-    ) {
-      return;
-    }
+  private readonly onPointerDown = (event: PointerInput) => {
     this.cancelWheelPan();
     if (this.pan || this.marquee) {
       return;
@@ -323,12 +356,8 @@ export class CanvasInputController {
     if (this.options.interactions === false || event.button !== 0 || this.isInteractive(event)) {
       return;
     }
-    const host =
-      event.target instanceof Element
-        ? event.target.closest<HTMLElement>("[data-canvas-element]")
-        : null;
-    if (host) {
-      const id = host.dataset.canvasElement!;
+    const id = event.target?.ancestorAttribute("[data-canvas-element]", "data-canvas-element");
+    if (id !== undefined) {
       const ids = this.canvas.selection.get();
       if (event.metaKey || event.ctrlKey) {
         this.canvas.select(ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
@@ -337,14 +366,18 @@ export class CanvasInputController {
       }
       return;
     }
+    const point = this.toViewportPoint(event);
+    if (!point) {
+      return;
+    }
     this.marquee = {
-      point: this.toViewportPoint(event),
+      point,
       base: event.ctrlKey || event.metaKey ? this.canvas.selection.get() : [],
       pointer: event.pointerId,
     };
     this.canvas.select(this.marquee.base);
-    this.root.setPointerCapture(event.pointerId);
-    this.root.focus();
+    this.releasePointerCapture = event.captureRootPointer();
+    this.inputRoot.focus({ preventScroll: false });
     event.preventDefault();
   };
 
@@ -355,7 +388,7 @@ export class CanvasInputController {
    * @returns Pointer capture and host pan state reflect the active gesture.
    * @throws If browser pointer capture or the host's pan-state callback fails.
    */
-  private startPan(event: PointerEvent): void {
+  private startPan(event: PointerInput): void {
     const camera = this.canvas.camera.get();
     this.pan = {
       point: { x: event.clientX, y: event.clientY },
@@ -364,7 +397,7 @@ export class CanvasInputController {
       pointer: event.pointerId,
       moved: false,
     };
-    this.root.setPointerCapture(event.pointerId);
+    this.releasePointerCapture = event.captureRootPointer();
     this.reportPanState();
     event.preventDefault();
     event.stopPropagation();
@@ -383,7 +416,7 @@ export class CanvasInputController {
    * or selection reflects this sample without source geometry writes.
    * @throws If the first movement's camera subscribers reject publication.
    */
-  private readonly onPointerMove = (event: PointerEvent) => {
+  private readonly onPointerMove = (event: PointerInput) => {
     if (!this.pan && !this.marquee) {
       return;
     }
@@ -394,11 +427,14 @@ export class CanvasInputController {
         this.pan.moved = event.clientX !== this.pan.point.x || event.clientY !== this.pan.point.y;
         this.flushPan();
       } else {
-        this.panFrame ??= this.root.ownerDocument.defaultView!.requestAnimationFrame(this.flushPan);
+        this.panFrame ??= this.clock?.requestFrame(this.flushPan);
       }
       event.preventDefault();
     } else if (this.marquee && event.pointerId === this.marquee.pointer) {
       const point = this.toViewportPoint(event);
+      if (!point) {
+        return;
+      }
       const x = Math.min(point.x, this.marquee.point.x),
         y = Math.min(point.y, this.marquee.point.y);
       const width = Math.abs(point.x - this.marquee.point.x),
@@ -406,13 +442,9 @@ export class CanvasInputController {
       if (Math.hypot(width, height) < 3) {
         return;
       }
-      Object.assign(this.rect.style, {
-        display: "block",
-        left: `${x}px`,
-        top: `${y}px`,
-        width: `${width}px`,
-        height: `${height}px`,
-      });
+      if (!this.rect.update({ x, y, width, height })) {
+        return;
+      }
       const origin = this.canvas.toWorld({ x, y }),
         zoom = this.canvas.camera.get().zoom;
       this.canvas.select([
@@ -432,13 +464,13 @@ export class CanvasInputController {
    * @returns Tracking, scheduled paint and host pan flags are cleared.
    * @throws Propagates camera publication, host notification or pointer capture failures.
    */
-  private readonly stopPointerGesture = (event?: PointerEvent) => {
+  private readonly stopPointerGesture = (event?: PointerInput) => {
     const pointer = this.pan?.pointer ?? this.marquee?.pointer;
     if (event && pointer !== undefined && event.pointerId !== pointer) {
       return;
     }
     if (this.panFrame !== undefined) {
-      this.root.ownerDocument.defaultView!.cancelAnimationFrame(this.panFrame);
+      this.panFrame();
       this.panFrame = undefined;
     }
     try {
@@ -456,11 +488,11 @@ export class CanvasInputController {
       if (!event || event.pointerId === this.primaryPointerId) {
         this.primaryPointerId = undefined;
       }
-      this.rect.style.display = "none";
+      this.rect.update();
       this.reportPanState();
-      if (pointer !== undefined && this.root.hasPointerCapture(pointer)) {
-        this.root.releasePointerCapture(pointer);
-      }
+      const release = this.releasePointerCapture;
+      this.releasePointerCapture = undefined;
+      release?.();
     }
   };
 
@@ -479,7 +511,7 @@ export class CanvasInputController {
     this.panFrame = undefined;
     const pending = this.pendingPan;
     this.pendingPan = undefined;
-    if (!this.pan || !pending) {
+    if (!this.pan || !pending || !this.inputRoot.isAttached()) {
       return;
     }
     // Client-coordinate deltas cancel the viewport origin without forcing layout after pan styles change.
@@ -501,25 +533,23 @@ export class CanvasInputController {
    * @returns Admitted input moves the camera or schedules its remaining wheel displacement.
    * @throws If the wheel target is not finite or camera subscribers reject publication.
    */
-  private readonly onWheel = (event: WheelEvent) => {
-    if (
-      event.target instanceof Element &&
-      CanvasViewport.forElement(event.target)?.canvas !== this.canvas
-    ) {
-      return;
-    }
+  private readonly onWheel = (event: WheelInput) => {
     if (!this.allowsCamera(event)) {
       return;
     }
     const camera = this.canvas.camera.get();
     if (event.ctrlKey || event.metaKey) {
       this.cancelWheelPan();
-      this.canvas.zoomAt(
-        camera.zoom * Math.exp(-event.deltaY * 0.006),
-        this.toViewportPoint(event),
-      );
+      const point = this.toViewportPoint(event);
+      if (!point) {
+        return;
+      }
+      this.canvas.zoomAt(camera.zoom * Math.exp(-event.deltaY * 0.006), point);
     } else {
       const delta = this.wheelDeltaInPixels(event);
+      if (!delta) {
+        return;
+      }
       this.panByWheel(delta.x, delta.y, event.deltaMode === 0);
     }
     event.preventDefault();
@@ -533,16 +563,20 @@ export class CanvasInputController {
    * Page-mode input uses the viewport width and height for the corresponding axes.
    *
    * @param event - Admitted wheel event with its native delta mode.
-   * @returns Horizontal and vertical displacement in CSS pixels.
+   * @returns Horizontal and vertical displacement in CSS pixels, or undefined after detachment.
    */
-  private wheelDeltaInPixels(event: WheelEvent): Point {
+  private wheelDeltaInPixels(event: WheelInput): Point | undefined {
     if (event.deltaMode === 1) {
-      const style = this.root.ownerDocument.defaultView!.getComputedStyle(this.root);
-      const lineHeight = Number.parseFloat(style.lineHeight) || 16;
+      const value = this.viewport?.readComputedProperty("line-height");
+      if (value === undefined) {
+        return undefined;
+      }
+      const lineHeight = Number.parseFloat(value) || 16;
       return { x: event.deltaX * lineHeight, y: event.deltaY * lineHeight };
     }
     if (event.deltaMode === 2) {
-      return { x: event.deltaX * this.root.clientWidth, y: event.deltaY * this.root.clientHeight };
+      const size = this.viewport?.readClientSize();
+      return size ? { x: event.deltaX * size.width, y: event.deltaY * size.height } : undefined;
     }
     return { x: event.deltaX, y: event.deltaY };
   }
@@ -597,6 +631,10 @@ export class CanvasInputController {
     if (!pan) {
       return;
     }
+    if (!this.inputRoot.isAttached()) {
+      this.wheelPan = undefined;
+      return;
+    }
     const camera = this.canvas.camera.get();
     const x = pan.target.x - camera.x;
     const y = pan.target.y - camera.y;
@@ -607,7 +645,11 @@ export class CanvasInputController {
       this.wheelPan = undefined;
     } else {
       // Immediate whole-grid jumps look stationary; intermediate camera positions expose the motion.
-      pan.frame = this.root.ownerDocument.defaultView!.requestAnimationFrame(this.paintWheelPan);
+      pan.cancelFrame = this.clock?.requestFrame(this.paintWheelPan);
+      if (!pan.cancelFrame) {
+        this.wheelPan = undefined;
+        return;
+      }
     }
     this.canvas.setCamera({
       ...camera,
@@ -622,9 +664,7 @@ export class CanvasInputController {
    * @returns Any scheduled wheel frame is cancelled; the last published camera is retained.
    */
   private cancelWheelPan(): void {
-    if (this.wheelPan?.frame !== undefined) {
-      this.root.ownerDocument.defaultView!.cancelAnimationFrame(this.wheelPan.frame);
-    }
+    this.wheelPan?.cancelFrame?.();
     this.wheelPan = undefined;
   }
 
@@ -634,13 +674,7 @@ export class CanvasInputController {
    * @param event - Keyboard input bubbling through the viewport.
    * @returns Editing retains Space; accepted shortcuts update transient state.
    */
-  private readonly onKeyDown = (event: KeyboardEvent) => {
-    if (
-      event.target instanceof Element &&
-      CanvasViewport.forElement(event.target)?.canvas !== this.canvas
-    ) {
-      return;
-    }
+  private readonly onKeyDown = (event: KeyInput) => {
     if (event.code === "Space" && !this.isInteractive(event)) {
       this.space = true;
       this.reportPanState();
@@ -659,7 +693,7 @@ export class CanvasInputController {
    * @param event - Native window keyup.
    * @returns Space readiness is cleared when appropriate.
    */
-  private readonly onKeyUp = (event: KeyboardEvent) => {
+  private readonly onKeyUp = (event: KeyInput) => {
     if (event.code === "Space") {
       this.space = false;
       this.reportPanState();
@@ -689,10 +723,10 @@ export class CanvasInputController {
     }
     const previous = this.releaseFocus;
     this.releaseFocus = undefined;
-    const host =
-      this.root.ownerDocument.activeElement?.closest<HTMLElement>("[data-canvas-element]");
-    if (host && this.root.contains(host)) {
-      this.releaseFocus = this.canvas.pin([host.dataset.canvasElement!]);
+    const host = this.inputRoot.captureFocusedRegion("[data-canvas-element]");
+    const id = host?.readAttribute("data-canvas-element");
+    if (id !== undefined) {
+      this.releaseFocus = this.canvas.pin([id]);
     }
     previous?.();
   };
@@ -710,7 +744,7 @@ export class CanvasInputController {
    * @param event - Auxiliary mouse input inside the viewport.
    * @returns Middle-button input is marked handled without modifying clipboard data.
    */
-  private readonly onAuxClick = (event: MouseEvent) => {
+  private readonly onAuxClick = (event: MouseInput) => {
     if (event.button === 1) {
       event.preventDefault();
     }
@@ -722,7 +756,7 @@ export class CanvasInputController {
    * @param event - Native pointer cancellation, possibly from another contact.
    * @returns The matching gesture is released without stopping unrelated pointers.
    */
-  private readonly onPointerCancel = (event: PointerEvent) => {
+  private readonly onPointerCancel = (event: PointerInput) => {
     try {
       if (event.pointerId === this.primaryPointerId) {
         this.canvas.cancelTransform();

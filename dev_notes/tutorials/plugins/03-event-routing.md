@@ -1,226 +1,198 @@
-# Глава 03. EventRouter подробно
+# Глава 03. События Host, Page и Canvas
 
-## 1. Зачем нормализовать события
+Эта глава описывает текущую архитектуру. Прежний текст про `EventRouter`, portable
+payload и фазы global → block → fallback сохранён в
+[исторической версии](./historical/03-event-router.md). Он не является инструкцией
+для текущих event managers.
 
-Browser и React имеют свои event objects. Runtime managers не должны зависеть
-от React types или DOM nodes.
+## 1. Где живёт обработка событий
 
-React adapter строит portable event:
+В редакторе есть три разных владельца browser input:
 
-```ts
-{
-  type: "keydown",
-  blockId: block.id,
-  key: event.key,
-  shiftKey: event.shiftKey,
-  ctrlKey: event.ctrlKey,
-  metaKey: event.metaKey,
-  payload: { defaultBlockType, empty },
-}
-```
+| Контекст         | Публичная точка регистрации | Владелец DOM lifetime                            |
+| ---------------- | --------------------------- | ------------------------------------------------ |
+| Host React panel | `reactPanel.events`         | Общий `EventManager` через `DOMEventListeners`   |
+| Standalone Page  | `editor.events`             | `BlockEditorEvents` через `NativeEventListeners` |
+| Canvas viewport  | `viewport.events`           | `CanvasEvents`                                   |
 
-`EventRouter` может обработать его без import React.
+Выбирайте manager того редактора, которому принадлежит взаимодействие. Host panel
+может показывать Page или Edgeless; это не превращает host event в standalone
+Page event. Общие document mutations по-прежнему выполняются через owning managers
+и команды, а не через прямое изменение CRDT из DOM handler.
 
-## 2. Три фазы dispatch
+## 2. Host: native event и контекст panel
 
-Строгий порядок:
+`EditorEvent` содержит исходный `raw` DOM event, `reactPanel`, `root`, `mode`,
+снимок `selection`, `eventTarget`, `insideRoot`, `blockElement`, `blockId` и
+`contentElement`. Это browser-контракт, а не portable event без DOM references.
 
-```text
-1. active global plugin handlers
-2. active handlers для current persisted block type
-3. built-in fallback handlers
-```
-
-Каждая следующая фаза запускается, только если предыдущие handlers не вернули
-`true`.
-
-## 3. Global phase
-
-Global plugins могут переопределить поведение независимо от block type.
-
-Например, slash menu первым видит Escape. Если menu открыт, handler закрывает
-его и возвращает `true`. Built-in key fallback уже не должен интерпретировать
-тот же Escape.
-
-## 4. Block phase
-
-Router получает только `blockId`, а block type хранится в document. Поэтому он:
-
-1. читает detached `editor.getBlocks()`;
-2. рекурсивно flatten tree;
-3. находит block по ID;
-4. читает `block.type`;
-5. запускает handlers для этого type.
-
-Flatten нужен, потому что block может быть nested child, а не root.
-
-Router специально не обращается к CRDT containers и остаётся на
-DocumentModel boundary.
-
-## 5. Fallback phase
-
-Built-in fallback реализует default editor behavior:
-
-- Enter добавляет block;
-- empty Backspace удаляет block;
-- Tab indent/outdent;
-- Ctrl/Cmd+Z undo;
-- drop перемещает block.
-
-Plugin может забрать событие раньше, но если никто не забрал, core остаётся
-работоспособным.
-
-## 6. Short-circuit
-
-Основной цикл концептуально выглядит так:
-
-```ts
-for (const handler of handlers) {
-  if (handler(event, editor) === true) return true;
-}
-```
-
-Проверяется именно `=== true`. Случайное truthy значение вроде объекта не
-считается официальным claim.
-
-Результат `dispatch()` сообщает renderer:
-
-```ts
-const handled = editor.events.dispatch(...);
-if (handled) event.preventDefault();
-```
-
-Router сам не может вызвать `preventDefault`, потому что normalized event не
-обязан содержать native DOM event.
-
-## 7. Priority
-
-Router entries имеют числовой priority. Большие values выполняются раньше
-внутри plugin phase.
-
-При равном priority современная stable sort сохраняет installation order.
-
-Обычный `PluginManager` сейчас регистрирует contributions с default priority
-`0`. Direct runtime integrations могут использовать methods router с explicit
-priority, но plugin contract не содержит отдельного priority field.
-
-## 8. Mode filtering
-
-Перед handler router проверяет:
-
-```ts
-!entry.modes || entry.modes.includes(mode)
-```
-
-Inactive handler остаётся в registry, но пропускается. При смене mode не нужно
-uninstall/reinstall plugins, а disposer остаётся тем же.
-
-Built-in fallbacks не имеют mode metadata в router. Если fallback зависит от
-mode, он проверяет mode внутри handler, как drop behavior.
-
-## 9. `lastEvent`
-
-В начале dispatch router записывает:
-
-```ts
-this.currentLastEvent = event.type;
-```
-
-и уведомляет diagnostics subscribers ещё до выполнения handlers.
-
-Поэтому `lastEvent` означает «последний event дошёл до runtime», а не
-«последний event был кем-то handled».
-
-Даже unhandled event появляется в inspector.
-
-## 10. Plugin cleanup
-
-Disposer удаляет exact entry из array. После plugin disposal следующий
-dispatch больше не вызывает handler.
-
-Для block handler router дополнительно удаляет пустую map block type, когда во
-всех event arrays больше нет entries. Это cleanup внутреннего индекса, не
-изменение document.
-
-## 11. Пример полного route
-
-Есть:
-
-- global plugin `analytics`, возвращает false;
-- block plugin для `callout`, возвращает false;
-- fallback pointerdown, возвращает true.
-
-Event:
-
-```ts
-{ type: "pointerdown", blockId: "block-7" }
-```
-
-Если block-7 имеет type callout:
+Путь доставки:
 
 ```text
-analytics handler
-  false
-    ↓
-callout handler
-  false
-    ↓
-fallback
-  true
-    ↓
-dispatch returns true
+DOMEventListeners
+  → EventManager: фиксирует список registrations для native event
+  → PanelEventFactory → PanelRegistry: выбирает receiving panel
+  → EditorEvent: сохраняет контекст этой listener group
+  → фильтры регистрации и when
+  → handler
 ```
 
-Если analytics вернёт true:
+`PanelRegistry` сохраняет ответственность за activation, nested panels и pointer
+routing. `PanelEventFactory` читает panel API, selection и DOM markers, но не
+владеет listeners. `mode` берётся из receiving surface: Page embedding может
+иметь mode `block`, хотя основной document показан в Edgeless.
 
-```text
-analytics handler
-  true
-    ↓
-dispatch returns true
+Контекст создаётся для каждой native listener group. Более поздняя группа может
+увидеть selection, изменённый предыдущей. Внутри группы predicates и handlers
+получают один объект контекста.
 
-callout и fallback НЕ запускаются
-```
+## 3. Host: регистрация и claim
 
-## 12. Unit test порядка
-
-Существующий test складывает labels в array:
+В контексте существующего `ReactPanelApi`:
 
 ```ts
-const calls: string[] = [];
+const remove = reactPanel.events.register(
+  { id: "example.content-click", type: "click", scope: "content" },
+  (event) => {
+    console.log(event.blockId);
+    // Наблюдение без claim: следующие handlers продолжают работу.
+  },
+);
+
+remove();
 ```
 
-После dispatch ожидается:
+Scope может быть `surface`, `block` или `content`. Без scope доступны также
+события вне root, например от window. Дополнительные фильтры — `mode` и `when`.
+`EditorEvent.matches()` проверяет scope/mode; dynamic `when` выполняет dispatcher.
+
+Handler возвращает `true`, когда событие обработано. Host тогда прекращает
+последующую editor delivery и вызывает `preventDefault()` для cancelable event,
+если регистрация не passive и `preventDefault` не установлен в `false`.
+`stopPropagation()` автоматически не вызывается. Предварительно отменённый native
+event не доставляется host handlers.
+
+`preventDefault: false` отключает отмену browser default, но не снимает editor
+claim. Passive handler также может claim event, не отменяя default.
+
+## 4. Host: порядок и изменения во время доставки
+
+Внутри одинаковых native options handlers идут в порядке регистрации. Между
+capture, bubble, document/window и passive groups действует порядок native
+listeners. Старой схемы global plugin → block plugin → fallback здесь нет.
+
+Добавленные во время доставки registrations ждут следующего native event,
+включая добавление в более позднюю phase. Удалённые registrations пропускаются
+сразу. Старый disposer не удаляет новую регистрацию с повторно использованным ID.
+
+Panel-local ID имеет внутренний panel prefix. Consumer использует свой локальный
+ID; `reactPanel.events.delete(id)` не удаляет одноимённую регистрацию другой panel.
+Panel удерживает локальные disposers, не уничтожая общий `EventManager`.
+
+## 5. Семантическая клавиатура
+
+Для keyboard actions используйте `reactPanel.keyboard`. Host `KeyboardManager`
+использует общий `KeyboardRuntime` из `rivto-root`; `ReactKeyboardTransport`
+связывает его с native keydown/keyup на surface и window.
+
+Keyboard transport сохраняет host panel context и использует тот же
+`event.matches(definition)`. Семантические shortcuts, keymap overrides и keyboard
+priority не являются отдельными фазами DOM `EventManager`.
+
+## 6. Standalone Page
+
+Page input использует `BlockInputEvent`: нормализованные данные input и block ID
+одной occurrence, без native event, DOM elements, `ReactPanelApi`, document mode
+или host selection snapshot. Browser implementation сохраняет native context
+внутри Page для selection и drag. В существующем Page editor можно
+зарегистрировать наблюдателя:
 
 ```ts
-["plugin", "block", "fallback"]
+const remove = editor.events.observe(
+  "example.observe-content-click",
+  { type: "click", priority: 0, scope: "content" },
+  (event) => {
+    console.log(event.blockId);
+  },
+);
+
+remove();
 ```
 
-Затем global plugin dispose, новый dispatch и expectation:
+Обычный `register(id, definition, handler)` ожидает `"handled"` или `"continue"`.
+`"handled"` прекращает последующую handler delivery для occurrence, включая
+поздние native groups. Browser default отменяется только явным вызовом
+`event.preventDefault()`. `event.input` содержит данные для конкретного имени
+события и синхронные browser capabilities; их нельзя считать долгоживущим
+заменителем model identity или повторного чтения состояния документа.
+
+`observe()` не claim event. Observers запускаются перед handlers своей группы и
+продолжают получать события после claim другой группы. Числовой finite `priority`
+обязателен: большие значения идут раньше внутри одной native group, равные
+сохраняют порядок установки. Priority не переупорядочивает browser phases.
+
+Scopes: `root`, `block`, `content`, `selection-anchor`. Context исключает nested
+Page editors. Registrations сохраняются при detach/remount; controller владеет
+attachment, а extension — своим disposer. Focus/blur observers и `onDetach()`
+имеют отдельные контракты и не заменяют input handlers.
+
+## 7. Canvas
+
+Canvas viewport предоставляет нормализованный input без native event, DOM element
+или host panel context:
 
 ```ts
-["block", "fallback"]
+const remove = viewport.events.register({
+  id: "example.canvas-click",
+  type: "click",
+  priority: 0,
+  handle: (event) => {
+    console.log(event.clientX, event.clientY);
+  },
+});
+
+remove();
 ```
 
-Так один test доказывает и порядок, и cleanup.
+Target — `root`, `document` или `window`; по умолчанию `root`. Priority по
+умолчанию равен нулю. Большие значения идут раньше в одной группе.
+Возврат `"handled"` прекращает только текущую listener group, а не все phases.
+Default prevention и propagation остаются явными capabilities handler.
 
-## 13. Частые ошибки handler
+Root handlers исключают вложенные attached Canvas roots. Global handlers должны
+сами проверять, относится ли событие к их активному gesture. Registrations
+сохраняются между attachment одного viewport; владелец view выполняет detach.
 
-### Возвращать true всегда
+## 8. Cleanup и ошибки
 
-Это блокирует core behavior даже для keys, которые plugin не обрабатывает.
+Host registration rollback освобождает ID после ошибки установки. Keyboard
+transport удаляет уже установленные routes, если более поздняя регистрация
+падает. Host destruction пытается выполнить все cleanup callbacks и сохраняет
+ошибки в `AggregateError`.
 
-### Мутировать document напрямую
+Page input attachment также выполняет rollback, сохраняет setup/cleanup errors и
+пытается удалить все native listeners. Stale detach не удаляет новый attachment.
 
-Event policy должна вызвать command, иначе typing/history/validation paths
-расходятся.
+Canvas использует тот же `NativeEventListeners`: detach отключает delivery и
+пытается удалить все listeners. `CanvasViewport` снимает mounted ownership и
+публикует null layers даже при ошибке cleanup. Обзор предыдущих failure paths и
+решение об extraction описаны в [обзоре lifetime](../../native-listener-lifetime-review.md).
 
-### Полагаться только на event.blockId
+## 9. Как проверять расширение
 
-ID не сообщает block type. Используйте block-scoped contribution, когда type
-важен, или безопасно найдите detached block.
+Проверяйте наблюдаемый результат и соответствующий контракт:
 
-### Хранить native event после dispatch
+- нужная panel/occurrence получает event, nested editor не захватывается чужим handler;
+- handled прекращает именно тот scope доставки, который гарантирует manager;
+- default prevention проверяется отдельно от claim;
+- удаление прекращает delivery, а remount сохраняет нужные registrations;
+- callback может удалить себя или другую регистрацию без пропуска оставшихся;
+- failure tests проверяют retry, повторное использование ID и оставшиеся listeners.
 
-Portable runtime state не должно зависеть от lifetime React SyntheticEvent.
-Извлеките необходимые простые values во время normalization.
+Не переносите между managers assumptions о priority, claims, observers или
+cleanup только из-за похожих имён методов. Не храните snapshot selection как
+живое состояние: после dispatch при необходимости читайте текущую selection
+через owning API.
+
+Подробнее: [host ownership](../../host-event-ownership.md) и
+[сравнение Host/Page/Canvas](../../native-listener-lifetime-review.md).

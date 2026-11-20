@@ -54,10 +54,15 @@ Cleanup failures are reported together after the remaining resources are attempt
 If a native target throws from removal, its listener may remain physically attached,
 but the disabled callback no longer delivers editor events.
 
-No `rivto-events` package is introduced. Page's priorities, observers, explicit
-default prevention and attachment lifecycle remain in Page. A future shared module
-needs a concrete common contract that removes duplication without combining these
-different policies into configuration switches.
+`rivto-root` now owns the generic dispatcher and the single-root native listener
+lifetime. Page, Canvas and the host use the dispatcher; the host retains its
+multi-panel `DOMEventListeners`. Page priorities, observers and explicit default
+prevention remain in Page. Existing browser adapters still expose native event
+objects and need a separate normalization migration.
 
 The former exported `modeMatches` and `scopeMatches` helpers are replaced by
 `event.matches(definition)`. All repository consumers use the event method.
+
+The completed [Host/Page/Canvas listener lifetime comparison](./native-listener-lifetime-review.md)
+records the original comparison and the later Page/Canvas extraction. The [event-routing tutorial](./tutorials/plugins/03-event-routing.md)
+describes the current consumer contracts; the old EventRouter guide is archived.

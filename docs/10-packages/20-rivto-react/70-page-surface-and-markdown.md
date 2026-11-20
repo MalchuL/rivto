@@ -38,9 +38,9 @@ Default paragraph сохраняет Markdown как обычную строку
 ```tsx
 standardPreset({
   writing: {
-    onMarkdownLinkClick({ href, event }) {
+    onMarkdownLinkClick({ href, preventDefault }) {
       if (!href.startsWith("rivto:")) return;
-      event.preventDefault();
+      preventDefault();
       navigateInsideApp(href);
     },
   },
@@ -51,7 +51,7 @@ standardPreset({
 
 - **`blockId: string`:** block с link;
 - **`href: string`:** sanitized standard URL или explicitly enabled custom protocol;
-- **`event: MouseEvent<HTMLAnchorElement>`:** host может вызвать `preventDefault()`.
+- **`preventDefault(): void`:** синхронно отменяет стандартную навигацию браузера.
 
 ## Editing и preview
 

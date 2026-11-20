@@ -277,13 +277,16 @@ it("shares receiving-panel context across predicates and handlers", () => {
   expect(handler).toHaveBeenCalledTimes(1);
   const event = handler.mock.calls[0][0];
   expect(event).toBe(predicate.mock.calls[0][0]);
-  expect(event.reactPanel.getRoot()).toBe(root);
-  expect(event.root).toBe(root);
+  expect(event.reactPanel).toBe(panel);
+  expect(event.inputRoot.isAttached()).toBe(true);
+  expect(event).not.toHaveProperty("root");
   expect(event.mode).toBe("block");
   expect(event.insideRoot).toBe(true);
-  expect(event.blockElement).toBe(block);
+  expect(event.insideBlock).toBe(true);
   expect(event.blockId).toBe("event-block");
-  expect(event.contentElement).toBe(content);
+  expect(event.insideContent).toBe(true);
+  expect(event).not.toHaveProperty("blockElement");
+  expect(event).not.toHaveProperty("contentElement");
 });
 
 it("delivers outside window events without block context only to matching scopes and modes", () => {
@@ -306,11 +309,12 @@ it("delivers outside window events without block context only to matching scopes
   document.body.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   expect(unscoped).toHaveBeenCalledTimes(1);
   const event = unscoped.mock.calls[0][0];
-  expect(event.root).toBe(root);
+  expect(event.inputRoot.isAttached()).toBe(true);
+  expect(event).not.toHaveProperty("root");
   expect(event.insideRoot).toBe(false);
-  expect(event.blockElement).toBeNull();
+  expect(event.insideBlock).toBe(false);
   expect(event.blockId).toBeUndefined();
-  expect(event.contentElement).toBeNull();
+  expect(event.insideContent).toBe(false);
   expect(scoped).not.toHaveBeenCalled();
   expect(wrongMode).not.toHaveBeenCalled();
 });

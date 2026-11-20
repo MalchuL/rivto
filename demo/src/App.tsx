@@ -1,4 +1,5 @@
 import { BLOCK_HANDLE_SELECTOR } from "../../packages/react-rivto-editor/src/components/block-handle/constants";
+import { PANEL_SELECTOR } from "../../packages/react-rivto-editor/src/panels/panel-dom";
 import { paragraphBlockFactory, separatorBlockFactory } from "@chulane/rivto-react/block-factories";
 import { mindmapExtension } from "./extensions/mindmap/mindmap";
 import { ElementRegistrationTest } from "./ElementRegistrationTest";
@@ -40,6 +41,7 @@ import {
   useEditorMode,
   type ReactEditorApi,
   type MarkdownLinkClick,
+  type BulletThreadingAnchor,
 } from "@chulane/rivto-react";
 import { useCallback, useEffect, useState, useSyncExternalStore, type ChangeEvent } from "react";
 import {
@@ -99,11 +101,11 @@ const demoReviewReports = () =>
  * Host apps own non-http links; ordinary URLs stay native. Dispatches
  * `rivto:markdown-link` for e2e / host listeners.
  */
-const handleMarkdownLink = ({ href, event }: MarkdownLinkClick): void => {
+const handleMarkdownLink = ({ href, preventDefault }: MarkdownLinkClick): void => {
   if (!/^(?:rivto|chulane):/i.test(href)) {
     return;
   }
-  event.preventDefault();
+  preventDefault();
   window.dispatchEvent(new CustomEvent("rivto:markdown-link", { detail: href }));
 };
 
@@ -142,24 +144,27 @@ function demoRepeatCount(): number {
 /**
  * Resolves the demo thread endpoint from the controls rendered in one block row.
  *
- * @param block - Rendered block shell being measured.
+ * @param block - Captured region for the rendered block shell.
  * @returns The universal handle when it has nonzero layout dimensions, otherwise
- * a collapse toggle with nonzero dimensions, or null when neither is available.
+ * a collapse toggle with nonzero dimensions, or undefined when neither is available.
  * Opacity is not checked, so a hover-hidden handle still supplies a stable anchor.
  */
-function demoThreadAnchor(block: Element): Element | null {
-  const row = block.querySelector(":scope > .rivto-block-row");
+const demoThreadAnchor: BulletThreadingAnchor = (block) => {
+  const children = block.captureChildren();
+  const row = Array.from({ length: children?.getLength() ?? 0 }, (_, index) =>
+    children?.get(index),
+  ).find((child) => child?.matches(".rivto-block-row"));
   for (const selector of [BLOCK_HANDLE_SELECTOR, ".page-collapse-toggle"]) {
-    const control = row?.querySelector(selector);
+    const control = row?.findOwnedRegion(selector, PANEL_SELECTOR);
     if (control) {
-      const rect = control.getBoundingClientRect();
-      if (rect.width && rect.height) {
+      const rect = control.readBounds();
+      if (rect?.width && rect.height) {
         return control;
       }
     }
   }
-  return null;
-}
+  return undefined;
+};
 
 /**
  * Seeds canvas visuals that exercise edgeless features in the journal demo.

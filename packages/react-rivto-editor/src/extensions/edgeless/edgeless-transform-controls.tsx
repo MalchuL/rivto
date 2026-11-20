@@ -1,12 +1,13 @@
-import { useCanvasViewportLayers } from "@chulane/rivto-edgeless/react";
-import { useContext, useLayoutEffect, useMemo } from "react";
+import { useContext, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
+import { ConnectorTransformPreview } from "./connector-transform-preview";
 import { CanvasTransformControls } from "@chulane/rivto-edgeless/react";
 import { EdgelessControlsAdapter } from "./edgeless-controls-adapter";
-import { useEditorRoot, useReactPanel, useElements } from "../../hooks";
+import { useElements } from "../../hooks";
+import { useReactPanelContext } from "../../hooks/editor/use-react-panel-context";
 import { SurfaceContext } from "../../surfaces/surface";
 import { useEdgelessCanvas } from "../../surfaces/edgeless/edgeless-tools-context";
 import { useEdgelessSelection } from "../built-ins/selection/edgeless-runtime";
-import type { EdgelessTransformController } from "./edgeless-transform";
+import type { EdgelessTransformControlsProps } from "./types";
 
 /**
  * Mounts controls for dragging selected HTML elements, resizing, and rotation.
@@ -20,31 +21,47 @@ import type { EdgelessTransformController } from "./edgeless-transform";
  * @param props.controller - Supplies move targets and previews or commits gestures for the panel.
  * @returns Controls in the canvas plane, or nothing outside an eligible selection.
  */
-export function EdgelessTransformControls({
-  controller,
-}: {
-  readonly controller: EdgelessTransformController;
-}) {
-  const panel = useReactPanel();
-  const { element: root } = useEditorRoot();
+export function EdgelessTransformControls({ controller }: EdgelessTransformControlsProps) {
+  const { reactPanel: panel } = useReactPanelContext();
+  const inputRoot = useSyncExternalStore(
+    panel.subscribeAvailability,
+    () => panel.inputRoot,
+    () => undefined,
+  );
+  const inputRegistration = useSyncExternalStore(
+    panel.subscribeAvailability,
+    () => panel.inputRegistration,
+    () => undefined,
+  );
   const mode = useContext(SurfaceContext);
   const canvas = useEdgelessCanvas();
   const selection = useEdgelessSelection();
   const elements = useElements();
-  const plane = useCanvasViewportLayers()?.plane;
   const id = selection.items.length === 1 ? selection.items[0] : undefined;
   const element = id ? panel.elements.getElementNode(id) : undefined;
   const groupRotation = element?.type === "group" ? Number(element.props.rotation) || 0 : undefined;
   const adapter = useMemo(
     () =>
-      new EdgelessControlsAdapter(controller, panel, root, plane, selection.items, groupRotation),
-    [controller, panel, root, plane, selection.items, groupRotation],
+      new EdgelessControlsAdapter(
+        controller,
+        panel,
+        inputRoot,
+        selection.items,
+        groupRotation,
+        inputRegistration,
+      ),
+    [controller, panel, inputRoot, inputRegistration, selection.items, groupRotation],
   );
   useLayoutEffect(() => {
     canvas?.setSelection(selection.items);
   }, [canvas, selection.items, elements]);
-  if (mode !== "edgeless" || !canvas || !plane) {
+  if (mode !== "edgeless" || !canvas) {
     return null;
   }
-  return <CanvasTransformControls canvas={canvas} plane={plane} adapter={adapter} />;
+  return (
+    <>
+      <CanvasTransformControls canvas={canvas} adapter={adapter} />
+      <ConnectorTransformPreview controller={controller} />
+    </>
+  );
 }

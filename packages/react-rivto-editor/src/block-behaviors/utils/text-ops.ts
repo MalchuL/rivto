@@ -8,9 +8,8 @@
  * @module
  */
 import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
-import type { ReactPanelApi } from "../../panels/types";
 import type { KeyboardSelectionTarget } from "../../managers/keyboard/selection";
-import type { BlockBehaviorContext, BlockBehaviorOutcome } from "../types";
+import type { BlockEditingPanel, BlockKeyboardContext, BlockBehaviorOutcome } from "../types";
 import { focusCaret, scheduleBlockFocus } from "./focus-ops";
 import { createBlockOutlineContext } from "./context";
 
@@ -31,7 +30,7 @@ import { createBlockOutlineContext } from "./context";
  * @throws If a delegated block update, insertion, or list-property validation fails.
  */
 export function splitBlockAt(
-  reactPanel: ReactPanelApi,
+  reactPanel: BlockEditingPanel,
   block: EditorBlock,
   splitAt: number,
   listProps?: EditorBlock["listProps"],
@@ -63,18 +62,19 @@ export function splitBlockAt(
  * Empty-block outdent resolves fresh shallow fields and current model selection,
  * then dispatches parent and child handlers in its own nested panel batch.
  *
- * @param context - Source snapshot, live panel commands, and editing surface root.
+ * @param context - Source snapshot, live panel commands, and originating input attachment.
  * @param target - Captured caret; a noncollapsed structural target splits at the end.
  * @param listProps - Continuation list properties, or undefined to use writing defaults.
  * @returns `"handled"` after insertion or an outdent attempt, including attempts rejected by parent outline handlers.
  * @throws If delegated block mutation, hierarchy, or list-property validation fails.
  */
 export function splitBlock(
-  context: BlockBehaviorContext,
+  context: BlockKeyboardContext,
   target: KeyboardSelectionTarget,
   listProps?: EditorBlock["listProps"],
 ): BlockBehaviorOutcome {
-  const { reactPanel, block, root } = context;
+  const { reactPanel, block, inputRoot } = context;
+  const attachment = inputRoot ?? reactPanel.inputRoot;
   const { defaultWritingBlockFactory } = reactPanel.editor;
   // Outdent empty block if
   if (
@@ -92,7 +92,7 @@ export function splitBlock(
         reactPanel.editor.blockBehaviors.dispatch("onOutdent", outlineContext, [block.id]),
       );
     }
-    focusCaret(reactPanel, root, block.id, 0);
+    focusCaret(reactPanel, block.id, 0, attachment, context.inputRegistration);
     return "handled";
   }
   const splitAt = target.collapsed
@@ -111,19 +111,41 @@ export function splitBlock(
     // new writing block as the first visible child.
     reactPanel.blocks.indentBlock(nextBlock.id);
     reactPanel.blocks.moveBlock(nextBlock.id, null);
-  } else if (
-    reactPanel.getSurfaceType() === "edgeless" &&
-    reactPanel.blocks.getRootIds().includes(block.id)
-  ) {
-    const element = reactPanel.elements
-      .getElementNodes()
-      .find((candidate) => candidate.type === "block" && candidate.props.endBlockId === block.id);
-    if (element) {
-      reactPanel.elements.updateElement(element.id, { props: { endBlockId: nextBlock.id } });
-    }
+  } else {
+    extendEdgelessBlockRange(reactPanel, block.id, nextBlock.id);
   }
-  scheduleBlockFocus(reactPanel, root, nextBlock.id, 0);
+  scheduleBlockFocus(reactPanel, nextBlock.id, 0, attachment, context.inputRegistration);
   return "handled";
+}
+
+/**
+ * Extends a canvas card ending at a newly split root block.
+ *
+ * Page surfaces and non-root blocks do not change a canvas card's range.
+ *
+ * @param reactPanel - Occurrence supplying surface type and document operations.
+ * @param blockId - Original block whose content was split.
+ * @param nextBlockId - Newly inserted block following the original.
+ * @returns The matching card range is updated when the split ends its range.
+ * @throws Propagates surface, hierarchy, element lookup, and update failures.
+ */
+function extendEdgelessBlockRange(
+  reactPanel: BlockEditingPanel,
+  blockId: string,
+  nextBlockId: string,
+): void {
+  if (
+    reactPanel.getSurfaceType() !== "edgeless" ||
+    !reactPanel.blocks.getRootIds().includes(blockId)
+  ) {
+    return;
+  }
+  const element = reactPanel.elements
+    .getElementNodes()
+    .find((candidate) => candidate.type === "block" && candidate.props.endBlockId === blockId);
+  if (element) {
+    reactPanel.elements.updateElement(element.id, { props: { endBlockId: nextBlockId } });
+  }
 }
 
 /**
@@ -133,7 +155,7 @@ export function splitBlock(
  * @param blockId - Empty block to convert.
  * @returns Nothing; the same block keeps the caret.
  */
-export function convertEmptyToList(reactPanel: ReactPanelApi, blockId: string): void {
+export function convertEmptyToList(reactPanel: BlockEditingPanel, blockId: string): void {
   reactPanel.blocks.updateBlock(blockId, { listProps: { type: "list", checked: false } });
   reactPanel.selection.set(createCaretSelection(blockId, 0));
 }
@@ -146,7 +168,11 @@ export function convertEmptyToList(reactPanel: ReactPanelApi, blockId: string): 
  * @param sourceId - Block transferred and removed.
  * @returns Target content offset where the source text begins.
  */
-export function mergeBlocks(reactPanel: ReactPanelApi, targetId: string, sourceId: string): number {
+export function mergeBlocks(
+  reactPanel: BlockEditingPanel,
+  targetId: string,
+  sourceId: string,
+): number {
   const joinOffset = reactPanel.blocks.mergeBlocks(targetId, sourceId);
   reactPanel.selection.set(createCaretSelection(targetId, joinOffset));
   return joinOffset;
@@ -159,7 +185,7 @@ export function mergeBlocks(reactPanel: ReactPanelApi, targetId: string, sourceI
  * @param blockId - Block whose native type is replaced.
  * @returns Nothing; identity is preserved.
  */
-export function resetToWritingType(reactPanel: ReactPanelApi, blockId: string): void {
+export function resetToWritingType(reactPanel: BlockEditingPanel, blockId: string): void {
   reactPanel.blocks.setBlockType(
     blockId,
     reactPanel.editor.defaultWritingBlockFactory.createEmptyBlock().type,

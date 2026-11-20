@@ -1,4 +1,4 @@
-import type { ReactEditorApi } from "../../../../editor/types";
+import type { ReactEditorExtensionApi } from "../../../../editor/types";
 /** Runtime registration for page indentation keyboard behavior. */
 import { KEYBOARD_BINDING_IDS } from "../../../../managers";
 import type { IndentExtensionOptions } from "./types";
@@ -11,7 +11,7 @@ import { applyIndentShortcut } from "./utils";
  * @param options - Optional replacement shortcuts.
  * @returns No value.
  */
-export function registerIndent(reactEditor: ReactEditorApi, options: IndentExtensionOptions): void {
+export function registerIndent(reactEditor: ReactEditorExtensionApi, options: IndentExtensionOptions): void {
   const indentKeys = options.indentKeys ?? ["Tab"];
   const outdentKeys = options.outdentKeys ?? ["Shift+Tab"];
   reactEditor.keyboard.register(
@@ -19,15 +19,13 @@ export function registerIndent(reactEditor: ReactEditorApi, options: IndentExten
       id: KEYBOARD_BINDING_IDS.blockIndent,
       keys: indentKeys,
     },
-    ({ reactPanel, root, raw: event }) =>
-      applyIndentShortcut(reactPanel.selection, root, event, false, reactPanel),
+    (event) => applyIndentShortcut(event.reactPanel.selection, event, false, event.reactPanel),
   );
   reactEditor.keyboard.register(
     {
       id: KEYBOARD_BINDING_IDS.blockOutdent,
       keys: outdentKeys,
     },
-    ({ reactPanel, root, raw: event }) =>
-      applyIndentShortcut(reactPanel.selection, root, event, true, reactPanel),
+    (event) => applyIndentShortcut(event.reactPanel.selection, event, true, event.reactPanel),
   );
 }

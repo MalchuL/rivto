@@ -1,5 +1,5 @@
 import { EdgelessToolContext } from "../edgeless-tools/edgeless-tool-context";
-import type { ReactEditorApi } from "../../editor/types";
+import type { ReactEditorExtensionApi } from "../../editor/types";
 import type { ReactPanelApi } from "../../panels/types";
 import { EdgelessOperations } from "./edgeless-operations";
 import type { VisualCommandPayload } from "../../elements/visuals/types";
@@ -13,7 +13,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * Document-only commands use fresh creation defaults. Tool selection requires a
  * { tools, payload } context and registered tool ID because interaction is surface-local.
  */
-export function registerEdgelessCommands(editor: ReactEditorApi): () => void {
+export function registerEdgelessCommands(editor: ReactEditorExtensionApi): () => void {
   const registrations: Array<{
     /**
      * Releases the installed edgeless command registrations.

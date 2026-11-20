@@ -7,7 +7,8 @@
  * stopped at the panel root so canvas selection and marquee handlers never
  * treat interaction with a control as a click on the canvas.
  */
-import { useState, type ReactNode, type RefObject } from "react";
+import { useState, type ReactNode } from "react";
+import type { EdgelessPropertiesPanelProps } from "./types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 import { UI_SCOPE_CLASS } from "../ui-scope";
 import { EdgelessToolButton } from "./tool-button";
@@ -75,29 +76,28 @@ export function PropertyRow({
  * Renders shared collapsible chrome for visual and block property editors.
  *
  * @param props - Panel identity, selection count, close callback, and body.
+ * @param props.id - Optional stable DOM identity for occurrence-specific keyboard routing.
+ * @param props.title - Label for the selected kind of object.
+ * @param props.count - Number of selected objects shown by the panel.
+ * @param props.ariaLabel - Accessible name of the properties region.
+ * @param props.onClose - Invoked when the close control is activated.
+ * @param props.children - Property controls displayed inside the panel.
  * @returns A right-side edgeless properties region.
  */
 export function EdgelessPropertiesPanel({
+  id,
   title,
   count,
   ariaLabel,
-  panelRef,
   onClose,
   children,
-}: {
-  readonly title: string;
-  readonly count: number;
-  readonly ariaLabel: string;
-  readonly panelRef?: RefObject<HTMLDivElement | null>;
-  readonly onClose: () => void;
-  readonly children: ReactNode;
-}) {
+}: EdgelessPropertiesPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   return (
     <Collapsible
+      id={id}
       open={!collapsed}
       onOpenChange={(open) => setCollapsed(!open)}
-      ref={panelRef}
       className={PANEL_CLASS}
       data-edgeless-ui="true"
       data-collapsed={collapsed || undefined}
@@ -123,7 +123,7 @@ export function EdgelessPropertiesPanel({
             label="Close properties"
             icon="close"
             className={ACTION_CLASS}
-            onClick={onClose}
+            onActivate={onClose}
           />
         </div>
       </header>

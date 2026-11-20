@@ -1,4 +1,4 @@
-import type { ReactEditorApi } from "../../editor/types";
+import type { ReactEditorExtensionApi } from "../../editor/types";
 /** Runtime registration for shared Page block dragging in writing pages and canvas cards. */
 import { createElement, type ReactNode } from "react";
 import { PageDragBoundary } from "../../surfaces/page/page-drag-boundary";
@@ -12,7 +12,7 @@ import type { PageDragExtensionOptions } from "./types";
  * @returns No value.
  */
 export function registerPageDrag(
-  reactEditor: ReactEditorApi,
+  reactEditor: ReactEditorExtensionApi,
   options: Omit<PageDragExtensionOptions, "children">,
 ): void {
   /**

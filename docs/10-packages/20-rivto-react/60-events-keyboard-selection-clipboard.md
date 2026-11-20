@@ -63,7 +63,7 @@ React DOM selection       browser nodes/ranges/highlights текущей surface
 - `clearDOMHighlight()` возвращает `void`;
 - `updateDOMHighlight(selection?)` возвращает `void`.
 
-Все methods без явного root используют root конкретного отображения через `reactPanel.getRoot()`. Core selection всегда меняйте через `editor.selection`.
+Methods используют Root конкретного отображения через `reactPanel.inputRoot`. Core selection всегда меняйте через `editor.selection`.
 
 Text selection extension синхронизирует caret/ranges. Обычный cross-block drag создаёт block selection; Alt-drag сохраняет partial text endpoints. Selection локален и не синхронизируется между collaborators.
 

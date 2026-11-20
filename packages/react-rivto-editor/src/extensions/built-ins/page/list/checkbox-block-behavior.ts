@@ -2,7 +2,7 @@ import type { KeyboardSelectionTarget } from "../../../../managers/keyboard/sele
 import type {
   BlockBehavior,
   BlockBehaviorAvailabilityContext,
-  BlockBehaviorContext,
+  BlockKeyboardContext,
   BlockBehaviorOutcome,
 } from "../../../../block-behaviors/types";
 import { splitBlock } from "../../../../block-behaviors/utils/text-ops";
@@ -33,8 +33,9 @@ export class CheckboxBlockBehavior implements BlockBehavior {
    * @returns Handled after removing the marker or completing the shared split.
    * @throws If delegated block mutation or list-property validation fails.
    */
-  onSplit(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
-    const { reactPanel, block, root } = context;
+  onSplit(context: BlockKeyboardContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
+    const { reactPanel, block, inputRoot } = context;
+    const attachment = inputRoot ?? reactPanel.inputRoot;
     if (
       !reactPanel.editor.defaultWritingBlockFactory.isEmptyBlock(
         reactPanel.blocks.getBlockNode(block.id)!,
@@ -45,7 +46,7 @@ export class CheckboxBlockBehavior implements BlockBehavior {
     // The first Enter removes only the visible list state; the block keeps
     // its outline position and unrelated properties for the next press.
     reactPanel.blocks.deleteListProps(block.id, ["type", "checked"]);
-    focusCaret(reactPanel, root, block.id, 0);
+    focusCaret(reactPanel, block.id, 0, attachment, context.inputRegistration);
     return "handled";
   }
 }

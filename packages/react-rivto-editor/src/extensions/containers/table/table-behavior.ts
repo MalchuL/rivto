@@ -12,7 +12,7 @@ import type { BlockBehaviorAvailabilityContext } from "../../../block-behaviors/
  * @module
  */
 import { ContainerBlockBehavior } from "../../../block-behaviors/container-block-behavior";
-import type { BlockBehaviorContext } from "../../../block-behaviors/types";
+import type { BlockKeyboardContext } from "../../../block-behaviors/types";
 import type { KeyboardSelectionTarget } from "../../../managers";
 
 export const TABLE_BLOCK_TYPE = "table";
@@ -171,7 +171,7 @@ export class TableCellBehavior extends ContainerBlockBehavior {
    * @returns `"handled"` after the child is inserted.
    */
   override onSplit(
-    context: BlockBehaviorContext,
+    context: BlockKeyboardContext,
     target: KeyboardSelectionTarget,
   ): BlockBehaviorOutcome {
     return this.appendWritingBlock(context);

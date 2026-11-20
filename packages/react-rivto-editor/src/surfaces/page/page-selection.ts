@@ -2,41 +2,14 @@ import {
   createEdgelessSelection,
   isEdgelessSelectionActive,
 } from "../../extensions/built-ins/selection/edgeless-runtime";
-import {
-  isStructuralSelection,
-  type ModeManagerApi,
-  type PanelAPI,
-  type Selection,
-} from "@chulane/rivto";
+import { isStructuralSelection, type Selection } from "@chulane/rivto";
 import type {
   BlockEditorBlocks,
   BlockEditorSelection,
   BlockSelectionSnapshot,
 } from "@chulane/rivto-page";
-import type { PanelSelectionApi } from "../../managers/selection/api";
-import type { BlockTypesApi } from "../../managers/blocks/block-types-api";
-import type { BlockBehaviorsApi } from "../../managers/blocks/block-behaviors-api";
 import { BLOCK_TEXT_METADATA_KEY } from "../../managers/selection/block-text-metadata";
-
-/** Existing host stores borrowed by Page; no independent writable selection is created. */
-interface PageSelectionHost {
-  readonly mode?: Pick<ModeManagerApi, "get" | "subscribe">;
-  readonly getRoot?: () => HTMLElement | null;
-  readonly blocks: Pick<PanelAPI["blocks"], "getBlockNode">;
-  readonly selection: Pick<
-    PanelSelectionApi,
-    "snapshot" | "set" | "clear" | "subscribe" | "isBlockSelected" | "hasPendingSelectionCallback"
-  >;
-  readonly document: { readonly selection: Pick<PanelAPI["document"]["selection"], "snapshot"> };
-  readonly editor: {
-    readonly blockTypes: Pick<
-      BlockTypesApi,
-      "getDefinition" | "separatesBlockElements" | "subscribe"
-    >;
-    readonly blockBehaviors: Pick<BlockBehaviorsApi, "subscribe">;
-  };
-  readonly subscribe: PanelAPI["subscribe"];
-}
+import type { PageSelectionHost } from "./types";
 
 /** Panel-owned selection adapter with addressed membership feedback and model-based outline order. */
 export class PageSelection implements BlockEditorSelection {
@@ -127,20 +100,28 @@ export class PageSelection implements BlockEditorSelection {
    * Page embeddings remain selectable inside an Edgeless document, while
    * unclaimed canvas block input retains ordinary row and body selection.
    *
-   * @param event - Native input about to start block selection.
+   * @param hasBlockAncestor - Whether the input target is inside a block marker.
    * @returns Whether this input belongs to writing-page or canvas block content.
+   * @throws Propagates Root attachment or surface attribute read failures.
    */
-  canStartSelection(event: MouseEvent): boolean {
-    const root = this.panel.getRoot?.();
-    const surface = root?.dataset.rivtoSurface ?? this.panel.mode?.get();
+  canStartSelection(hasBlockAncestor: boolean): boolean {
+    const root = this.panel.mountedRoot;
+    const surface = root?.readAttribute("data-rivto-surface") ?? this.panel.mode?.get();
+    if (root && (this.panel.mountedRoot !== root || !root.isAttached())) {
+      return false;
+    }
     if (surface !== "edgeless") {
       return true;
     }
-    if (root?.dataset.panningReady === "true" || root?.dataset.edgelessPanTool === "true") {
+    const panning = root?.readAttribute("data-panning-ready") === "true";
+    const panTool = root?.readAttribute("data-edgeless-pan-tool") === "true";
+    if (root && (this.panel.mountedRoot !== root || !root.isAttached())) {
       return false;
     }
-    const target = event.target;
-    return target instanceof Element && !!target.closest("[data-block-id]");
+    if (panning || panTool) {
+      return false;
+    }
+    return hasBlockAncestor;
   }
 
   /**

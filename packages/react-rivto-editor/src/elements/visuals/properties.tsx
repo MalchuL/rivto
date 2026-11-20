@@ -17,7 +17,8 @@ import type { EdgelessFontOption, TextHorizontalAlign, TextVerticalAlign } from 
 import { ColorControl } from "../../components/edgeless/color-control";
 import { PropertyGroup, PropertyRow } from "../../components/edgeless/properties-panel";
 import { SizeControl } from "../../components/edgeless/size-control";
-import { EdgelessToolButton, type EdgelessToolIcon } from "../../components/edgeless/tool-button";
+import type { EdgelessToolIcon } from "../../components/edgeless/types";
+import { EdgelessToolButton } from "../../components/edgeless/tool-button";
 
 /* Segmented control for text alignment; buttons keep `aria-pressed` for the active value. */
 const ALIGN_TOGGLES_CLASS =
@@ -158,7 +159,7 @@ export function TextProperties(props: ElementPropertiesProps & { connector?: boo
               label={label}
               icon={icon}
               pressed={common("align") === value}
-              onClick={() => preview({ align: value })}
+              onActivate={() => preview({ align: value })}
             />
           ))}
         </span>
@@ -169,7 +170,7 @@ export function TextProperties(props: ElementPropertiesProps & { connector?: boo
               label={label}
               icon={icon}
               pressed={common("verticalAlign") === value}
-              onClick={() => preview({ verticalAlign: value })}
+              onActivate={() => preview({ verticalAlign: value })}
             />
           ))}
         </span>

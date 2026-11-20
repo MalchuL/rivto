@@ -5,27 +5,12 @@
  *
  * @module
  */
-import { PANEL_SELECTOR, PanelDOM } from "../../panels/panel-dom";
+import type { InputRegion } from "@chulane/rivto-root";
+import { BLOCK_ID_SELECTOR } from "../../constants";
+import { PANEL_SELECTOR } from "../../panels/panel-dom";
+import type { ThreadPathOptions } from "./types";
 
 const ROOT_LEAD_RADIUS = 6;
-
-/** Measured anchor coordinates relative to the body-hosted overlay. */
-export interface ThreadPoint {
-  /** Horizontal center of the anchor. */
-  readonly x: number;
-  /** Vertical center of the anchor. */
-  readonly y: number;
-  /** Bottom edge used when a root trunk continues below an earlier block. */
-  readonly bottom: number;
-}
-
-interface ThreadPathOptions {
-  readonly root: HTMLElement;
-  readonly rootLineOffset: number;
-  readonly excluded: ReadonlySet<string>;
-  readonly continued: ReadonlySet<string> | null;
-  readonly point: (block: Element) => ThreadPoint | null;
-}
 
 /**
  * Builds a rounded vertical-to-horizontal link between two anchors.
@@ -52,55 +37,44 @@ function curve(fromX: number, fromY: number, toX: number, toY: number): string {
  * descendants. The first measurable earlier root extends the top-level trunk
  * above the active ancestry.
  *
- * @param options - Surface, traversal rules, and anchor measurements.
+ * @param options - Surface, focused block, traversal rules, and anchor measurements.
  * @returns Complete SVG path data, or an empty string when nothing is drawable.
  */
 export function buildThreadPath({
   root,
+  inputRoot,
+  focused,
   rootLineOffset,
   excluded,
   continued,
   point,
 }: ThreadPathOptions): string {
-  const canContinue = (block: Element) => {
-    const type = block.getAttribute("data-block-type") ?? "";
-    return !excluded.has(type) && (!continued || continued.has(type));
-  };
-  const dom = new PanelDOM(root);
-  const active = root.ownerDocument.activeElement;
-  const focused = active && root.contains(active) ? dom.getBlock(active) : null;
-  if (!focused) {
+  const blocks = getAncestry(root, focused);
+  if (!blocks.length) {
     return "";
-  }
-  // An embedding owns its own overlay; the enclosing view must not thread
-  // through the source subtree merely because its DOM contains that view.
-  if (active?.closest(PANEL_SELECTOR) !== root.closest(PANEL_SELECTOR)) {
-    return "";
-  }
-
-  // Direct and wrapped root blocks share the same document boundary regardless of wrapper depth.
-  const roots = dom.getRootBlocks();
-  const blocks: Element[] = [];
-  for (
-    let block: Element | null = focused;
-    block && root.contains(block);
-    block = dom.getParent(block)
-  ) {
-    blocks.unshift(block);
   }
   // A container stays connected to its parent, but its own descendants do not get threads.
-  const stop = blocks.findIndex((block) => !canContinue(block));
+  const stop = blocks.findIndex((block) => {
+    const type = block.readAttribute("data-block-type") ?? "";
+    return excluded.has(type) || Boolean(continued && !continued.has(type));
+  });
   if (stop >= 0) {
     blocks.length = stop + 1;
   }
-  let topStart: Element | undefined;
-  for (const sibling of roots) {
-    if (sibling === blocks[0]) {
-      break;
+  // Direct and wrapped root blocks share the same document boundary regardless of wrapper depth.
+  let topStart: InputRegion | undefined;
+  const visited = inputRoot.someTopLevelRegion(BLOCK_ID_SELECTOR, PANEL_SELECTOR, (block) => {
+    if (block.isSame(blocks[0]!)) {
+      return true;
     }
-    if (!topStart && point(sibling)) {
-      topStart = sibling;
+    if (point(block)) {
+      topStart = block;
+      return true;
     }
+    return false;
+  });
+  if (visited === undefined) {
+    return "";
   }
   let path = "";
   if (topStart) {
@@ -114,6 +88,45 @@ export function buildThreadPath({
       path = `M ${fromX} ${fromY}${curve(fromX, fromY, first.x, first.y)}`;
     }
   }
+  return appendThreadLinks(blocks, point, rootLineOffset, Boolean(topStart), path);
+}
+
+/**
+ * Collects the focused block and its rendered ancestors inside the occurrence.
+ *
+ * @param root - Current surface region.
+ * @param focused - Focused block region.
+ * @returns Root-to-leaf block regions, or an empty list if ownership changes.
+ */
+function getAncestry(root: InputRegion, focused: InputRegion): InputRegion[] {
+  const blocks: InputRegion[] = [];
+  const result = focused.someAncestorWithin(root, (region) => {
+    if (region.matches(BLOCK_ID_SELECTOR)) {
+      blocks.unshift(region);
+    }
+    return false;
+  });
+  return result === false ? blocks : [];
+}
+
+/**
+ * Appends links between measured blocks until a missing or reversed anchor.
+ *
+ * @param blocks - Root-to-leaf sequence including any earlier top-level block.
+ * @param point - Cached anchor measurement for a rendered block.
+ * @param rootLineOffset - Horizontal offset of the top-level trunk in CSS pixels.
+ * @param hasTopStart - Whether the first block is an earlier top-level anchor.
+ * @param initialPath - Optional lead already created for the first block.
+ * @returns Complete trimmed SVG path.
+ */
+function appendThreadLinks(
+  blocks: readonly InputRegion[],
+  point: ThreadPathOptions["point"],
+  rootLineOffset: number,
+  hasTopStart: boolean,
+  initialPath: string,
+): string {
+  let path = initialPath;
   for (let index = 1; index < blocks.length; index += 1) {
     const from = point(blocks[index - 1]!);
     const to = point(blocks[index]!);
@@ -121,8 +134,8 @@ export function buildThreadPath({
       break;
     }
     // The first link begins below an earlier root; later links begin at their parent anchor.
-    const fromX = index === 1 && Boolean(topStart) ? to.x - rootLineOffset : from.x;
-    const fromY = index === 1 && Boolean(topStart) ? from.bottom : from.y;
+    const fromX = index === 1 && hasTopStart ? to.x - rootLineOffset : from.x;
+    const fromY = index === 1 && hasTopStart ? from.bottom : from.y;
     if (to.y <= fromY) {
       break;
     }

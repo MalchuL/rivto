@@ -9,16 +9,7 @@
  * state or mutate the document.
  */
 import { BlockSelectionRanges } from "./block-selection-ranges";
-import type {
-  BlockSelectionPosition as EditorPosition,
-  BlockSelectionSnapshot as Selection,
-} from "./types";
-
-/** Directed concrete endpoints recovered from stored coverage. */
-interface BlockSelectionEndpointPair {
-  readonly anchor: EditorPosition;
-  readonly head: EditorPosition;
-}
+import type { BlockSelectionEndpointPair, BlockSelectionSnapshot as Selection } from "./types";
 
 /**
  * Recovers directed UTF-16 endpoints from document-ordered block ranges.

@@ -1,7 +1,8 @@
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 module.exports = {
   moduleNameMapper: {
-    "^@chulane/rivto-keyboard$": "<rootDir>/../rivto-keyboard/src/index.ts",
+    "^@chulane/rivto-root/browser$": "<rootDir>/../rivto-root/src/browser.ts",
+    "^@chulane/rivto-root$": "<rootDir>/../rivto-root/src/index.ts",
   },
   testMatch: ["**/*.test.ts", "**/*.test.tsx"],
   testEnvironment: "jsdom",

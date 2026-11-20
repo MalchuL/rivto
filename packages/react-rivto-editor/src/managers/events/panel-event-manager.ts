@@ -11,7 +11,7 @@ export class PanelEventManager implements PanelEventsApi {
    * Registrations retain this panel even when another panel gains focus.
    *
    * @param shared - Document event registrations and native listener transport.
-   * @param owner - Stable occurrence identity, current DOM root, and registration cleanup.
+   * @param owner - Stable occurrence identity, current input registration, and cleanup ownership.
    */
   constructor(
     private readonly shared: Pick<EventManager, "register" | "delete">,

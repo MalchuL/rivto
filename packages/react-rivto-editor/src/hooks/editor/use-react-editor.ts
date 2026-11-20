@@ -1,9 +1,8 @@
-import type { DocumentModel } from "@chulane/document-model";
 import { createDocumentEditor, type DocumentEditorAPI } from "@chulane/rivto";
 import { useEffect, useState } from "react";
 import { createReactEditor } from "../../editor/react-editor";
-import type { ReactEditorApi } from "../../editor/types";
-import type { ReactEditorState, UseReactEditorOptions } from "./types";
+import type { ReactEditorHostApi } from "../../editor/types";
+import type { ReactEditorState, UseReactEditorCurrent, UseReactEditorOptions } from "./types";
 
 /**
  * Creates one core and React editor after commit, and disposes both after unmount or model replacement.
@@ -17,12 +16,14 @@ import type { ReactEditorState, UseReactEditorOptions } from "./types";
  * @param options - Borrowed document, construction settings, and optional error reporter.
  * @returns Loading on first render or document replacement, ready after setup, or a construction error.
  */
-export function useReactEditor(options: UseReactEditorOptions): ReactEditorState {
-  const [current, setCurrent] = useState<{ document: DocumentModel; state: ReactEditorState }>();
+export function useReactEditor<CustomEvents extends object = object>(
+  options: UseReactEditorOptions<CustomEvents>,
+): ReactEditorState<CustomEvents> {
+  const [current, setCurrent] = useState<UseReactEditorCurrent<CustomEvents>>();
   const { document } = options;
   useEffect(() => {
     let core: DocumentEditorAPI | undefined;
-    let editor: ReactEditorApi | undefined;
+    let editor: ReactEditorHostApi<CustomEvents> | undefined;
     const dispose = () => {
       const errors: unknown[] = [];
       for (const close of [() => editor?.destroy(), () => core?.destroy()]) {
@@ -41,7 +42,7 @@ export function useReactEditor(options: UseReactEditorOptions): ReactEditorState
     };
     try {
       core = createDocumentEditor({ document });
-      editor = createReactEditor({ ...options, editor: core });
+      editor = createReactEditor<CustomEvents>({ ...options, editor: core });
       setCurrent({ document, state: { status: "ready", editor } });
     } catch (error) {
       dispose();

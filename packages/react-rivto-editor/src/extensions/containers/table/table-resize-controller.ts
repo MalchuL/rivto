@@ -1,6 +1,6 @@
-import type { ReactPanelApi } from "../../../panels/types";
-import { isInPanel } from "../../../panels/panel-dom";
-import { BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR } from "../../../constants";
+import type { KeyInput, PointerInput } from "@chulane/rivto-root";
+import { PANEL_SELECTOR } from "../../../panels/panel-dom";
+import { BLOCK_ID_ATTRIBUTE } from "../../../constants";
 import { TABLE_BLOCK_TYPE, TABLE_ROW_BLOCK_TYPE } from "./table-behavior";
 import {
   CELL_ITEM_ATTRIBUTE,
@@ -8,45 +8,17 @@ import {
   columnWidth,
   setTableColumnWidth,
   tableColumnCells,
+  TABLE_RESIZE_HANDLE_SELECTOR,
 } from "./table-column-width";
-
-/** Addressed model reads and the existing grouped column-width write. */
-type TableResizeBlocks = Pick<
-  ReactPanelApi["blocks"],
-  "getBlockNode" | "getParentId" | "updateBlocks"
->;
-
-/** Panel occurrence narrowed to the block operations used by the resize owner. */
-interface TableResizeHost {
-  readonly blocks: TableResizeBlocks;
-}
-
-/** Current source identity within its real table column. */
-interface TableColumnLocation {
-  readonly tableId: string;
-  readonly column: number;
-  readonly width: number;
-}
-
-/** One mounted placement whose width declaration belongs temporarily to this gesture. */
-interface TableWidthPreview {
-  readonly id: string;
-  readonly element: HTMLElement;
-  readonly value: string;
-  readonly priority: string;
-  readonly modelWidth: number;
-}
-
-/** Captured column membership and mounted preview targets; movement does no DOM lookup. */
-interface TableResizeGesture {
-  readonly pointerId: number;
-  readonly handle: HTMLElement;
-  readonly location: TableColumnLocation;
-  readonly ids: readonly string[];
-  readonly targets: readonly TableWidthPreview[];
-  readonly startX: number;
-  width: number;
-}
+import type {
+  TableColumnLocation,
+  TableResizeGesture,
+  TableResizeHost,
+  TableResizeResource,
+  TableResizeRoot,
+  TableResizeStart,
+  TableWidthPreview,
+} from "./types";
 
 /** Owns one cell's transient column width, capture and cancellation listeners. */
 export class TableResizeController {
@@ -55,18 +27,16 @@ export class TableResizeController {
   /**
    * Borrows a live model boundary and one mounted document occurrence.
    *
-   * The cell component creates this owner in its attachment effect and cancels
-   * it before replacing the occurrence or unmounting. No listeners exist while idle.
+   * The cell component creates this owner and cancels it on unmount. The current
+   * Root is captured when a gesture begins; no gesture listeners exist while idle.
    *
    * @param panel - Addressed block reads and grouped writes; never destroyed here.
    * @param blockId - Persisted cell from which the column index is resolved live.
-   * @param root - Mounted occurrence for pointer previews, or null before attachment.
-   * Keyboard width commands remain available without a DOM root.
+   * Keyboard width commands remain available without a mounted occurrence.
    */
   constructor(
     private readonly panel: TableResizeHost,
     private readonly blockId: string,
-    private readonly root: HTMLElement | null,
   ) {}
 
   /**
@@ -77,40 +47,50 @@ export class TableResizeController {
    * The separator receives focus so history and arrow keys route to this occurrence.
    * Capture or listener failure rolls back the resources already installed.
    *
-   * @param event - Primary-button pointer press on the resize separator.
-   * @param handle - Mounted separator receiving capture and active feedback.
+   * @param event - Normalized primary-button pointer press on the resize separator.
+   * @param input - Occurrence-bound feedback for the mounted separator.
    * @returns A preview session is active, or no change for an invalid source/button.
    * @throws Model or DOM reads propagate; browser setup failures trigger attempted rollback.
    */
-  start(event: PointerEvent, handle: HTMLElement): void {
-    if (event.button !== 0 || !this.root?.isConnected) {
+  start(event: PointerInput, input: TableResizeStart): void {
+    const root = this.panel.inputRoot;
+    if (event.button !== 0 || !root?.isConnected()) {
       return;
     }
     this.cancel();
+    if (this.panel.inputRoot !== root || !root.isConnected()) {
+      return;
+    }
     const location = this.resolveColumn();
     if (!location) {
       return;
     }
     const ids = tableColumnCells(this.panel.blocks, location.tableId, location.column);
-    const targets = this.captureTargets(ids);
-    event.preventDefault();
-    event.stopPropagation();
-    this.gesture = {
+    const targets = this.captureTargets(root, ids);
+    const gesture: TableResizeGesture = {
+      root,
       pointerId: event.pointerId,
-      handle,
       location,
       ids,
       targets,
       startX: event.clientX,
       width: location.width,
     };
+    this.gesture = gesture;
     try {
-      handle.setPointerCapture(event.pointerId);
-      handle.setAttribute("data-resizing", "true");
-      const view = this.root?.ownerDocument.defaultView;
-      view?.addEventListener("blur", this.cancel);
-      view?.addEventListener("keydown", this.cancelOnEscape, true);
-      handle.focus({ preventScroll: true });
+      if (this.panel.inputRoot !== root || !root.isConnected()) {
+        this.cancel();
+        return;
+      }
+      event.preventDefault();
+      if (this.gesture !== gesture) {
+        return;
+      }
+      event.stopPropagation();
+      if (this.gesture !== gesture) {
+        return;
+      }
+      this.activate(gesture, event, input);
     } catch (error) {
       try {
         this.cancel();
@@ -131,17 +111,15 @@ export class TableResizeController {
    * @returns Connected captured placements reflect the clamped pixel width.
    * @throws Style failures propagate after cancellation is attempted.
    */
-  move(event: PointerEvent): void {
+  move(event: PointerInput): void {
     const active = this.gesture;
     if (!active || event.pointerId !== active.pointerId) {
       return;
     }
     active.width = columnWidth(active.location.width + event.clientX - active.startX);
     try {
-      for (const { element } of active.targets) {
-        if (element.isConnected) {
-          element.style.setProperty(COLUMN_WIDTH_PROPERTY, `${active.width}px`);
-        }
+      for (const { styles } of active.targets) {
+        styles.set(`${active.width}px`);
       }
     } catch (error) {
       try {
@@ -167,7 +145,7 @@ export class TableResizeController {
    * @returns The matching session ends; unrelated pointers and cancelled sessions never write.
    * @throws Cleanup and delegated grouped-command failures propagate.
    */
-  finish(event: PointerEvent, commit: boolean): void {
+  finish(event: PointerInput, commit: boolean): void {
     const active = this.gesture;
     if (!active || active.pointerId !== event.pointerId) {
       return;
@@ -205,7 +183,7 @@ export class TableResizeController {
    * @returns One width adjustment is persisted; other keys keep their native behavior.
    * @throws Delegated model-command failures propagate after pointer cleanup.
    */
-  resizeWithKeyboard(event: KeyboardEvent): void {
+  resizeWithKeyboard(event: KeyInput): void {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
       return;
     }
@@ -242,28 +220,21 @@ export class TableResizeController {
     }
     this.gesture = undefined;
     const errors: unknown[] = [];
-    const view = this.root?.ownerDocument.defaultView;
-    for (const type of ["blur", "keydown"] as const) {
+    for (const release of [active.releaseAvailability, active.releaseEscape, active.releaseBlur]) {
       try {
-        if (type === "blur") {
-          view?.removeEventListener(type, this.cancel);
-        } else {
-          view?.removeEventListener(type, this.cancelOnEscape, true);
-        }
+        release?.();
       } catch (error) {
         errors.push(error);
       }
     }
     this.restoreTargets(active.targets, errors);
     try {
-      active.handle.removeAttribute("data-resizing");
+      active.releaseMarker?.();
     } catch (error) {
       errors.push(error);
     }
     try {
-      if (active.handle.hasPointerCapture(active.pointerId)) {
-        active.handle.releasePointerCapture(active.pointerId);
-      }
+      active.releasePointer?.();
     } catch (error) {
       errors.push(error);
     }
@@ -271,6 +242,104 @@ export class TableResizeController {
       throw new AggregateError(errors, "Table resize cleanup failed");
     }
   };
+
+  /**
+   * Acquires pointer capture, visual feedback, and cancellation for one gesture.
+   *
+   * @param gesture - Gesture staged by the initiating pointer delivery.
+   * @param event - Normalized input providing pointer capture and target focus.
+   * @param input - Feedback region belonging to the mounted separator.
+   * @returns The active gesture owns its resources, or releases them if replaced.
+   * @throws Propagates capture, listener, focus, and cleanup failures.
+   */
+  private activate(
+    gesture: TableResizeGesture,
+    event: PointerInput,
+    input: TableResizeStart,
+  ): void {
+    if (
+      !this.retain(
+        gesture,
+        "releaseAvailability",
+        this.panel.subscribeAvailability(() => {
+          if (this.panel.inputRoot !== gesture.root || !gesture.root.isConnected()) {
+            this.cancel();
+          }
+        }),
+      )
+    ) {
+      return;
+    }
+    const pointer = event.captureTargetPointer(TABLE_RESIZE_HANDLE_SELECTOR);
+    if (!this.retain(gesture, "releasePointer", pointer)) {
+      return;
+    }
+    if (!pointer) {
+      this.cancel();
+      return;
+    }
+    if (
+      !this.retain(
+        gesture,
+        "releaseMarker",
+        input.feedback.setTemporaryAttribute("data-resizing", "true"),
+      )
+    ) {
+      return;
+    }
+    if (!this.observeCancellation(gesture)) {
+      return;
+    }
+    event.focusTargetAncestor(TABLE_RESIZE_HANDLE_SELECTOR);
+  }
+
+  /**
+   * Observes window blur and Escape for the lifetime of one pointer gesture.
+   *
+   * @param gesture - Current gesture receiving the cancellation resources.
+   * @returns True when both observations were retained by the current gesture.
+   * @throws Propagates listener registration and cleanup failures.
+   */
+  private observeCancellation(gesture: TableResizeGesture): boolean {
+    const blur = gesture.root.observeWindowInput("blur", "bubble", this.cancel);
+    if (!this.retain(gesture, "releaseBlur", blur)) {
+      return false;
+    }
+    const escape = gesture.root.observeWindowInput("keydown", "capture", this.cancelOnEscape);
+    return this.retain(gesture, "releaseEscape", escape);
+  }
+
+  /**
+   * Retains a newly acquired resource only while its gesture and Root remain current.
+   *
+   * @param gesture - Gesture that requested the resource.
+   * @param slot - Cleanup field belonging to the resource.
+   * @param release - Acquired cleanup, or undefined when unavailable.
+   * @returns True when acquisition may continue; false after stale cleanup.
+   * @throws Propagates Root checks and cleanup failures.
+   */
+  private retain(
+    gesture: TableResizeGesture,
+    slot: TableResizeResource,
+    release?: () => void,
+  ): boolean {
+    gesture[slot] = release;
+    if (this.gesture !== gesture) {
+      release?.();
+      return false;
+    }
+    if (
+      this.panel.inputRoot !== gesture.root ||
+      !gesture.root.isConnected() ||
+      this.gesture !== gesture
+    ) {
+      if (this.gesture === gesture) {
+        this.cancel();
+      }
+      return false;
+    }
+    return true;
+  }
 
   /**
    * Locates the source cell's current table column and persisted width.
@@ -296,32 +365,52 @@ export class TableResizeController {
   /**
    * Captures mounted column placements and their exact inline width declarations.
    *
+   * @param root - Exact occurrence captured for this gesture.
    * @param ids - Captured canonical cell IDs, including unmounted cells.
    * @returns Mounted targets in this occurrence; absent cells require no DOM preview.
    */
-  private captureTargets(ids: readonly string[]): TableWidthPreview[] {
+  private captureTargets(root: TableResizeRoot, ids: readonly string[]): TableWidthPreview[] {
     const targets: TableWidthPreview[] = [];
-    if (!this.root) {
+    const identity = root.getElementIdentity?.();
+    const boundary = identity && root.captureRegionByIdentity(identity);
+    if (!boundary) {
       return targets;
     }
     const remaining = new Set(ids);
-    for (const cell of this.root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)) {
-      const id = cell.getAttribute(BLOCK_ID_ATTRIBUTE)!;
-      if (!remaining.has(id) || !isInPanel(this.root, cell)) {
-        continue;
+    try {
+      for (const cell of root.findRegionsByAttribute(BLOCK_ID_ATTRIBUTE, ids, PANEL_SELECTOR)) {
+        const id = cell.readAttribute(BLOCK_ID_ATTRIBUTE);
+        if (!id || !remaining.has(id)) {
+          continue;
+        }
+        remaining.delete(id);
+        let placement = cell;
+        const walked = cell.someAncestorWithin(boundary, (ancestor) => {
+          if (ancestor.readAttribute(CELL_ITEM_ATTRIBUTE) !== undefined) {
+            placement = ancestor;
+            return true;
+          }
+          return false;
+        });
+        if (walked === undefined) {
+          throw new Error("Table resize occurrence ended during target capture");
+        }
+        const modelWidth = columnWidth(this.panel.blocks.getBlockNode(id)?.props.tableColumnWidth);
+        const styles = placement.captureInlineStyle(COLUMN_WIDTH_PROPERTY);
+        if (styles) {
+          targets.push({ id, styles, modelWidth });
+        }
+        if (!remaining.size) {
+          break;
+        }
       }
-      remaining.delete(id);
-      const element = cell.closest<HTMLElement>(`[${CELL_ITEM_ATTRIBUTE}]`) ?? cell;
-      targets.push({
-        id,
-        element,
-        value: element.style.getPropertyValue(COLUMN_WIDTH_PROPERTY),
-        priority: element.style.getPropertyPriority(COLUMN_WIDTH_PROPERTY),
-        modelWidth: columnWidth(this.panel.blocks.getBlockNode(id)?.props.tableColumnWidth),
-      });
-      if (!remaining.size) {
-        break;
+    } catch (error) {
+      const errors: unknown[] = [error];
+      this.restoreTargets(targets, errors);
+      if (errors.length > 1) {
+        throw new AggregateError(errors, "Table resize target capture failed");
       }
+      throw error;
     }
     return targets;
   }
@@ -333,7 +422,7 @@ export class TableResizeController {
    * @returns True only while the source and all column cell IDs retain their positions.
    */
   private isCurrentColumn(active: TableResizeGesture): boolean {
-    if (!this.root?.isConnected) {
+    if (this.panel.inputRoot !== active.root || !active.root.isConnected()) {
       return false;
     }
     const location = this.resolveColumn();
@@ -360,8 +449,7 @@ export class TableResizeController {
         const current = columnWidth(
           this.panel.blocks.getBlockNode(target.id)?.props.tableColumnWidth,
         );
-        const value = current === target.modelWidth ? target.value : `${current}px`;
-        target.element.style.setProperty(COLUMN_WIDTH_PROPERTY, value, target.priority);
+        target.styles.finish(current === target.modelWidth ? undefined : `${current}px`);
       } catch (error) {
         errors.push(error);
       }
@@ -374,7 +462,7 @@ export class TableResizeController {
    * @param event - Captured window keyboard input during the gesture.
    * @returns Escape is consumed after releasing resources; other keys are untouched.
    */
-  private readonly cancelOnEscape = (event: KeyboardEvent): void => {
+  private readonly cancelOnEscape = (event: KeyInput): void => {
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();

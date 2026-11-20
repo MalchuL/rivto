@@ -1,29 +1,12 @@
 import { BlockDropBoundaryContext } from "../../drag-and-drop/block-drop-layout";
-import type { BlockDropBoundaryMode } from "../../../editor/drag-and-drop/types";
-import type { BlockVirtualizationOptions } from "../../../editor/virtualization/block-virtualization-controller";
-import {
-  forwardRef,
-  useImperativeHandle,
-  useLayoutEffect,
-  useState,
-  type HTMLAttributes,
-} from "react";
-import { BlockEditorScope, type BlockEditorViewApi } from "./block-editor-scope";
+import { getBrowserElementIdentity } from "@chulane/rivto-root/browser";
+import { forwardRef, useImperativeHandle, useLayoutEffect, useState } from "react";
+import { BlockEditorScope } from "./block-editor-scope";
 import { BlockTree } from "./block-tree";
+import { useBlockEditorRoot } from "./use-block-editor-root";
+import type { BlockEditorProps } from "./types";
 
-/** Inputs of the autonomous block forest, without access to a host editor. */
-export interface BlockEditorProps extends HTMLAttributes<HTMLDivElement> {
-  /** Host-owned instance; views attach/detach without destroying its registrations or nodes. */
-  readonly editor: BlockEditorViewApi;
-  /** Additional root classes; import package CSS for geometry defaults and override them through theme parameters. */
-  readonly className?: string;
-  /** Shared sibling feedback, default merged; separate retains nearest-edge feedback. */
-  readonly dropBoundaries?: BlockDropBoundaryMode;
-  /** Opt-in window scrolling of display subtrees; omitted renders the full tree. */
-  readonly virtualization?: BlockVirtualizationOptions;
-  /** Actual receiving parent for an empty view; null denotes document roots, undefined disables it. */
-  readonly emptyDropParentId?: string | null;
-}
+export type { BlockEditorProps } from "./types";
 
 /**
  * Renders a host-configured block editor and borrows its DOM attachment.
@@ -65,6 +48,7 @@ export const BlockEditor = forwardRef<HTMLDivElement, BlockEditorProps>(function
 ) {
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   useImperativeHandle(ref, () => root!, [root]);
+  const inputRoot = useBlockEditorRoot(editor, root);
   useLayoutEffect(() => {
     if (!root || emptyDropParentId === undefined) {
       return;
@@ -72,7 +56,7 @@ export const BlockEditor = forwardRef<HTMLDivElement, BlockEditorProps>(function
     const destination = { kind: "inside", parentId: emptyDropParentId } as const;
     const region = { kind: "inside", coverage: "background", destination } as const;
     return editor.dropTargets.register({
-      element: root,
+      identity: getBrowserElementIdentity(root),
       /**
        * Declares append on the existing empty editor surface without adding a spacer.
        *
@@ -91,7 +75,7 @@ export const BlockEditor = forwardRef<HTMLDivElement, BlockEditorProps>(function
       data-block-root-list
       tabIndex={attributes.tabIndex ?? -1}
     >
-      <BlockEditorScope editor={editor} root={root}>
+      <BlockEditorScope editor={editor} inputRoot={inputRoot}>
         <BlockDropBoundaryContext.Provider value={dropBoundaries}>
           <BlockTree virtualization={virtualization} />
           {children}

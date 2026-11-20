@@ -1,5 +1,4 @@
 import { BlockSelectionEndpoints } from "@chulane/rivto-page";
-import { findPanelElements } from "../../../../../panels/panel-dom";
 /**
  * Shared selection and focus operations for page navigation registrations.
  *
@@ -12,16 +11,8 @@ import {
   type DocumentEditorAPI,
   type Selection,
 } from "@chulane/rivto";
-import {
-  BLOCK_CONTENT_SELECTOR,
-  BLOCK_ID_ATTRIBUTE,
-  BLOCK_ID_SELECTOR,
-  PAGE_EDITOR_ROOT_SELECTOR,
-} from "../../../../../constants";
-import type { ReactPanelApi } from "../../../../../panels/types";
-import { focusBlock } from "../../../../../managers";
+import type { NavigationCaretPanel, NavigationPanel } from "./types";
 import type { PanelSelectionApi } from "../../../../../managers/selection/api";
-import { PageNavigationController } from "../../../../../surfaces/page/page-navigation-controller";
 import { pageEntries } from "./outline";
 import { navigationOutlineBlocks } from "./scope";
 import type { VerticalDirection } from "./types";
@@ -35,7 +26,7 @@ export type { VerticalDirection } from "./types";
  * @returns Current selection when present.
  */
 export function currentNavigationSelection(
-  selectionManager: PanelSelectionApi,
+  selectionManager: Pick<PanelSelectionApi, "get" | "readDOM">,
 ): Selection | undefined {
   return selectionManager.readDOM() ?? selectionManager.get();
 }
@@ -43,18 +34,16 @@ export function currentNavigationSelection(
 /**
  * Publishes and focuses one caret position.
  *
- * @param root - Active editor root.
  * @param reactPanel - Owning editor view.
  * @param position - Target portable position.
  * @returns No value.
  */
 export function setNavigationCaret(
-  root: HTMLElement,
-  reactPanel: ReactPanelApi,
+  reactPanel: NavigationCaretPanel,
   position: EditorPosition,
 ): void {
   reactPanel.selection.set(createCaretSelection(position.blockId, position.offset));
-  focusBlock(root, position.blockId, position.offset);
+  reactPanel.selection.focusBlock(position.blockId, position.offset);
 }
 
 /**
@@ -67,8 +56,8 @@ export function setNavigationCaret(
  * @returns Position at that edge.
  */
 export function textSelectionEdge(
-  reactPanel: ReactPanelApi,
-  editor: ReactPanelApi | DocumentEditorAPI,
+  reactPanel: NavigationPanel,
+  editor: NavigationPanel | DocumentEditorAPI,
   selection: Selection,
   edge: "start" | "end",
 ): EditorPosition {
@@ -79,10 +68,8 @@ export function textSelectionEdge(
   if (!ends) {
     return { blockId: selection.focusBlockId, offset: 0 };
   }
-  const root = reactPanel.getRoot();
-  const displayed = root ? PageNavigationController.getForElement(root)?.selection : undefined;
   const ids =
-    displayed?.getSelectableBlockIds() ??
+    reactPanel.selection.selectableBlockIds() ??
     pageEntries(
       navigationOutlineBlocks(editor, selection.focusBlockId),
       null,
@@ -98,65 +85,4 @@ export function textSelectionEdge(
   const start = forward ? ends.anchor : ends.head;
   const stop = forward ? ends.head : ends.anchor;
   return edge === "start" ? start : stop;
-}
-
-/**
- * Moves a boundary caret to the adjacent page editor in DOM order.
- *
- * @param root - Active editor root.
- * @param direction - Adjacent editor direction.
- * @returns Whether another editor accepted focus.
- */
-export function focusAdjacentEditor(root: HTMLElement, direction: VerticalDirection): boolean {
-  // A subtree editor is contained by another page, not the next journal page.
-  const roots = Array.from(
-    root.ownerDocument.querySelectorAll<HTMLElement>(PAGE_EDITOR_ROOT_SELECTOR),
-  ).filter((candidate) => !candidate.parentElement?.closest(PAGE_EDITOR_ROOT_SELECTOR));
-  const index = roots.indexOf(root);
-  if (index < 0) {
-    return false;
-  }
-  const adjacent = roots[index + (direction === "up" ? -1 : 1)];
-  if (!adjacent) {
-    return false;
-  }
-  PageNavigationController.getForElement(adjacent)?.mountFirstOrLastBlock(
-    direction === "up" ? -1 : 1,
-  );
-  const blocks = findPanelElements(adjacent, BLOCK_ID_SELECTOR);
-  if (direction === "up") {
-    blocks.reverse();
-  }
-  let focused = false;
-  for (const block of blocks) {
-    const content = Array.from(block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)).find(
-      (candidate) => candidate.closest(BLOCK_ID_SELECTOR) === block,
-    );
-    const blockId = block.getAttribute(BLOCK_ID_ATTRIBUTE);
-    if (blockId && content) {
-      focused = focusBlock(
-        adjacent,
-        blockId,
-        direction === "up" ? (content.textContent?.length ?? 0) : 0,
-      );
-      break;
-    }
-  }
-  return focused;
-}
-
-/**
- * Focuses one structural block selection without creating a DOM range.
- *
- * @param root - Active editor root.
- * @param blockId - Focus block identifier.
- * @returns No value.
- */
-export function focusBlockSelection(root: HTMLElement, blockId: string): void {
-  PageNavigationController.getForElement(root)?.mountBlocks([blockId]);
-  root.ownerDocument.getSelection()?.removeAllRanges();
-  root.focus({ preventScroll: true });
-  root
-    .querySelector<HTMLElement>(`[${BLOCK_ID_ATTRIBUTE}="${CSS.escape(blockId)}"]`)
-    ?.scrollIntoView({ block: "nearest" });
 }

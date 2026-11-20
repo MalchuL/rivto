@@ -43,6 +43,7 @@ import {
 } from "../../utils";
 import { contentFrom, strings, validateBlockForest, validateBlockListProps } from "./utils";
 import { BlockCache } from "./cache";
+import type { BlockParentCursor, BlockParentLocation } from "./types";
 
 const ROOTS_KEY = "rivto.editor.roots";
 const BLOCKS_KEY = "rivto.editor.blocks";
@@ -71,8 +72,8 @@ interface LocatedBlock {
  * schema and placement policy is applied before this storage boundary.
  */
 export class DocumentBlockManager implements DocumentBlockManagerApi {
-  /** Largest move batch that uses individual parent lookups during an open CRDT transaction. */
-  private static readonly PARENT_INDEX_MOVE_THRESHOLD = 8;
+  /** Largest parent lookup batch that uses individual searches during an open CRDT transaction. */
+  private static readonly PARENT_INDEX_BATCH_THRESHOLD = 8;
   /** Creates block identities without exposing generator configuration. */
   protected generateId(): string {
     return crypto.randomUUID();
@@ -280,6 +281,45 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
       return found ? (found.parentId ?? null) : undefined;
     }
     return this.cache.getParentId(id);
+  }
+
+  /**
+   * Resolves a group of block parents from the current hierarchy.
+   *
+   * Open transactions use one live traversal. If a block has duplicate
+   * placements, individual lookups retain their existing cached-path behavior.
+   * Missing records and unplaced blocks are omitted.
+   *
+   * @param ids - Block IDs to resolve; duplicates are ignored.
+   * @returns Parent IDs keyed by placed block ID, with null for roots.
+   * @throws Propagates malformed hierarchy or CRDT access failures.
+   */
+  getParentIds(ids: readonly string[]): ReadonlyMap<string, string | null> {
+    const wanted = new Set(ids);
+    if (!wanted.size) {
+      return new Map();
+    }
+    if (
+      !this.crdt.isTransacting ||
+      wanted.size <= DocumentBlockManager.PARENT_INDEX_BATCH_THRESHOLD
+    ) {
+      return this.readParentIds(wanted);
+    }
+    const locations = this.readUniqueParentLocations(wanted);
+    if (!locations) {
+      return this.readParentIds(wanted);
+    }
+    const parents = new Map<string, string | null>();
+    for (const id of wanted) {
+      const location = locations.get(id);
+      if (location && this.storage.has(id)) {
+        this.cache.setPath(id, location.path);
+        parents.set(id, location.parentId);
+      } else {
+        this.cache.deletePath(id);
+      }
+    }
+    return parents;
   }
 
   /**
@@ -940,7 +980,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     // cache is stale and individual placement searches scan the whole tree.
     // Read the live hierarchy once for a large grouped move.
     const liveParents =
-      this.crdt.isTransacting && moves.length > DocumentBlockManager.PARENT_INDEX_MOVE_THRESHOLD
+      this.crdt.isTransacting && moves.length > DocumentBlockManager.PARENT_INDEX_BATCH_THRESHOLD
         ? new Map<string, string | null>()
         : undefined;
     if (liveParents) {
@@ -1633,5 +1673,73 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
       throw new Error(`Expected CRDTText at ${key}`);
     }
     return value as Extract<Schema[Key], CRDTText>;
+  }
+
+  /**
+   * Resolves IDs individually using the existing cached-path behavior.
+   *
+   * @param ids - Unique block identities to read.
+   * @returns Parent IDs for placed blocks; absent identities are omitted.
+   * @throws Propagates malformed hierarchy or CRDT access failures.
+   */
+  private readParentIds(ids: ReadonlySet<string>): ReadonlyMap<string, string | null> {
+    const result = new Map<string, string | null>();
+    for (const id of ids) {
+      const parent = this.getParentId(id);
+      if (parent !== undefined && this.storage.has(id)) {
+        result.set(id, parent);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Reads requested locations in one live hierarchy traversal.
+   *
+   * Duplicate placements, cycles, or malformed child arrays require the existing
+   * individual lookup, whose cached path can select a different occurrence and
+   * which may not need to inspect unrelated malformed branches.
+   *
+   * @param wanted - Block IDs whose locations should be retained.
+   * @returns Locations, or undefined when the hierarchy requires fallback.
+   * @throws Propagates malformed hierarchy or CRDT access failures.
+   */
+  private readUniqueParentLocations(
+    wanted: ReadonlySet<string>,
+  ): Map<string, BlockParentLocation> | undefined {
+    const locations = new Map<string, BlockParentLocation>();
+    const visited = new Set<string>();
+    const pending: BlockParentCursor[] = [{ ids: this.roots.toArray(), index: 0, parentId: null }];
+    const path: number[] = [];
+    while (pending.length) {
+      const cursor = pending[pending.length - 1]!;
+      if (cursor.index >= cursor.ids.length) {
+        pending.pop();
+        continue;
+      }
+      const index = cursor.index++;
+      const id = cursor.ids[index];
+      if (typeof id !== "string") {
+        continue;
+      }
+      if (visited.has(id)) {
+        return undefined;
+      }
+      visited.add(id);
+      path.length = pending.length - 1;
+      path.push(index);
+      if (wanted.has(id)) {
+        locations.set(id, { parentId: cursor.parentId, path: [...path] });
+      }
+      const block = this.storage.get(id);
+      if (isCRDTMap(block)) {
+        const children = block.get("children");
+        if (!isCRDTArray(children)) {
+          return undefined;
+        }
+        pending.push({ ids: children.toArray(), index: 0, parentId: id });
+      }
+    }
+    return locations;
   }
 }

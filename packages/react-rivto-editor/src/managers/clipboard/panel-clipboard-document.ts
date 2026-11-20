@@ -1,5 +1,5 @@
 import type { BlockDestination } from "@chulane/document-model";
-import type { DocumentEditorAPI } from "@chulane/rivto";
+import type { DocumentEditorOperations } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../panels/types";
 import type { PanelDestination } from "@chulane/rivto";
 
@@ -10,7 +10,7 @@ import type { PanelDestination } from "@chulane/rivto";
  * @param reactPanel - Receiving panel, retained throughout this paste.
  * @returns Document contract whose block reads and writes respect the receiving panel.
  */
-export function panelClipboardDocument(reactPanel: ReactPanelApi): DocumentEditorAPI {
+export function panelClipboardDocument(reactPanel: ReactPanelApi): DocumentEditorOperations {
   const document = reactPanel.document;
   const destination = (target?: BlockDestination): PanelDestination => {
     if (!target || target.parentId === (reactPanel.rootBlockId ?? null)) {
@@ -51,7 +51,7 @@ export function panelClipboardDocument(reactPanel: ReactPanelApi): DocumentEdito
           reactPanel.blocks.insertBlock(
             input,
             destination(place),
-          )) satisfies DocumentEditorAPI["blocks"]["insertBlock"];
+          )) satisfies DocumentEditorOperations["blocks"]["insertBlock"];
       }
       if (key === "importForest") {
         return ((input, place, onError, ids) =>
@@ -60,7 +60,7 @@ export function panelClipboardDocument(reactPanel: ReactPanelApi): DocumentEdito
             destination(place),
             onError,
             ids,
-          )) satisfies DocumentEditorAPI["blocks"]["importForest"];
+          )) satisfies DocumentEditorOperations["blocks"]["importForest"];
       }
       if (key in reactPanel.blocks) {
         const value = Reflect.get(reactPanel.blocks, key);

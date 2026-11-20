@@ -1,4 +1,4 @@
-import type { DocumentEditorAPI } from "../editor/types";
+import type { DocumentEditorOperations } from "../editor/types";
 import { PanelElements } from "./panel-elements";
 import type { PanelAPI, PanelBlocksAPI, PanelElementsAPI, PanelOptions } from "./types";
 
@@ -25,7 +25,7 @@ export abstract class Panel implements PanelAPI {
    * @param blocks - Concrete panel's boundary and root-protection policy.
    */
   protected constructor(
-    readonly document: DocumentEditorAPI,
+    readonly document: DocumentEditorOperations,
     options: PanelOptions,
     readonly blocks: PanelBlocksAPI,
   ) {

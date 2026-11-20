@@ -1,32 +1,19 @@
 import { Button } from "../../components/ui/button";
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import type { PointerInput } from "@chulane/rivto-root";
 import type { ElementRenderProps } from "../../managers/elements/types";
-import type { ConnectorEndpoint } from "./types";
+import type {
+  ConnectorEndpoint,
+  ConnectorEndpointKey,
+  ConnectorGesture,
+  ConnectorInteraction,
+} from "./types";
+import type { Point } from "@chulane/rivto-edgeless";
 import { editorControlProps } from "../../constants";
+import { useConnectorEndpointInput } from "./use-connector-endpoint-input";
 
 /** Connector creation and reconnect gestures share the same canvas hit testing. */
-export const ConnectorInteractionContext = createContext<{
-  /**
-   * Resolves pointer coordinates to a connector attachment or free endpoint.
-   *
-   * @param event - Native or React event supplying the current input.
-   * @returns Endpoint at the pointer's current position.
-   */
-  resolveEndpoint(event: Pick<PointerEvent, "clientX" | "clientY">): ConnectorEndpoint;
-  /**
-   * Updates the reconnect hover target, or clears it when the pointer is absent.
-   *
-   * @param event - Native or React event supplying the current input.
-   * @returns Updates or clears panel-local attachment feedback without document writes.
-   */
-  onReconnectHover(event: Pick<PointerEvent, "clientX" | "clientY"> | null): void;
-} | null>(null);
+export const ConnectorInteractionContext = createContext<ConnectorInteraction | null>(null);
 
 /**
  * Keeps endpoint drag previews local to this connector renderer.
@@ -40,6 +27,7 @@ export const ConnectorInteractionContext = createContext<{
  */
 export function useConnectorPreview({ element, operations }: ElementRenderProps) {
   const interaction = useContext(ConnectorInteractionContext);
+  const gesture = useRef<ConnectorGesture | null>(null);
   const [draft, setDraft] = useState<{
     key: "source" | "target";
     endpoint: ConnectorEndpoint;
@@ -48,6 +36,7 @@ export function useConnectorPreview({ element, operations }: ElementRenderProps)
   useEffect(() => () => onReconnectHover?.(null), [onReconnectHover]);
   return {
     interaction,
+    gesture,
     draft,
     setDraft,
     operations,
@@ -75,39 +64,113 @@ export function ConnectorEndpoints({
   selected,
   preview,
 }: Omit<ElementRenderProps, "preview"> & { preview: ReturnType<typeof useConnectorPreview> }) {
-  const { interaction, source, target, setDraft, operations } = preview;
-  if (!interaction) {
-    return null;
-  }
-  const { resolveEndpoint, onReconnectHover } = interaction;
+  const { interaction, gesture, source, target, setDraft, operations } = preview;
   /**
    * Previews one endpoint and its current attachment target without changing the document.
    *
    * @param key - Endpoint being reconnected.
-   * @param event - Pointer position in viewport pixels.
+   * @param point - Pointer position in client CSS pixels.
    * @returns Updates the local draft and attachment feedback without writing the document.
    */
-  const moveEndpoint = (
-    key: "source" | "target",
-    event: Pick<PointerEvent, "clientX" | "clientY">,
-  ) => {
-    setDraft({ key, endpoint: resolveEndpoint(event) });
-    onReconnectHover(event);
+  const moveEndpoint = (key: "source" | "target", point: Point) => {
+    const active = gesture.current;
+    if (!active) {
+      return;
+    }
+    const endpoint = active.interaction.resolveEndpoint(point);
+    setDraft(endpoint ? { key, endpoint } : null);
+    active.interaction.onReconnectHover(endpoint ? point : null);
   };
   /**
    * Commits the released endpoint and clears its local preview and attachment feedback.
    *
    * @param key - Endpoint being reconnected.
    * @param event - Release event supplying the final pointer position.
-   * @returns Writes the endpoint through the panel's property operations.
-   * @throws If the property update fails validation or storage.
+   * @returns Writes the endpoint through the panel's property operations when
+   * its originating canvas attachment is available; otherwise clears the preview.
+   * @throws If pointer capture release fails or the property update fails validation or storage.
    */
-  const endEndpoint = (key: "source" | "target", event: ReactPointerEvent<HTMLButtonElement>) => {
-    const endpoint = resolveEndpoint(event.nativeEvent);
+  const endEndpoint = (key: ConnectorEndpointKey, event: PointerInput) => {
+    const active = gesture.current;
+    if (!active || active.pointerId !== event.pointerId) {
+      return;
+    }
+    gesture.current = null;
+    active.releasePointer();
+    const endpoint = active.interaction.resolveEndpoint({ x: event.clientX, y: event.clientY });
     setDraft(null);
-    onReconnectHover(null);
-    operations.updateProperties(element.id, { [key]: endpoint });
+    active.interaction.onReconnectHover(null);
+    if (endpoint) {
+      operations.updateProperties(element.id, { [key]: endpoint });
+    }
   };
+  /**
+   * Clears the active gesture and releases its original pointer capture.
+   *
+   * @returns The local draft and attachment feedback are cleared without a document write.
+   * @throws If pointer release or feedback cleanup fails.
+   */
+  const cancelEndpoint = () => {
+    const active = gesture.current;
+    if (!active) {
+      return;
+    }
+    gesture.current = null;
+    try {
+      active.releasePointer();
+    } finally {
+      setDraft(null);
+      active.interaction.onReconnectHover(null);
+    }
+  };
+  /**
+   * Applies normalized pointer input to the originating endpoint gesture.
+   *
+   * @param key - Endpoint receiving this input.
+   * @param input - Current Root-normalized pointer delivery.
+   * @returns Updates the local preview or commits the released endpoint.
+   * @throws Propagates pointer capture or document update failures.
+   */
+  const onInput = (key: ConnectorEndpointKey, input: PointerInput) => {
+    if (input.type === "pointerdown") {
+      if (!interaction) {
+        return;
+      }
+      const releasePointer = input.captureTargetPointer("[data-edgeless-connector-endpoint]");
+      if (!releasePointer) {
+        return;
+      }
+      cancelEndpoint();
+      input.stopPropagation();
+      gesture.current = { pointerId: input.pointerId, interaction, releasePointer };
+      moveEndpoint(key, { x: input.clientX, y: input.clientY });
+      return;
+    }
+    if (input.type === "pointerup") {
+      input.stopPropagation();
+    }
+    const active = gesture.current;
+    if (!active || active.pointerId !== input.pointerId) {
+      return;
+    }
+    if (input.type === "pointermove") {
+      input.stopPropagation();
+      moveEndpoint(key, { x: input.clientX, y: input.clientY });
+    } else if (input.type === "pointerup") {
+      endEndpoint(key, input);
+    } else if (input.type === "pointercancel" || input.type === "lostpointercapture") {
+      cancelEndpoint();
+    }
+  };
+  const endpointRefs = useConnectorEndpointInput(
+    interaction?.inputRoot,
+    selected && !!interaction,
+    onInput,
+    cancelEndpoint,
+  );
+  if (!interaction) {
+    return null;
+  }
   return (
     <>
       {selected &&
@@ -118,31 +181,12 @@ export function ConnectorEndpoints({
               variant="ghost"
               {...editorControlProps}
               key={key}
+              ref={endpointRefs[key]}
               className="edgeless-connector-endpoint border-0 bg-transparent hover:bg-transparent"
               data-edgeless-connector-endpoint={key}
               type="button"
               aria-label={`Reconnect ${key}`}
               style={{ left: point.x - element.frame.x, top: point.y - element.frame.y }}
-              onPointerDown={(event) => {
-                event.currentTarget.setPointerCapture(event.pointerId);
-                event.stopPropagation();
-                moveEndpoint(key, event.nativeEvent);
-              }}
-              onPointerMove={(event) => {
-                if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
-                  return;
-                }
-                event.stopPropagation();
-                moveEndpoint(key, event.nativeEvent);
-              }}
-              onPointerUp={(event) => {
-                event.stopPropagation();
-                endEndpoint(key, event);
-              }}
-              onPointerCancel={() => {
-                setDraft(null);
-                onReconnectHover(null);
-              }}
             />
           );
         })}

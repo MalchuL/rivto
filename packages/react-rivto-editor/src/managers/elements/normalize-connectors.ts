@@ -1,5 +1,5 @@
 import { createEdgelessDefaults } from "../../elements/visuals/creation-defaults";
-import type { ReactEditorApi } from "../../editor/types";
+import type { ReactEditorExtensionApi } from "../../editor/types";
 import { ElementGeometry } from "../../elements/element-geometry";
 import type {
   ConnectorEndpoint,
@@ -26,7 +26,7 @@ import { connectorFrame, endpointPoint } from "../../elements/visuals/utils/geom
  * @returns Unsubscribe callback that stops automatic connector reconciliation.
  */
 export function registerConnectorNormalization(
-  editor: ReactEditorApi,
+  editor: ReactEditorExtensionApi,
   options: { readonly orphanConnectors?: OrphanConnectorBehavior },
 ): () => void {
   const geometry = new ElementGeometry(

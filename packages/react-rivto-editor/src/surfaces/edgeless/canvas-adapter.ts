@@ -1,9 +1,9 @@
 import type { EditorElementNode } from "@chulane/rivto";
+import type { FrameClock, InputRoot } from "@chulane/rivto-root";
 import type { CanvasElement } from "@chulane/rivto-edgeless";
 import { type CanvasApi, CanvasSource } from "@chulane/rivto-edgeless";
-import { CanvasViewport } from "@chulane/rivto-edgeless/browser";
 import { flushSync } from "react-dom";
-import type { ReactPanelApi } from "../../panels/types";
+import type { EdgelessCanvasSourcePanel } from "./types";
 import { ElementGeometry } from "../../elements/element-geometry";
 import {
   blockIdsOf,
@@ -11,23 +11,11 @@ import {
   EDGELESS_BLOCK_ELEMENT_TYPE,
 } from "../../elements/block-element-projection";
 
-/** Shared document notifications and element definitions borrowed by the projection. */
-export interface EdgelessCanvasSourceEditor extends Pick<ReactPanelApi["editor"], "subscribe"> {
-  readonly elementTypes: Pick<ReactPanelApi["editor"]["elementTypes"], "get" | "subscribe">;
-}
-
-/** Borrowed document reads and subscriptions needed by the canvas projection. */
-export interface EdgelessCanvasSourcePanel {
-  readonly blocks: Pick<ReactPanelApi["blocks"], "getRootIds" | "getParentId">;
-  readonly elements: Pick<ReactPanelApi["elements"], "getElementNode" | "getElementNodes">;
-  readonly selection: Pick<ReactPanelApi["selection"], "get" | "subscribe">;
-  readonly editor: EdgelessCanvasSourceEditor;
-}
-
 /** Projects one Rivto occurrence into an independent, surface-owned canvas. */
 export class EdgelessCanvasAdapter extends CanvasSource {
-  private static readonly adapters = new WeakMap<CanvasApi, EdgelessCanvasAdapter>();
   private connectedCanvas?: CanvasApi;
+  private disconnecting = false;
+  private readonly pendingMounts = new Set<() => void>();
   private readonly geometry: ElementGeometry;
   private releaseSelection?: () => void;
   private pinnedCardIdsKey = "";
@@ -53,13 +41,14 @@ export class EdgelessCanvasAdapter extends CanvasSource {
    */
   override getElements(): readonly CanvasElement[] {
     const elements = this.panel.elements.getElementNodes();
+    const parents = this.blockParents(elements);
     const rendered = new Set(
       elements
         .filter(
           (element) =>
             element.type !== "group" &&
             (element.type !== EDGELESS_BLOCK_ELEMENT_TYPE ||
-              blockElementRoot(element, this.panel.blocks) === null),
+              this.blockParent(element, parents) === null),
         )
         .map(({ id }) => id),
     );
@@ -91,11 +80,10 @@ export class EdgelessCanvasAdapter extends CanvasSource {
    * @throws If already connected, or source initialization fails.
    */
   override connect(canvas: CanvasApi): () => void {
-    if (this.connectedCanvas) {
+    if (this.connectedCanvas || this.disconnecting) {
       throw new Error("Rivto canvas source is already connected");
     }
     this.connectedCanvas = canvas;
-    EdgelessCanvasAdapter.adapters.set(canvas, this);
     const releases: (() => void)[] = [];
     let released = false;
     const release = () => {
@@ -103,18 +91,24 @@ export class EdgelessCanvasAdapter extends CanvasSource {
         return;
       }
       released = true;
+      this.disconnecting = true;
+      this.connectedCanvas = undefined;
+      const releaseSelection = this.releaseSelection;
+      this.releaseSelection = undefined;
+      this.pinnedCardIdsKey = "";
       const errors: unknown[] = [];
-      for (const stop of [...releases.reverse(), () => this.releaseSelection?.()]) {
+      for (const stop of [
+        ...releases.reverse(),
+        ...this.pendingMounts,
+        () => releaseSelection?.(),
+      ]) {
         try {
           stop();
         } catch (error) {
           errors.push(error);
         }
       }
-      this.releaseSelection = undefined;
-      this.pinnedCardIdsKey = "";
-      EdgelessCanvasAdapter.adapters.delete(canvas);
-      this.connectedCanvas = undefined;
+      this.disconnecting = false;
       if (errors.length) {
         throw new AggregateError(errors, "Rivto canvas source cleanup failed");
       }
@@ -169,32 +163,44 @@ export class EdgelessCanvasAdapter extends CanvasSource {
 
   /**
    * Mounts cards synchronously before a programmatic focus or selection operation.
+   *
+   * Before the source connects, no cards are mounted. After connection, pins last
+   * until selection or focus pins take over on the next frame. Surface cleanup
+   * releases the navigation registration independently of source disconnection.
+   *
    * @param ids - Block IDs whose DOM is required immediately.
-   * @returns Cards are mounted until selection/focus pins take over on the next frame.
+   * @param root - Exact mounted occurrence providing the frame clock.
+   * @returns Available cards are mounted synchronously while the occurrence is attached.
+   * @throws Propagates document reads, scheduling, cleanup and synchronous React commit failures.
    */
-  mountBlocks(ids: readonly string[]): void {
-    const cards = this.getCardIdsForBlocks(ids);
-    if (cards.every((id) => this.canvas.visible.get().includes(id))) {
+  mountBlocks(
+    ids: readonly string[],
+    root: Pick<InputRoot, "isAttached" | "captureFrameClock">,
+  ): void {
+    const canvas = this.connectedCanvas;
+    if (!canvas || !root.isAttached()) {
       return;
     }
-    let release: (() => void) | undefined;
-    flushSync(() => {
-      release = this.canvas.pin(cards);
-    });
-    requestAnimationFrame(() => release?.());
-  }
-
-  /**
-   * Mounts virtualized Rivto cards for a DOM selection or focus request.
-   * @param root - Active surface root; page surfaces are ignored.
-   * @param ids - Blocks that need live DOM hosts.
-   * @returns Matching cards are synchronously mounted when a canvas adapter exists.
-   */
-  static mountBlocksForElement(root: HTMLElement, ids: readonly string[]): void {
-    const canvas = CanvasViewport.forElement(root)?.canvas;
-    if (canvas) {
-      EdgelessCanvasAdapter.adapters.get(canvas)?.mountBlocks(ids);
+    const clock = root.captureFrameClock();
+    if (!clock || !root.isAttached() || this.connectedCanvas !== canvas) {
+      return;
     }
+    const cards = this.getCardIdsForBlocks(ids);
+    if (
+      this.connectedCanvas !== canvas ||
+      !root.isAttached() ||
+      cards.every((id) => canvas.visible.get().includes(id))
+    ) {
+      return;
+    }
+    let releasePin: (() => void) | undefined;
+    flushSync(() => {
+      releasePin = canvas.pin(cards);
+    });
+    if (!releasePin) {
+      return;
+    }
+    this.releaseMountAfterFrame(root, canvas, clock, releasePin);
   }
 
   /**
@@ -208,6 +214,139 @@ export class EdgelessCanvasAdapter extends CanvasSource {
       throw new Error("Rivto canvas source is not connected");
     }
     return this.connectedCanvas;
+  }
+
+  /**
+   * Releases a navigation pin on the originating Root's next frame.
+   *
+   * Disconnect also invokes the same idempotent cleanup. Reentrant detachment
+   * or scheduling failure releases the pin and any returned frame disposer.
+   *
+   * @param root - Occurrence captured by the navigation request.
+   * @param canvas - Scene that owns the temporary pin.
+   * @param clock - Frame scheduler captured from the occurrence.
+   * @param releasePin - Releases this request's canvas pin.
+   * @returns The source retains cleanup until the frame or disconnection.
+   * @throws Propagates attachment, scheduling, and cleanup failures.
+   */
+  private releaseMountAfterFrame(
+    root: Pick<InputRoot, "isAttached">,
+    canvas: CanvasApi,
+    clock: Pick<FrameClock, "requestFrame">,
+    releasePin: () => void,
+  ): void {
+    let cancelFrame: (() => void) | undefined;
+    /**
+     * Releases this pin and its scheduled frame once, including on disconnection.
+     *
+     * @returns The frame and pin are released when still pending.
+     * @throws If either cleanup fails, after both have been attempted.
+     */
+    const finish = () => {
+      if (!this.pendingMounts.delete(finish)) {
+        return;
+      }
+      const errors: unknown[] = [];
+      for (const release of [() => cancelFrame?.(), releasePin]) {
+        try {
+          release();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      if (errors.length) {
+        throw new AggregateError(errors, "Canvas navigation pin cleanup failed");
+      }
+    };
+    this.pendingMounts.add(finish);
+    try {
+      if (!root.isAttached() || this.connectedCanvas !== canvas) {
+        finish();
+        return;
+      }
+      const cancel = clock.requestFrame(() => {
+        cancelFrame = undefined;
+        finish();
+      });
+      if (!this.pendingMounts.has(finish)) {
+        cancel?.();
+      } else if (cancel) {
+        cancelFrame = cancel;
+      } else {
+        finish();
+      }
+    } catch (error) {
+      try {
+        finish();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Canvas navigation pin setup failed");
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Resolves a card's panel-relative parent using the current batch when available.
+   *
+   * A surviving start boundary takes precedence; the end is used only when the
+   * start is missing. Subtree panels retain their existing scoped lookup.
+   *
+   * @param element - Block card containing its persisted boundary IDs.
+   * @param parents - Current whole-document parent snapshot, or undefined for a subtree panel.
+   * @returns Parent ID, null for this panel's roots, or undefined without a surviving boundary.
+   */
+  private blockParent(
+    element: EditorElementNode,
+    parents: ReadonlyMap<string, string | null> | undefined,
+  ): string | null | undefined {
+    if (!parents) {
+      return blockElementRoot(element, this.panel.blocks);
+    }
+    const start = element.props.startBlockId;
+    const end = element.props.endBlockId;
+    const parent = typeof start === "string" ? parents.get(start) : undefined;
+    if (parent !== undefined) {
+      return parent;
+    }
+    return typeof end === "string" ? parents.get(end) : undefined;
+  }
+
+  /**
+   * Reads document-card boundary parents in batches for a whole-document panel.
+   *
+   * End boundaries are read only when their start is missing, preserving the
+   * existing start-first lookup and its cached-path behavior. Subtree panels use
+   * their panel-relative lookup instead.
+   *
+   * @param elements - Current occurrence's flat element records.
+   * @returns Boundary parents, or undefined for a subtree panel.
+   * @throws Propagates document hierarchy read failures.
+   */
+  private blockParents(
+    elements: readonly EditorElementNode[],
+  ): ReadonlyMap<string, string | null> | undefined {
+    if (this.panel.rootBlockId !== undefined) {
+      return undefined;
+    }
+    const cards = elements.filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE);
+    const starts = cards.flatMap((element) => {
+      const id = element.props.startBlockId;
+      return typeof id === "string" ? [id] : [];
+    });
+    const parents = new Map(this.panel.document.blocks.getParentIds(starts));
+    const ends = cards.flatMap((element) => {
+      const start = element.props.startBlockId;
+      const end = element.props.endBlockId;
+      return (typeof start !== "string" || !parents.has(start)) && typeof end === "string"
+        ? [end]
+        : [];
+    });
+    if (ends.length) {
+      for (const [id, parent] of this.panel.document.blocks.getParentIds(ends)) {
+        parents.set(id, parent);
+      }
+    }
+    return parents;
   }
 
   /**

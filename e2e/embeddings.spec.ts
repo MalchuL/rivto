@@ -203,8 +203,8 @@ for (const repeat of [0, 200]) {
           const { reactEditor } = (window as unknown as { __rivtoDemo: JournalInspection })
             .__rivtoDemo;
           return (
-            reactEditor.panels.getActiveRoot() ?? reactEditor.panels.getDefaultRoot()
-          )?.getAttribute("role");
+            reactEditor.panels.getActiveInputRoot() ?? reactEditor.panels.getDefaultInputRoot()
+          )?.readAttribute("role");
         }),
       ).toBe("region");
       await content.click();

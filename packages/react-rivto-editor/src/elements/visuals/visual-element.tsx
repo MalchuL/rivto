@@ -4,13 +4,15 @@
  * Selection handles subscribe per visual ID so marquee growth over a neighbor
  * does not re-render this node or recreate its label editor.
  */
-import { memo, useRef, useState } from "react";
+import { memo } from "react";
 import type { EditorElementNode } from "@chulane/rivto";
-import type { EditableLabelFocusPoint } from "../../components";
 import { ElementSlots } from "../../blocks";
 import { useEdgelessSelected } from "../../extensions/built-ins/selection/edgeless-runtime";
 import type { EdgelessOperations } from "../../managers/elements/edgeless-operations";
 import { useEdgelessElementStyle } from "../../hooks/elements/use-edgeless-element-style";
+import { createVisualLabelInput } from "./browser/visual-label-input";
+import type { VisualElementContentProps } from "./types";
+import { useVisualLabelEditing } from "./use-visual-label-editing";
 
 /**
  * Renders one persisted visual without owning canvas movement.
@@ -35,10 +37,8 @@ export const VisualElement = memo(function VisualElement({
 }) {
   const selected = useEdgelessSelected(element.id);
   const registration = edgelessOperation.runtime.elementTypes.get(element.type);
-  const Renderer = registration?.render;
   const reactPanel = edgelessOperation.reactPanel;
-  const [editing, setEditing] = useState(false);
-  const focusPointRef = useRef<EditableLabelFocusPoint | null>(null);
+  const { editing, setEditing, focusPointRef, startEditing } = useVisualLabelEditing();
   // Echo transform preview inline styles while locked so React does not clear them.
   const { ref, style } = useEdgelessElementStyle<HTMLDivElement>(
     element,
@@ -55,31 +55,37 @@ export const VisualElement = memo(function VisualElement({
       data-selected={selected || undefined}
       data-editing={editing || undefined}
       style={style}
-      onDoubleClick={(event) => {
-        if (!registration?.behavior?.editableLabel) {
-          return;
-        }
-        event.stopPropagation();
-        focusPointRef.current = { x: event.clientX, y: event.clientY };
-        setEditing(true);
-      }}
-    >
-      {Renderer && reactPanel ? (
-        <Renderer
-          preview={false}
-          element={element}
-          reactPanel={reactPanel}
-          operations={edgelessOperation}
-          selected={selected}
-          zoom={zoom}
-          editing={editing}
-          setEditing={setEditing}
-          focusPointRef={focusPointRef}
-        />
-      ) : (
-        <div role="status">Unknown element: {element.type}</div>
+      onDoubleClick={createVisualLabelInput(
+        reactPanel,
+        Boolean(registration?.behavior?.editableLabel),
+        startEditing,
       )}
+    >
+      <VisualElementContent
+        Renderer={registration?.render}
+        element={element}
+        reactPanel={reactPanel}
+        operations={edgelessOperation}
+        selected={selected}
+        zoom={zoom}
+        editing={editing}
+        setEditing={setEditing}
+        focusPointRef={focusPointRef}
+      />
       <ElementSlots element={element} selected={selected} />
     </div>
   );
 });
+
+/**
+ * Renders registered visual content or its unknown-type fallback.
+ *
+ * @param props - Renderer, panel, and the current visual editing state.
+ * @returns Registered content when its panel is available, otherwise a status message.
+ */
+function VisualElementContent({ Renderer, reactPanel, ...props }: VisualElementContentProps) {
+  if (!Renderer || !reactPanel) {
+    return <div role="status">Unknown element: {props.element.type}</div>;
+  }
+  return <Renderer {...props} reactPanel={reactPanel} preview={false} />;
+}

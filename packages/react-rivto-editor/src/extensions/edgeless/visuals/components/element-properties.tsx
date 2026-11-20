@@ -1,7 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, type ComponentType } from "react";
-import type { ElementPropertiesProps } from "../../../../managers/elements/types";
-import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
-import { isNodeLike } from "../../../../dom/dom-nodes";
+import { useEffect, useId, useLayoutEffect, useSyncExternalStore } from "react";
+import type { ElementPropertiesPanelProps } from "./types";
+import { useReactPanelContext } from "../../../../hooks/editor/use-react-panel-context";
 import { EdgelessPropertiesPanel } from "../../../../components/edgeless/properties-panel";
 
 /**
@@ -10,6 +9,10 @@ import { EdgelessPropertiesPanel } from "../../../../components/edgeless/propert
  * selection change, or unmount. Escape cancels the pending preview. The property component
  * receives the owning panel and callbacks backed by shared operations rather than creating another canvas state.
  * @param props - Stable selection identity, title, registered contents, and mounted canvas operations.
+ * @param props.ids - Selected element identities whose property previews are edited.
+ * @param props.title - Label shown in the properties panel.
+ * @param props.component - Registered controls for the selected element type.
+ * @param props.operations - Borrowed canvas operations for preview and commit.
  * @returns Right-side property panel with shared chrome and editing lifecycle, or null
  * when there is no receiving React panel or no selected records remain.
  * @throws During preview/commit callbacks if selected targets or their properties fail validation.
@@ -19,36 +22,38 @@ export function ElementProperties({
   title,
   component: Properties,
   operations,
-}: {
-  readonly ids: readonly string[];
-  readonly title: string;
-  readonly component: ComponentType<ElementPropertiesProps>;
-  readonly operations: EdgelessOperations;
-}) {
+}: ElementPropertiesPanelProps) {
   const selectionKey = JSON.stringify(ids);
-  const panelRef = useRef<HTMLDivElement | null>(null);
+  const { reactPanel: panel } = useReactPanelContext();
+  const inputRoot = useSyncExternalStore(
+    panel.subscribeAvailability,
+    () => panel.inputRoot,
+    () => undefined,
+  );
+  const panelId = useId();
   // Commit before the canvas owner releases its passive subscriptions and previews.
   useLayoutEffect(() => {
-    const view = panelRef.current?.ownerDocument.defaultView;
-    if (!view) {
+    if (!inputRoot || !operations.reactPanel) {
       return;
     }
-    const commit = (event: PointerEvent) => {
-      if (isNodeLike(event.target) && panelRef.current?.contains(event.target)) {
+    const release = inputRoot.observeWindowInput("pointerdown", "capture", (input) => {
+      if (input.target?.hasAncestor(`[id=${JSON.stringify(panelId)}]`)) {
         return;
       }
       if (operations.hasPropertyPreview()) {
         operations.commitPropertyPreview();
       }
-    };
-    view.addEventListener("pointerdown", commit, true);
+    });
     return () => {
-      view.removeEventListener("pointerdown", commit, true);
-      if (operations.hasPropertyPreview()) {
-        operations.commitPropertyPreview();
+      try {
+        release();
+      } finally {
+        if (operations.hasPropertyPreview()) {
+          operations.commitPropertyPreview();
+        }
       }
     };
-  }, [operations, selectionKey]);
+  }, [inputRoot, operations, panelId, selectionKey]);
   useEffect(
     () =>
       (operations.reactPanel ?? operations.runtime).keyboard.register(
@@ -57,15 +62,14 @@ export function ElementProperties({
           keys: ["Escape"],
           mode: "edgeless",
           priority: 50,
-          when: ({ raw }) =>
-            isNodeLike(raw.target) && Boolean(panelRef.current?.contains(raw.target)),
+          when: ({ targetHasAncestor }) => targetHasAncestor(`#${CSS.escape(panelId)}`),
         },
         () => {
           operations.discardPropertyPreview();
           return true;
         },
       ),
-    [operations],
+    [operations, panelId],
   );
   const elements = ids.flatMap((id) => operations.getRenderedElement(id) ?? []);
   const reactPanel = operations.reactPanel;
@@ -78,10 +82,10 @@ export function ElementProperties({
   };
   return (
     <EdgelessPropertiesPanel
+      id={panelId}
       title={title}
       count={elements.length}
       ariaLabel="Visual properties"
-      panelRef={panelRef}
       onClose={() => operations.clearSelection()}
     >
       <Properties

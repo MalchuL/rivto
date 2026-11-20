@@ -160,6 +160,10 @@ CanvasPanTool for primary-pointer panning. Subclass ReactCanvasTool from /react
 when a tool renders React preview content. For icons, use a registry parameterized
 with ReactCanvasToolRegistration and ReactCanvasToolGroupEntry. Register React icon content; hosts
 with their own named icons supply CanvasToolbar's Button component.
+Custom toolbar buttons invoke `onActivate` without forwarding a browser event,
+render `toolId` in the exported `CANVAS_TOOL_ATTRIBUTE` on the button for
+preset input routing, and map `menuId` and `menuOpen` to accessible menu
+attributes. The default `CanvasToolButton` implements this contract.
 
 CanvasEditorProvider connects the supplied CanvasEditor, which owns source and
 tool observation and disposal of local instances. It disconnects on unmount and
@@ -167,8 +171,9 @@ permits remount; call editor.dispose() only when permanently discarding the edit
 pointer capture, cancellation and preview rendering to the shared implementation;
 applications with their own input routing can reuse useCanvasToolGesture.
 
-renderGroup, getButtonProps and renderLayout bind application-specific group
-controls, placement and chrome. The registry and context preserve extended
+renderGroup and renderLayout bind application-specific group controls and chrome.
+Tool registrations may supply a button class through `className`; placement
+interactions use normalized canvas input. The registry and context preserve extended
 registration types. See `demo/canvas-demo-tools.tsx` for a runnable independent example and
 `packages/react-rivto-editor/src/managers/edgeless-tools/` for Rivto integration.
 The historical `dev_notes/canvas-tools.md` in the source worktree records the
@@ -195,6 +200,13 @@ releases listeners, capture and focus pins on disconnect. The host still renders
 its scene and chooses its transform controls; a second non-React rendering engine
 is not supplied by this package.
 
+CanvasToolGesture accepts copied CanvasPointerInput values. Pointer-down also
+supplies a capture capability returning a disposer and a default-prevention
+capability; the browser adapter retains the event and capture element. Its
+CanvasPointerNormalizer receives copied coordinates and modifiers, without a
+native pointer event. Capture is released on completion, cancellation, and
+failure after admission.
+
 See `demo/canvas-demo-editor.ts` for the application class and the local migration
 plan for ownership, Rivto scenarios, lifecycle failure behavior and extension
 boundaries. The source worktree's `dev_notes/edgeless-editor-api.md` records the
@@ -203,18 +215,18 @@ original design; it is not required to run or customize this package.
 ## Mounted browser view
 
 `CanvasEditor` owns scene/source/tool lifetime. `CanvasViewport` from
-`@chulane/rivto-edgeless/browser` owns the separate DOM attachment: `layers.get()` is
-`null` or `{ root, plane }`. `attach(root, plane)` returns an attachment-specific
-cleanup; it rejects concurrent mounts and does not dispose the scene on detach.
-Imperative browser adapters can use `CanvasViewport.forElement(element)` to find
-the nearest mounted world layer without relying on application selectors. This is the single DOM-to-scene lookup;
-input connection does not create or destroy the viewport association.
+`@chulane/rivto-edgeless/browser` owns the separate DOM attachment.
+`attach(root, plane)` returns an attachment-specific cleanup; it rejects concurrent
+mounts and does not dispose the scene on detach. `isAttached()` and
+`subscribeAttachment()` expose attachment state without returning DOM elements.
+Input connection does not create or destroy the viewport association.
 
 `CanvasEditorProvider` supplies this browser owner separately from the core
-editor. `CanvasView` attaches its actual layers. `useCanvasViewportLayers()` from
+editor. `CanvasView` attaches its actual layers. `useCanvasViewportAttached()` from
 `@chulane/rivto-edgeless/react` observes mount/unmount, including for sibling extension
-components inside the provider. It returns `null` during SSR. Camera and preview
-updates do not change this snapshot. Standalone views provide their own owner.
+components inside the provider. It returns `false` during SSR. Camera and preview
+updates do not change this state. `CanvasWorldPortal` renders content into the
+world layer without exposing its element. Standalone views provide their own owner.
 
 `canvas.canTransform("move" | "resize" | "rotate", ids?)` checks every requested
 source object (current selection by default). Empty or unknown selections return
@@ -223,12 +235,14 @@ checks. Rivto remains responsible for projecting group and absolute-geometry
 policies. See `dev_notes/canvas-react-integration.md` in the source worktree for the
 ownership matrix and integration rationale.
 
-## Native event registrations
+## Input registrations
 
-`CanvasViewport.events` owns `CanvasEvents`. Register native inputs independently
+`CanvasViewport.events` owns `CanvasEvents`. Register normalized inputs independently
 of attachment; `viewport.attach(root, plane)` binds them to that root's document
 and window. Detach releases listeners while retaining registrations for remount.
-Keep each registration disposer with the extension that installed it.
+Keep each registration disposer with the extension that installed it. Handlers receive
+normalized data and target/default-prevention capabilities, not native events or
+HTML elements. Target and cancellation capabilities apply during the current delivery.
 
 `useCanvasViewport()` exposes read-only layers and `events.register` to React
 extensions, without exposing attachment. For example, a component inside
@@ -271,11 +285,13 @@ renderers, overlays and input registrations without importing document-model.
 
 ## Host-driven marquee selection
 
-`CanvasMarquee` from `@chulane/rivto-edgeless/browser` owns drag slop, captured
+`CanvasMarquee` from `@chulane/rivto-edgeless` owns drag slop, captured
 client-coordinate bounds, inclusive hit testing, and an imperative rectangle.
-The host supplies a detached styled rectangle and a `CanvasMarqueeSource` with
-`capture` and `select`. `capture` runs once after the drag crosses three CSS pixels;
-use `CanvasMarquee.snapshot(viewport, canvas)` to include offscreen scene objects.
+The host supplies an occurrence-bound Root rectangle overlay and a `CanvasMarqueeSource`
+with `capture` and `select`. `capture` runs once after the drag crosses three CSS pixels;
+use `CanvasMarquee.snapshot(region, canvas)` to include offscreen scene objects.
+The captured region must belong to the same Root as the overlay; the snapshot returns
+undefined if that occurrence is no longer active.
 Hosts may map hit IDs to persisted groups before returning the captured hits.
 
 Call `start` for an admitted pointerdown, `move` for pointer samples, and `stop`

@@ -1,7 +1,7 @@
 import { focusSelectionCaret } from "../../../managers";
 import { deletePanelSelection } from "../selection/selection-deletion";
 import { createStructuralSelection } from "@chulane/rivto";
-import type { ReactEditorApi } from "../../../editor/types";
+import type { ReactEditorExtensionApi } from "../../../editor/types";
 import type { BlockContextMenuContext } from "../../../managers/block-context-menu/types";
 import { assertBlockMenuTargets } from "../../../managers/block-context-menu/targets";
 import { writeClipboardBundle } from "../../../managers/clipboard/browser-clipboard";
@@ -13,6 +13,8 @@ import { writeClipboardBundle } from "../../../managers/clipboard/browser-clipbo
  * cut, targets and a freshly copied bundle are checked after the asynchronous
  * write. If the source changed, the copied data remains on the clipboard while
  * the document is left intact. Successful deletion uses container-aware policies.
+ * Cut also retains its invoking registration across the write; replacement
+ * rejects the action before deleting, while leaving the copied data available.
  *
  * @param context - Invoking panel and captured ancestor-deduplicated root IDs.
  * @param cut - Whether to delete the unchanged source after copying it.
@@ -22,19 +24,26 @@ import { writeClipboardBundle } from "../../../managers/clipboard/browser-clipbo
  */
 async function copyBlocks(context: BlockContextMenuContext, cut: boolean): Promise<void> {
   const { reactPanel, rootIds } = context;
+  const inputRoot = reactPanel.inputRoot;
   const bundle = reactPanel.clipboard.copy(createStructuralSelection([...rootIds]));
   if (!bundle) {
     return;
   }
-  await writeClipboardBundle(reactPanel.editor, bundle);
+  if (!inputRoot?.isAttached()) {
+    throw new Error("The invoking panel is no longer mounted");
+  }
+  await writeClipboardBundle(reactPanel.editor, bundle, inputRoot);
   if (cut) {
+    if (!inputRoot?.isAttached() || reactPanel.inputRoot !== inputRoot) {
+      throw new Error("The invoking panel is no longer mounted");
+    }
     assertBlockMenuTargets(context);
     // Do not remove edits that arrived while the clipboard permission prompt was open.
     const current = reactPanel.clipboard.copy(createStructuralSelection([...rootIds]));
     if (JSON.stringify(current) !== JSON.stringify(bundle)) {
       throw new Error("Blocks changed while copying; copied content was kept and nothing was cut");
     }
-    deleteMenuBlocks(context);
+    deleteMenuBlocks(context, inputRoot);
   }
 }
 
@@ -48,7 +57,7 @@ async function copyBlocks(context: BlockContextMenuContext, cut: boolean): Promi
  * @returns No value; registration cleanup belongs to the active extension lifecycle.
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
-export function registerBlockClipboardActions(editor: ReactEditorApi): void {
+export function registerBlockClipboardActions(editor: ReactEditorExtensionApi): void {
   for (const [id, title, cut] of [
     ["copy", "Copy", false],
     ["cut", "Cut", true],
@@ -86,7 +95,7 @@ export function registerBlockClipboardActions(editor: ReactEditorApi): void {
  * @returns No value; registration cleanup belongs to the active extension lifecycle.
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
-export function registerBlockListActions(editor: ReactEditorApi): void {
+export function registerBlockListActions(editor: ReactEditorExtensionApi): void {
   editor.blockContextMenu.register({ id: "list", title: "List style", kind: "submenu", order: 20 });
   for (const [type, title] of [
     ["list", "Ordinary list"],
@@ -164,7 +173,7 @@ export function setSubtreesCollapsed(context: BlockContextMenuContext, collapsed
  * @returns No value; registration cleanup belongs to the active extension lifecycle.
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
-export function registerBlockCollapseActions(editor: ReactEditorApi): void {
+export function registerBlockCollapseActions(editor: ReactEditorExtensionApi): void {
   for (const [id, title, collapsed] of [
     ["collapse", "Collapse subtree", true],
     ["expand", "Expand whole subtree", false],
@@ -190,24 +199,39 @@ export function registerBlockCollapseActions(editor: ReactEditorApi): void {
  * The captured roots replace the current selection before container policies run.
  * After deletion, caret focus is restored when possible, otherwise the surface
  * root receives focus. A second caret restoration is scheduled only while the
- * resulting selection remains unchanged.
+ * resulting selection remains unchanged. A replaced attachment rejects the action
+ * before deletion or prevents later focus work, depending on when it was replaced.
  *
  * @param context - Invoking panel and ancestor-deduplicated roots to delete.
+ * @param inputRoot - Invoking registration, defaulting to the current registration for Delete;
+ * Cut supplies the registration captured before its asynchronous clipboard write.
  * @returns No value after deletion and deferred focus restoration are scheduled.
- * @throws If the panel has no mounted surface root or its deletion operations fail.
+ * @throws If the panel has no active surface registration or its deletion operations fail.
  */
-function deleteMenuBlocks(context: BlockContextMenuContext): void {
+function deleteMenuBlocks(
+  context: BlockContextMenuContext,
+  inputRoot = context.reactPanel.inputRoot,
+): void {
   const { reactPanel, rootIds } = context;
-  const root = reactPanel.getRoot();
-  if (!root) {
+  if (!inputRoot?.isAttached() || reactPanel.inputRoot !== inputRoot) {
     throw new Error("The invoking panel is no longer mounted");
   }
   reactPanel.selection.set(createStructuralSelection([...rootIds]));
-  deletePanelSelection(reactPanel, root);
-  if (!focusSelectionCaret(root, reactPanel.selection)) {
-    root.focus({ preventScroll: true });
+  if (!inputRoot.isAttached() || reactPanel.inputRoot !== inputRoot) {
+    throw new Error("The invoking panel is no longer mounted");
   }
-  reactPanel.selection.scheduleIfSelectionUnchanged(() =>
-    focusSelectionCaret(root, reactPanel.selection),
-  );
+  deletePanelSelection(reactPanel);
+  if (!inputRoot.isAttached() || reactPanel.inputRoot !== inputRoot) {
+    return;
+  }
+  if (!focusSelectionCaret(reactPanel.selection)) {
+    inputRoot.focus();
+  }
+  if (inputRoot.isAttached() && reactPanel.inputRoot === inputRoot) {
+    reactPanel.selection.scheduleIfSelectionUnchanged(() => {
+      if (inputRoot.isAttached() && reactPanel.inputRoot === inputRoot) {
+        focusSelectionCaret(reactPanel.selection);
+      }
+    });
+  }
 }

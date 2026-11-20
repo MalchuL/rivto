@@ -3,12 +3,17 @@ import {
   BlockDropLayoutContext,
   useBlockDropLayout,
 } from "../../drag-and-drop/block-drop-layout";
-import type { BlockDropLayoutRegistration } from "../../../editor/drag-and-drop/types";
+import type {
+  BlockDropLayoutRegistration,
+  BlockDropTargetsApi,
+} from "../../../editor/drag-and-drop/types";
+import { BlockEditorContext } from "./block-editor-context";
 import { BlockRootNode } from "../../drag-and-drop/block-root-node";
 import { BlockDropExclude } from "../../drag-and-drop/block-drop-exclude";
 import { BLOCK_EDITOR_CLASSES } from "../../block-editor-classes";
 import { BlockItemIdentityContext } from "../block-layout/block-item-context";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import { getBrowserElementIdentity } from "@chulane/rivto-root/browser";
 import {
   useCallback,
   useContext,
@@ -21,10 +26,9 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useBlockEditorController } from "../../hooks/use-block-editor-controller";
-import {
-  BlockVirtualizationController,
-  type BlockVirtualizationOptions,
-} from "../../../editor/virtualization/block-virtualization-controller";
+import { BlockVirtualizationController } from "../../../editor/virtualization/block-virtualization-controller";
+import { attachBlockVirtualization } from "../../../editor/virtualization/browser/attach-block-virtualization";
+import type { BlockVirtualizationOptions } from "../../../editor/virtualization/types";
 
 /** Display-list windowing; omitted settings retain ordinary complete rendering. */
 export interface BlockTreeProps {
@@ -78,6 +82,11 @@ interface BlockTreeContentProps extends BlockTreeProps {
  */
 function BlockTreeContent({ blockIds, virtualization }: BlockTreeContentProps) {
   const { blocks, selection } = useBlockEditorController().adapter;
+  const editor = useContext(BlockEditorContext);
+  if (!editor) {
+    throw new Error("Block editor hooks require a BlockEditor");
+  }
+  const registrations = editor.virtualization;
   const host = useRef<HTMLDivElement>(null);
   const [margin, setMargin] = useState(0);
   const [revision, invalidate] = useReducer((value: number) => value + 1, 0);
@@ -123,7 +132,10 @@ function BlockTreeContent({ blockIds, virtualization }: BlockTreeContentProps) {
     rangeExtractor,
   });
   controller.setBlockIds(blockIds);
-  useLayoutEffect(() => controller.attach(host.current!, setMargin), [controller]);
+  useLayoutEffect(
+    () => attachBlockVirtualization(host.current!, setMargin, registrations, controller),
+    [controller, registrations],
+  );
   useLayoutEffect(() => controller.reconcileListSubscriptions(), [controller, blockIds]);
   const items = enabled
     ? virtualizer.getVirtualItems()
@@ -183,20 +195,24 @@ function useBlockTreeRootLayout(
   host: RefObject<HTMLDivElement | null>,
   getItems: BlockDropLayoutRegistration["getItems"],
 ): void {
-  const editor = useBlockEditorController();
+  const editor = useContext(BlockEditorContext);
+  if (!editor) {
+    throw new Error("Block editor hooks require a BlockEditor");
+  }
+  const targets: Pick<BlockDropTargetsApi, "registerLayout"> = editor.dropTargets;
   const boundaries = useContext(BlockDropBoundaryContext);
   useLayoutEffect(() => {
     const element = host.current?.parentElement;
     if (!element?.hasAttribute("data-rivto-block-editor")) {
       return;
     }
-    return editor.dropTargets.registerLayout({
-      element,
+    return targets.registerLayout({
+      identity: getBrowserElementIdentity(element),
       axis: "vertical",
       gaps: true,
       virtual: true,
       boundaries,
       getItems,
     });
-  }, [editor, host, getItems, boundaries]);
+  }, [targets, host, getItems, boundaries]);
 }

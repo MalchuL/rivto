@@ -1,10 +1,12 @@
-import { EdgelessCanvasAdapter } from "../edgeless/canvas-adapter";
+import type { PageCanvasAttachment, PageCanvasMount, PageNavigationRoot } from "./types";
+import { BLOCK_ID_ATTRIBUTE } from "../../constants";
 import {
   BlockNavigation,
-  BlockVirtualizationController,
   type BlockEditorAdapter,
+  type BlockEditorController,
+  type BlockBrowserSelectionApi,
 } from "@chulane/rivto-page";
-import { PANEL_SELECTOR, PanelDOM } from "../../panels/panel-dom";
+import { PANEL_SELECTOR } from "../../panels/panel-dom";
 
 /**
  * Page-local bridge from DOM navigation and selection to unmounted root blocks.
@@ -19,8 +21,24 @@ import { PANEL_SELECTOR, PanelDOM } from "../../panels/panel-dom";
 
 /** Page-local operations needed by commands that focus a currently unmounted root. */
 export interface PageNavigationApi {
+  /**
+   * Captures a check for this exact navigation attachment.
+   *
+   * @returns A check that becomes false after removal or replacement, including on the same surface.
+   * @throws Propagates attachment-check failures when the returned check runs.
+   */
+  captureAttachment(): () => boolean;
+  /**
+   * Checks whether this navigation still owns its mounted occurrence.
+   *
+   * @returns False after detachment or replacement by another controller.
+   * @throws Propagates the borrowed Root's attachment check.
+   */
+  isAttached(): boolean;
   /** Borrowed model order and text metadata for Page DOM conversion. */
   readonly selection: PageNavigationSource["selection"];
+  /** Occurrence-bound caret focus without selection attachment ownership. */
+  readonly browserSelection: Pick<BlockBrowserSelectionApi, "focusBlock">;
   /**
    * Pins the top-level block containing each requested block in the virtualized
    * range. React synchronously mounts missing block DOM before callers resolve
@@ -77,10 +95,11 @@ interface PageNavigationSource {
 
 /** Panel-owned navigation bridge; the Page view retains ownership of its virtualizer. */
 export class PageNavigationController extends BlockNavigation implements PageNavigationApi {
-  private static readonly controllers = new WeakMap<HTMLElement, PageNavigationController>();
-  private root: HTMLElement | null = null;
+  private static readonly controllers = new WeakMap<object, PageNavigationController>();
+  private occurrence: PageNavigationRoot | undefined;
+  private canvasAttachment: PageCanvasAttachment | undefined;
   private suspensions = 0;
-  private previousOverflowAnchor = "";
+  private releaseScrollAnchor?: () => void;
   /** Identity distinguishes remounts even when React reuses the same DOM root. */
   private attachment = {};
 
@@ -88,23 +107,66 @@ export class PageNavigationController extends BlockNavigation implements PageNav
    * Borrows addressed hierarchy and the panel's canonical selection projection.
    *
    * @param adapter - Existing Page adapter; neither model nor selection is copied or destroyed.
+   * @param browserSelection - Borrowed occurrence-bound caret focus capability.
+   * @param virtualization - Page-owned lookup for the current mounted windowing view.
    */
-  constructor(adapter: PageNavigationSource) {
+  constructor(
+    adapter: PageNavigationSource,
+    readonly browserSelection: Pick<BlockBrowserSelectionApi, "focusBlock">,
+    private readonly virtualization: Pick<BlockEditorController["virtualization"], "get">,
+  ) {
     super(adapter.blocks, adapter.selection);
   }
 
   /**
-   * Finds navigation operations within the exact displayed Page occurrence.
+   * Finds navigation operations for a displayed Page's opaque surface identity.
    *
-   * @param element - Surface or descendant seeking its owning Page view.
-   * @returns Borrowed navigation operations, or undefined outside an attached Page.
+   * @param identity - Opaque identity of the displayed Page surface.
+   * @returns Borrowed navigation operations, or undefined when not registered.
    */
-  static getForElement(element: HTMLElement): PageNavigationApi | undefined {
-    const root = element.closest<HTMLElement>("[data-rivto-block-editor]");
-    if (!root || element.closest(PANEL_SELECTOR) !== root.closest(PANEL_SELECTOR)) {
-      return undefined;
+  static getForIdentity(
+    identity: object,
+  ):
+    | Pick<PageNavigationApi, "captureAttachment" | "mountFirstOrLastBlock" | "browserSelection">
+    | undefined {
+    return this.controllers.get(identity);
+  }
+
+  /**
+   * Checks whether this controller still owns its mounted Page occurrence.
+   *
+   * A later controller can replace its registration on the same surface. If a
+   * Root was supplied, it must also remain attached to its owning panel.
+   *
+   * @returns False while unmounted, replaced, or after the borrowed Root detaches.
+   * @throws Propagates the borrowed Root's attachment check.
+   */
+  isAttached(): boolean {
+    const occurrence = this.occurrence;
+    const identity = occurrence?.getElementIdentity();
+    if (!occurrence || !identity || PageNavigationController.controllers.get(identity) !== this) {
+      return false;
     }
-    return this.controllers.get(root);
+    const attached = occurrence.isAttached();
+    return (
+      attached &&
+      this.occurrence === occurrence &&
+      this.registryIdentity() === identity &&
+      PageNavigationController.controllers.get(identity) === this
+    );
+  }
+
+  /**
+   * Captures a check for this exact navigation attachment.
+   *
+   * A replacement on the same surface does not reactivate the captured check.
+   *
+   * @returns A check that reports whether this attachment remains current.
+   * @throws Propagates attachment-check failures when the returned check runs.
+   */
+  captureAttachment(): () => boolean {
+    const attachment = this.attachment;
+    return () => this.attachment === attachment && this.isAttached();
   }
 
   /**
@@ -113,24 +175,62 @@ export class PageNavigationController extends BlockNavigation implements PageNav
    * Old suspension disposers cannot affect a new attachment, even to the same element.
    * Unmarked roots are ignored; canvas roots delegate mounting to their card projection.
    *
-   * @param root - Panel root, or null during detach and destruction.
+   * @param occurrence - Borrowed Root for the panel, or null during detach and destruction.
    * @returns The bridge belongs only to the current Page root.
+   * @throws Propagates browser attribute or style failures.
    */
-  setRoot(root: HTMLElement | null): void {
-    if (this.root) {
-      if (PageNavigationController.controllers.get(this.root) === this) {
-        PageNavigationController.controllers.delete(this.root);
+  setRoot(occurrence: PageNavigationRoot | null): void {
+    const previous = this.occurrence;
+    const previousAttachment = this.attachment;
+    if (previous) {
+      const identity = previous.getElementIdentity();
+      if (this.occurrence !== previous || this.attachment !== previousAttachment) {
+        return;
       }
-      if (this.suspensions) {
-        this.root.style.overflowAnchor = this.previousOverflowAnchor;
+      if (identity && PageNavigationController.controllers.get(identity) === this) {
+        PageNavigationController.controllers.delete(identity);
       }
     }
+    this.occurrence = undefined;
     this.suspensions = 0;
     this.attachment = {};
-    this.root = root?.hasAttribute("data-rivto-block-editor") ? root : null;
-    if (this.root) {
-      PageNavigationController.controllers.set(this.root, this);
+    const attachment = this.attachment;
+    const release = this.releaseScrollAnchor;
+    this.releaseScrollAnchor = undefined;
+    release?.();
+    if (this.attachment !== attachment) {
+      return;
     }
+    const marker = occurrence?.readAttribute("data-rivto-block-editor");
+    if (this.attachment !== attachment) {
+      return;
+    }
+    this.occurrence = marker !== undefined ? (occurrence ?? undefined) : undefined;
+    if (this.occurrence) {
+      const identity = this.occurrence.getElementIdentity();
+      if (this.attachment === attachment && this.occurrence === occurrence) {
+        PageNavigationController.controllers.set(identity, this);
+      }
+    }
+  }
+
+  /**
+   * Registers the current canvas surface's card-mounting capability.
+   *
+   * A replacement belongs to its own surface lifetime; a stale disposer cannot
+   * remove a newer registration. The canvas source remains owned by its surface.
+   *
+   * @param source - Borrowed card-mounting capability for this panel occurrence.
+   * @returns Idempotent disposer releasing only this registration.
+   */
+  attachCanvas(source: PageCanvasMount): () => void {
+    const attachment = { source };
+    this.canvasAttachment = attachment;
+    return () => {
+      if (this.canvasAttachment === attachment) {
+        this.canvasAttachment = undefined;
+      }
+    };
   }
 
   /**
@@ -142,19 +242,19 @@ export class PageNavigationController extends BlockNavigation implements PageNav
    * @throws Propagates model reads and React commit failures.
    */
   override mountBlocks(blockIds: readonly string[], options?: PageMountOptions): void {
-    const root = this.root;
+    const root = this.occurrence;
     if (!root) {
       return;
     }
-    const view = BlockVirtualizationController.getForRoot(root);
+    const view = this.virtualization.get(root);
     if (view) {
       view.mountBlocks(blockIds);
     } else {
-      EdgelessCanvasAdapter.mountBlocksForElement(root, blockIds);
+      this.canvasAttachment?.source.mountBlocks(blockIds, root);
     }
     const id = blockIds.at(-1);
     if (options?.scroll !== false && id) {
-      new PanelDOM(root).findBlock(id)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      root.scrollFirstMatchingRegionIntoView(BLOCK_ID_ATTRIBUTE, id, PANEL_SELECTOR);
     }
   }
 
@@ -164,11 +264,18 @@ export class PageNavigationController extends BlockNavigation implements PageNav
    * @returns Idempotent cleanup restoring anchoring when the last current suspension ends.
    */
   suspendScrollAdjustments(): () => void {
-    const root = this.root;
+    const root = this.occurrence;
     const attachment = this.attachment;
-    if (root && this.suspensions++ === 0) {
-      this.previousOverflowAnchor = root.style.overflowAnchor;
-      root.style.overflowAnchor = "none";
+    if (root && this.suspensions === 0) {
+      const release = root.suspendScrollAnchoring();
+      if (this.attachment !== attachment || this.occurrence !== root) {
+        release();
+        return () => {};
+      }
+      this.releaseScrollAnchor = release;
+    }
+    if (root) {
+      this.suspensions += 1;
     }
     let active = true;
     return () => {
@@ -177,8 +284,22 @@ export class PageNavigationController extends BlockNavigation implements PageNav
       }
       active = false;
       if (--this.suspensions === 0) {
-        root.style.overflowAnchor = this.previousOverflowAnchor;
+        const release = this.releaseScrollAnchor;
+        this.releaseScrollAnchor = undefined;
+        release?.();
       }
     };
+  }
+
+  /**
+   * Resolves the current registration key without retaining a second Root reference.
+   *
+   * The identity belongs to the surface, while the attachment token separately
+   * distinguishes later Root occurrences mounted on the same element.
+   *
+   * @returns Opaque surface identity, or undefined when unmounted.
+   */
+  private registryIdentity(): object | undefined {
+    return this.occurrence?.getElementIdentity();
   }
 }

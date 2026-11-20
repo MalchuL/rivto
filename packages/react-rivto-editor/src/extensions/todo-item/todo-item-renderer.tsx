@@ -1,5 +1,5 @@
 import { CheckIcon, EllipsisIcon, MinusIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { NativeSelect, NativeSelectOption } from "../../components/ui/native-select";
@@ -39,24 +39,15 @@ export function TodoItem({
   propertiesModal: PropertiesModal = DefaultTodoItemPropertiesModal,
 }: TodoItemComponentProps) {
   const reactPanel = useReactPanel();
-  const editing = useBlockEditing<TodoItemProps>(blockId);
   const actions = useMemo(() => new TodoItemActions(reactPanel, blockId), [reactPanel, blockId]);
+  const runTextInput = useCallback((apply: () => void) => actions.commitText(apply), [actions]);
+  const editing = useBlockEditing<TodoItemProps>(blockId, { runTextInput });
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const block = editing.block as TodoItemBlock | undefined;
   if (!block) {
     return null;
   }
 
-  /** Updates content and its timestamp inside one editor batch. */
-  const updateName = (event: Parameters<typeof editing.attributes.onInput>[0]): void => {
-    actions.commitText(() => editing.attributes.onInput(event));
-  };
-  /** Completes IME input and advances its timestamp atomically. */
-  const finishComposition = (
-    event: Parameters<typeof editing.attributes.onCompositionEnd>[0],
-  ): void => {
-    actions.commitText(() => editing.attributes.onCompositionEnd(event));
-  };
   /** Closes the modal and commits a valid changed patch. */
   const closeProperties = (patch?: TodoItemPropertiesPatch): void => {
     setPropertiesOpen(false);
@@ -98,8 +89,6 @@ export function TodoItem({
           className={TODO_NAME_CLASS}
           role="textbox"
           aria-label="TODO item name"
-          onInput={updateName}
-          onCompositionEnd={finishComposition}
         />
         <Input
           {...editorControlProps}

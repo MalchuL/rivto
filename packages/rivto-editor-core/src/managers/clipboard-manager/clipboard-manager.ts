@@ -24,7 +24,7 @@ import {
   type PastePlacement,
 } from "./strategies";
 import { PasteStrategyRegistry } from "./strategies";
-import type { DocumentEditorAPI } from "../../editor/types";
+import type { DocumentEditorOperations } from "../../editor/types";
 import type { ClipboardManagerApi } from "../types";
 
 /** Framework-neutral clipboard operations over blocks with per-block offsets. */
@@ -36,7 +36,7 @@ export class ClipboardManager implements ClipboardManagerApi {
    * Creates the clipboard owner and registers core paste strategies.
    * @param editor - Owning editor providing block and selection operations.
    */
-  constructor(private readonly editor: DocumentEditorAPI) {
+  constructor(private readonly editor: DocumentEditorOperations) {
     this.pasteStrategies.register(
       PRESERVE_NEWLINES_PASTE_STRATEGY_ID,
       new PreserveNewlinesPasteStrategy(editor),

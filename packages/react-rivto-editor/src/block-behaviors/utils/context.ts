@@ -1,12 +1,16 @@
 /**
  * Builds the snapshots behavior methods receive from page and outline callers.
- * Keyboard methods include DOM state; outline methods use shallow block fields.
+ * Keyboard methods use attachment capabilities; outline methods use shallow block fields.
  *
  * @module
  */
 import type { Selection } from "@chulane/rivto";
-import type { ReactPanelApi } from "../../panels/types";
-import type { BlockBehaviorContext, BlockOutlineContext } from "../types";
+import type {
+  BlockOutlinePanel,
+  BlockOutlineContext,
+  BlockSnapshotContext,
+  BlockReadPanel,
+} from "../types";
 
 /**
  * Resolves shallow block fields and the current parent for an outline operation.
@@ -20,7 +24,7 @@ import type { BlockBehaviorContext, BlockOutlineContext } from "../types";
  * @returns Context for an existing block, or undefined for a missing identifier or block.
  */
 export function createBlockOutlineContext(
-  reactPanel: ReactPanelApi,
+  reactPanel: BlockOutlinePanel,
   blockId: string | undefined,
   selection: Selection | undefined,
 ): BlockOutlineContext | undefined {
@@ -37,20 +41,19 @@ export function createBlockOutlineContext(
 }
 
 /**
- * Resolves a live block into a behavior context, or `undefined` when it is missing.
+ * Resolves a full block snapshot and captured selection for a block behavior.
  *
- * @param reactPanel - Editor view providing the document and selection.
+ * @param reactPanel - Live occurrence supplying the block and parent hierarchy.
  * @param blockId - Placed block whose behavior will run.
- * @param root - Active surface or edgeless card.
- * @param selection - Portable selection captured for this event.
- * @returns Context for that block, or `undefined` when it is unplaced.
+ * @param selection - Portable selection captured for the operation, if any.
+ * @returns Context for the block, or undefined when it is unplaced.
+ * @throws Propagates block and parent lookup failures.
  */
-export function createBlockBehaviorContext(
-  reactPanel: ReactPanelApi,
+export function createBlockSnapshotContext<Panel extends BlockReadPanel>(
+  reactPanel: Panel,
   blockId: string,
-  root: HTMLElement,
   selection?: Selection,
-): BlockBehaviorContext | undefined {
+): BlockSnapshotContext<Panel> | undefined {
   const block = reactPanel.blocks.getBlock(blockId);
   if (!block) {
     return undefined;
@@ -60,6 +63,5 @@ export function createBlockBehaviorContext(
     block,
     parentId: reactPanel.blocks.getParentId(block.id) ?? null,
     selection,
-    root,
   };
 }

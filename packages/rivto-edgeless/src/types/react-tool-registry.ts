@@ -8,6 +8,8 @@ import type {
 /** Application tool metadata with React-renderable icon content. */
 export interface ReactCanvasToolEntry extends CanvasToolEntry {
   readonly icon?: ReactNode;
+  /** Optional presentation class applied to this tool's toolbar button. */
+  readonly className?: string;
 }
 
 /** Application group metadata with React-renderable icon content. */

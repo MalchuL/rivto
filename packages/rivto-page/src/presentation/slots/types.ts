@@ -1,4 +1,6 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
+import type { BlockPresentationAttributes } from "../types";
+import type { BlockLayoutInputBinding } from "../components/block-layout/types";
 import type { BlockEditorNodeSnapshot } from "../../adapter/types";
 import type { BlockEditorNodeApi } from "../../editor/blocks/block-editor-node-api";
 
@@ -95,4 +97,26 @@ export interface BlockSlotRegistration {
 export interface BlockSlotEntry extends BlockSlotRegistration {
   /** Registry-local key assigned once per installation, including duplicate components. */
   readonly id: number;
+}
+
+/** Current bounded owner context plus a requested position and registry snapshot. */
+export interface BlockSlotHostProps extends BlockSlotProps {
+  readonly attributes?: Omit<BlockPresentationAttributes, "children">;
+  /** Optional normalized input binding for this mounted slot. */
+  readonly bindInput?: BlockLayoutInputBinding;
+  readonly position: BlockSlotPosition;
+  readonly entries: readonly BlockSlotEntry[];
+}
+
+/** Current bounded owner context plus main renderer output and registry snapshot. */
+export interface BlockSlotsProps extends BlockSlotProps {
+  readonly entries: readonly BlockSlotEntry[];
+  readonly children: ReactNode;
+}
+
+/** Position and optional native styling for an explicitly composed slot. */
+export interface BlockSlotPlacementProps extends Omit<BlockPresentationAttributes, "children"> {
+  readonly position: BlockSlotPosition;
+  /** Installs normalized input for this mounted slot; keep the callback stable to avoid reconnecting. */
+  readonly bindInput?: BlockLayoutInputBinding;
 }

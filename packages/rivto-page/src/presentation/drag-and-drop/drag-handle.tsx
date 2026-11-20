@@ -1,29 +1,9 @@
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { useDragHandleClick } from "./use-drag-handle-click";
+import { type ButtonHTMLAttributes } from "react";
+import { useDragHandleBinding } from "./browser/use-drag-handle-binding";
+import { useDragHandleClick } from "./browser/use-drag-handle-click";
+import type { DragHandleProps } from "./types";
 
-/** Accessible handle capabilities; commands, artwork, and sensor attachment belong to the caller. */
-export interface DragHandleProps extends Omit<
-  ButtonHTMLAttributes<HTMLButtonElement>,
-  "onClick" | "onPointerDown" | "onContextMenu" | "onKeyDown"
-> {
-  readonly children?: ReactNode;
-  /** Finite positive excursion from pointer-down in viewport CSS pixels that prevents navigation, even after returning; defaults to 4. */
-  readonly clickMovementThreshold?: number;
-  /**
-   * Requests navigation when the handle receives an eligible click without default prevention.
-   *
-   * @returns Host navigation has been requested; omission leaves the handle navigation-free.
-   */
-  readonly onOpen?: () => void;
-  /**
-   * Opens host actions at browser context-menu coordinates.
-   *
-   * @param x - Viewport X coordinate in CSS pixels.
-   * @param y - Viewport Y coordinate in CSS pixels.
-   * @returns Host actions have been requested; omission leaves the native menu available.
-   */
-  readonly onMenu?: (x: number, y: number) => void;
-}
+export type { DragHandleProps } from "./types";
 
 /**
  * Renders a sensor-independent button separating navigation, menus, and drag activation.
@@ -41,15 +21,20 @@ export interface DragHandleProps extends Omit<
  * @param props.onOpen - Host navigation callback invoked by an eligible click without default prevention.
  * @param props.clickMovementThreshold - Positive excursion threshold in viewport CSS pixels; defaults to 4 and reaching it prevents pointer navigation for that press.
  * @param props.onMenu - Menu callback receiving viewport X and Y coordinates in CSS pixels.
- * @param ref - Optional drag sensor attachment forwarded to the button.
+ * @param props.bindHandle - Optional binding receiving the mounted handle's opaque identity.
  * @returns Accessible button with host artwork or the default four-dot grip.
  * @throws RangeError when clickMovementThreshold is not finite and positive.
  */
-export const DragHandle = forwardRef<HTMLButtonElement, DragHandleProps>(function DragHandle(
-  { onOpen, onMenu, children, clickMovementThreshold = 4, ...props },
-  ref,
-) {
+export function DragHandle({
+  onOpen,
+  onMenu,
+  bindHandle,
+  children,
+  clickMovementThreshold = 4,
+  ...props
+}: DragHandleProps) {
   const click = useDragHandleClick(clickMovementThreshold);
+  const handleRef = useDragHandleBinding(bindHandle);
   const events: ButtonHTMLAttributes<HTMLButtonElement> = {
     onPointerDown: click.onPointerDown,
     /**
@@ -70,8 +55,8 @@ export const DragHandle = forwardRef<HTMLButtonElement, DragHandleProps>(functio
      * Browser-generated context-menu events use this handler regardless of their
      * input source; it captures targets before focus moves into the menu.
      *
-     * @param event - Context-menu event supplying viewport coordinates.
-     * @returns Native propagation is stopped and the permitted host action is invoked.
+     * @param event - Context-menu event supplying viewport coordinates and the receiving handle.
+     * @returns When a menu callback exists, native propagation is stopped and the host action is invoked; otherwise the event is left unchanged.
      */
     onContextMenu: (event) => {
       if (!onMenu) {
@@ -79,14 +64,14 @@ export const DragHandle = forwardRef<HTMLButtonElement, DragHandleProps>(functio
       }
       event.preventDefault();
       event.stopPropagation();
-      onMenu?.(event.clientX, event.clientY);
+      onMenu(event.clientX, event.clientY);
     },
   };
   return (
     <button
       {...props}
       {...events}
-      ref={ref}
+      ref={handleRef}
       type="button"
       contentEditable={false}
       data-block-drag-handle="true"
@@ -103,4 +88,4 @@ export const DragHandle = forwardRef<HTMLButtonElement, DragHandleProps>(functio
       </span>
     </button>
   );
-});
+}

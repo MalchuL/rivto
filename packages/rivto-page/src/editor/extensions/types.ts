@@ -1,7 +1,7 @@
-import type { BlockEditorApi } from "../block-editor-api";
+import type { BlockEditorApi } from "../types";
 
 /** Reusable synchronous setup of presentation and behavior in a block editor. */
-export interface BlockEditorExtension {
+export interface BlockEditorExtension<CustomEvents extends object = object> {
   /**
    * Installs contributions and subscriptions for this editor instance.
    *
@@ -16,11 +16,11 @@ export interface BlockEditorExtension {
    * @returns Optional synchronous cleanup, called once on removal or destruction.
    * @throws Delegated setup failures; captured registrations are released before rethrow.
    */
-  setup(editor: BlockEditorApi): void | (() => void);
+  setup(editor: BlockEditorApi<CustomEvents>): void | (() => void);
 }
 
 /** Feature installation and explicit resource cleanup owned by one block editor. */
-export interface BlockEditorExtensionsApi {
+export interface BlockEditorExtensionsApi<CustomEvents extends object = object> {
   /**
    * Installs a unique feature and captures synchronous manager registrations.
    *
@@ -34,7 +34,7 @@ export interface BlockEditorExtensionsApi {
    * @returns Idempotent disposer uninstalling this feature and its owned resources.
    * @throws If destroyed, the ID is invalid/duplicate, or setup/cleanup fails.
    */
-  register(id: string, extension: BlockEditorExtension): () => void;
+  register(id: string, extension: BlockEditorExtension<CustomEvents>): () => void;
   /**
    * Adds cleanup to the editor and the currently active synchronous setup scope.
    *

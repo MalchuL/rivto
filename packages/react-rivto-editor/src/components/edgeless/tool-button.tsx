@@ -10,7 +10,8 @@
  * accessible label that doubles as the native tooltip.
  */
 import { editorControlProps } from "../../constants";
-import type { ComponentProps, ReactNode } from "react";
+import { CANVAS_TOOL_ATTRIBUTE } from "@chulane/rivto-edgeless/react";
+import type { EdgelessToolIcon, EdgelessToolButtonProps } from "./types";
 import { cn } from "cn";
 import {
   AlignCenterHorizontal,
@@ -52,45 +53,6 @@ import {
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Toggle } from "../ui/toggle";
-
-/** Icon names supported by the built-in edgeless tool button. */
-export type EdgelessToolIcon =
-  | "align-bottom"
-  | "align-center"
-  | "align-left"
-  | "align-middle"
-  | "align-right"
-  | "align-top"
-  | "back"
-  | "backward"
-  | "distribute-h"
-  | "distribute-v"
-  | "draw"
-  | "ellipse"
-  | "forward"
-  | "front"
-  | "group"
-  | "connector"
-  | "connector-curve"
-  | "connector-orthogonal"
-  | "connector-straight"
-  | "align-objects"
-  | "chevron-down"
-  | "chevron-up"
-  | "close"
-  | "eraser"
-  | "marker"
-  | "pan"
-  | "pen"
-  | "pencil"
-  | "rectangle"
-  | "select"
-  | "snap"
-  | "sticker"
-  | "text"
-  | "ungroup"
-  | "zoom-in"
-  | "zoom-out";
 
 const icons: Record<EdgelessToolIcon, LucideIcon> = {
   "align-bottom": AlignEndHorizontal,
@@ -145,26 +107,10 @@ const iconProps: LucideProps = {
  */
 const TOOL_BUTTON_CLASS = "edgeless-tool-button";
 
-/** Props accepted by {@link EdgelessToolButton}. */
-export type EdgelessToolButtonProps = Omit<ComponentProps<"button">, "children"> & {
-  /** Accessible name; also shown as the native tooltip. */
-  readonly label: string;
-  /** Built-in icon name or custom React content rendered before any children. */
-  readonly icon?: EdgelessToolIcon | ReactNode;
-  /**
-   * Pressed state for tools and toggles. When provided the button renders as a
-   * shadcn `Toggle` and exposes `aria-pressed`; the caller keeps ownership of
-   * the state and updates it through editor commands.
-   */
-  readonly pressed?: boolean;
-  /** Extra content such as a zoom percentage, preset label, or swatch. */
-  readonly children?: ReactNode;
-};
-
 /**
  * Renders one consistent accessible button for edgeless toolbars.
  *
- * @param props - Native button attributes plus its accessible label, icon,
+ * @param props - Toolbar presentation attributes plus its accessible label, icon,
  * and optional pressed state.
  * @returns A ghost `Button`, or a `Toggle` when `pressed` is provided.
  */
@@ -174,6 +120,10 @@ export function EdgelessToolButton({
   pressed,
   children,
   className,
+  toolId,
+  menuId,
+  menuOpen,
+  onActivate,
   ...button
 }: EdgelessToolButtonProps) {
   const Icon =
@@ -193,6 +143,11 @@ export function EdgelessToolButton({
     "aria-label": label,
     title: label,
     "data-edgeless-ui": "true",
+    ...(toolId === undefined ? {} : { [CANVAS_TOOL_ATTRIBUTE]: toolId }),
+    ...(menuOpen === undefined
+      ? {}
+      : { "aria-haspopup": "dialog" as const, "aria-controls": menuId, "aria-expanded": menuOpen }),
+    ...(onActivate && { onClick: () => onActivate() }),
   };
   return pressed === undefined ? (
     <Button {...editorControlProps} variant="ghost" size="icon" {...shared}>

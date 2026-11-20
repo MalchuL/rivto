@@ -1,18 +1,13 @@
-import { CanvasToolbar, type CanvasToolbarLayout } from "@chulane/rivto-edgeless/react";
+import { CanvasToolbar, useCanvasViewport } from "@chulane/rivto-edgeless/react";
 import { useRef } from "react";
-import { EdgelessCreationTool } from "../../../../managers/edgeless-tools/edgeless-creation-tool";
 import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
 import { Popover, PopoverAnchor } from "../../../../components/ui/popover";
 import { useReactPanelContext } from "../../../../hooks/editor/use-react-panel-context";
-import type { EdgelessTool } from "../../../../managers/edgeless-tools/edgeless-tool";
-import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
-import type { EdgelessToolbarRenderContext } from "../../../../managers/edgeless-toolbar/types";
-import type { EdgelessToolContext } from "../../../../managers/edgeless-tools/edgeless-tool-context";
-import {
-  EdgelessToolButton,
-  type EdgelessToolButtonProps,
-} from "../../../../components/edgeless/tool-button";
+import type { ToolBarLayoutProps, ToolBarProps } from "./types";
+import { EdgelessToolButton } from "../../../../components/edgeless/tool-button";
 import { ToolPopover, ToolSections } from "./tool-popover";
+import { usePresetStart } from "../hooks/use-preset-start";
+import { usePresetClick } from "../hooks/use-preset-click";
 
 /**
  * Bottom-centered create toolbar for the edgeless canvas.
@@ -36,33 +31,21 @@ const TOOL_BAR_CLASS = `${UI_SCOPE_CLASS} edgeless-tool-bar`;
  * This adapter supplies document placement bindings and existing receiving-panel styling.
  *
  * @param props - Shared receiving operations, tool session and mounted preset-drag handlers.
+ * @param props.edgelessOperation - Panel operations supplied to custom group contents.
+ * @param props.tools - Surface-owned tool session and activation state.
+ * @param props.startPresetDrag - Captures an eligible toolbar placement pointer.
  * @returns Toolbar with registered standalone tools and nonempty groups; active styling follows the shared session.
  */
-export function ToolBar({
-  edgelessOperation,
-  tools,
-  ...props
-}: {
-  readonly edgelessOperation: EdgelessOperations;
-  readonly tools: EdgelessToolContext;
-} & Pick<EdgelessToolbarRenderContext, "startPresetDrag" | "movePresetDrag" | "endPresetDrag">) {
+export function ToolBar({ edgelessOperation, tools, startPresetDrag }: ToolBarProps) {
   const { reactPanel } = useReactPanelContext();
-  const pointer = props;
-  const context: EdgelessToolbarRenderContext = {
-    reactPanel,
-    operations: edgelessOperation,
-    tools,
-    ...pointer,
-  };
+  const viewport = useCanvasViewport();
+  usePresetStart(viewport, tools, startPresetDrag);
+  usePresetClick(viewport, tools);
   return (
     <CanvasToolbar
       registry={reactPanel.editor.edgelessToolbar}
       tools={tools}
       Button={EdgelessToolButton}
-      getButtonProps={(registration, instance) => ({
-        ...getPlacementBindings(instance, pointer),
-        ...registration.getButtonProps?.(context),
-      })}
       renderGroup={(groupProps) => {
         const Contents = groupProps.group.registration.render;
         return Contents ? (
@@ -82,55 +65,13 @@ export function ToolBar({
 }
 
 /**
- * Binds ordinary creation tools to toolbar placement while preserving keyboard activation.
- *
- * @param tool - Current session instance, absent for an unavailable registration.
- * @param pointer - Receiving surface's preset-drag callbacks.
- * @returns Placement callbacks only for creation tools that support ordinary placement.
- */
-function getPlacementBindings(
-  tool: EdgelessTool | undefined,
-  pointer: Pick<
-    EdgelessToolbarRenderContext,
-    "startPresetDrag" | "movePresetDrag" | "endPresetDrag"
-  >,
-): Partial<EdgelessToolButtonProps> {
-  if (!(tool instanceof EdgelessCreationTool) || !tool.supportsPlacement) {
-    return {};
-  }
-  return {
-    /**
-     * Keeps pointer placement from also activating the toolbar entry through its synthetic click.
-     *
-     * @param event - Button click; detail zero identifies keyboard activation.
-     * @returns Pointer clicks are marked handled while keyboard clicks retain shared activation.
-     */
-    onClick: (event) => {
-      if (event.detail > 0) {
-        event.preventDefault();
-      }
-    },
-    onPointerDown: (event) => pointer.startPresetDrag(event, tool),
-    onPointerMove: pointer.movePresetDrag,
-    onPointerUp: (event) => pointer.endPresetDrag(event),
-    onPointerCancel: (event) => pointer.endPresetDrag(event, false),
-  };
-}
-
-/**
  * Places registered group contents in the receiving toolbar's in-tree popover.
  *
  * @param props - Shared layout snapshot and surface-local tool session.
+ * @param props.tools - Session that owns the active tool and menu behavior.
  * @returns Existing Rivto toolbar chrome with controlled menu dismissal.
  */
-function ToolBarLayout({
-  entries,
-  content,
-  menu,
-  popoverId,
-  setMenu,
-  tools,
-}: CanvasToolbarLayout & { readonly tools: EdgelessToolContext }) {
+function ToolBarLayout({ entries, content, menu, popoverId, setMenu, tools }: ToolBarLayoutProps) {
   const barRef = useRef<HTMLDivElement | null>(null);
   return (
     <Popover
@@ -145,6 +86,7 @@ function ToolBarLayout({
         <div
           ref={barRef}
           className={TOOL_BAR_CLASS}
+          data-edgeless-toolbar=""
           data-edgeless-ui="true"
           data-menu-open={menu ?? undefined}
           role="toolbar"

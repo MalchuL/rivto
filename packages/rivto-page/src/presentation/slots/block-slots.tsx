@@ -1,26 +1,15 @@
-import { Fragment, type ReactNode, type HTMLAttributes } from "react";
+import { Fragment } from "react";
 import { useBlockRegion } from "../components/block-layout/use-block-region";
 import { useBlockLayoutState } from "../components/block-layout/block-layout-context";
 import { BLOCK_EDITOR_CLASSES } from "../block-editor-classes";
 import {
   SLOT_POSITIONS,
-  type BlockSlotEntry,
-  type BlockSlotPosition,
-  type BlockSlotProps,
+  type BlockSlotHostProps,
+  type BlockSlotPlacementProps,
+  type BlockSlotsProps,
 } from "./types";
 
-/** Current bounded owner context plus a requested position and registry snapshot. */
-export interface BlockSlotHostProps extends BlockSlotProps {
-  readonly attributes?: Omit<HTMLAttributes<HTMLDivElement>, "children">;
-  readonly position: BlockSlotPosition;
-  readonly entries: readonly BlockSlotEntry[];
-}
-
-/** Current bounded owner context plus main renderer output and registry snapshot. */
-export interface BlockSlotsProps extends BlockSlotProps {
-  readonly entries: readonly BlockSlotEntry[];
-  readonly children: ReactNode;
-}
+export type { BlockSlotHostProps, BlockSlotPlacementProps, BlockSlotsProps } from "./types";
 
 /**
  * Renders matching contributions with registration keys independent of their index.
@@ -36,11 +25,23 @@ export interface BlockSlotsProps extends BlockSlotProps {
  * @param props.position - One supported row, body, or perimeter position.
  * @param props.entries - Cached immutable registrations, already priority ordered.
  * @param props.attributes - Optional native host styles and attributes; ownership markers remain package-owned.
+ * @param props.bindInput - Optional normalized input binding for this mounted slot.
  * @returns A start host, a populated other host, or null for an empty non-start anchor.
- * @throws Propagates predicate and contribution render failures.
+ * @throws Propagates predicate, contribution render, input binding, and cleanup failures.
  */
-export function BlockSlotHost({ position, entries, attributes, ...props }: BlockSlotHostProps) {
-  const slotRef = useBlockRegion(props.block.id, position === "body" ? "body" : "slot");
+export function BlockSlotHost({
+  position,
+  entries,
+  attributes,
+  bindInput,
+  ...props
+}: BlockSlotHostProps) {
+  const slotRef = useBlockRegion(
+    props.block.id,
+    position === "body" ? "body" : "slot",
+    undefined,
+    bindInput,
+  );
   const matches = entries.filter(
     (entry) => entry.position === position && (!entry.when || entry.when(props)),
   );
@@ -64,11 +65,6 @@ export function BlockSlotHost({ position, entries, attributes, ...props }: Block
   );
 }
 
-/** Position and optional native styling for an explicitly composed slot. */
-export interface BlockSlotPlacementProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
-  readonly position: BlockSlotPosition;
-}
-
 /**
  * Places contributions for the current block at an explicit JSX location.
  *
@@ -80,11 +76,19 @@ export interface BlockSlotPlacementProps extends Omit<HTMLAttributes<HTMLDivElem
  * @param props.position - Inline, body, or perimeter anchor to mount.
  * @param props.className - Optional class for the explicit anchor's presentation.
  * @param props.style - Native styles, including position overrides when a perimeter slot is placed in flow.
+ * @param props.bindInput - Optional normalized input setup for this mounted slot.
  * @returns The matching contributions, or null for an empty non-start slot.
- * @throws If outside a block layout or a contribution fails to render.
+ * @throws If outside a block layout, or contribution rendering, input binding, or cleanup fails.
  */
-export function BlockSlot({ position, ...attributes }: BlockSlotPlacementProps) {
-  return <BlockSlotHost {...useBlockLayoutState()} position={position} attributes={attributes} />;
+export function BlockSlot({ position, bindInput, ...attributes }: BlockSlotPlacementProps) {
+  return (
+    <BlockSlotHost
+      {...useBlockLayoutState()}
+      position={position}
+      bindInput={bindInput}
+      attributes={attributes}
+    />
+  );
 }
 
 /**

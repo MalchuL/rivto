@@ -1,0 +1,82 @@
+import { BrowserInputListeners } from "../browser-input-listeners";
+
+it("keeps a nested boundary until every listener on the same occurrence detaches", () => {
+  const outer = document.createElement("div");
+  const inner = document.createElement("div");
+  outer.append(inner);
+  const parent = new BrowserInputListeners();
+  const first = new BrowserInputListeners();
+  const second = new BrowserInputListeners();
+  const parentEvents = jest.fn();
+  const firstEvents = jest.fn();
+  const secondEvents = jest.fn();
+  parent.register({ type: "click", target: "root", capture: false }, parentEvents);
+  first.register({ type: "click", target: "root", capture: false }, firstEvents);
+  second.register({ type: "click", target: "root", capture: false }, secondEvents);
+  const detachParent = parent.attach(outer);
+  const detachFirst = first.attach(inner);
+  const detachSecond = second.attach(inner);
+  inner.click();
+  expect(parentEvents).not.toHaveBeenCalled();
+  expect(firstEvents).toHaveBeenCalledTimes(1);
+  expect(secondEvents).toHaveBeenCalledTimes(1);
+  detachFirst();
+  inner.click();
+  expect(parentEvents).not.toHaveBeenCalled();
+  expect(secondEvents).toHaveBeenCalledTimes(2);
+  const detachAgain = first.attach(inner);
+  detachFirst();
+  detachSecond();
+  inner.click();
+  expect(parentEvents).not.toHaveBeenCalled();
+  expect(firstEvents).toHaveBeenCalledTimes(2);
+  detachAgain();
+  inner.click();
+  expect(parentEvents).toHaveBeenCalledTimes(1);
+  detachParent();
+});
+
+it("retains another listener's boundary when shared attachment setup fails", () => {
+  const outer = document.createElement("div");
+  const inner = document.createElement("div");
+  outer.append(inner);
+  const parent = new BrowserInputListeners();
+  const existing = new BrowserInputListeners();
+  const failed = new BrowserInputListeners();
+  const parentEvents = jest.fn();
+  parent.register({ type: "click", target: "root", capture: false }, parentEvents);
+  failed.register({ type: "click", target: "root", capture: false }, () => {});
+  const detachParent = parent.attach(outer);
+  const detachExisting = existing.attach(inner);
+  const add = jest.spyOn(inner, "addEventListener").mockImplementation(() => {
+    throw new Error("listener setup failed");
+  });
+  expect(() => failed.attach(inner)).toThrow("listener setup failed");
+  add.mockRestore();
+  inner.click();
+  expect(parentEvents).not.toHaveBeenCalled();
+  detachExisting();
+  inner.click();
+  expect(parentEvents).toHaveBeenCalledTimes(1);
+  detachParent();
+});
+
+it("does not make a borrowing focus observer own unrelated nested input", () => {
+  const outer = document.createElement("div");
+  const inner = document.createElement("div");
+  outer.append(inner);
+  const parent = new BrowserInputListeners();
+  const observer = new BrowserInputListeners({ ownsRoot: false });
+  const wheel = jest.fn();
+  const focus = jest.fn();
+  parent.register({ type: "wheel", target: "root", capture: false }, wheel);
+  observer.register({ type: "focusin", target: "root", capture: false }, focus);
+  const detachParent = parent.attach(outer);
+  const detachObserver = observer.attach(inner);
+  inner.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 40 }));
+  expect(wheel).toHaveBeenCalledTimes(1);
+  inner.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+  expect(focus).toHaveBeenCalledTimes(1);
+  detachObserver();
+  detachParent();
+});

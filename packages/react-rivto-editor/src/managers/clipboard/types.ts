@@ -7,6 +7,8 @@ import type {
   PasteStrategy,
 } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../panels/types";
+import type { ReactEditorApi } from "../../editor/types";
+import type { HtmlElement } from "@chulane/rivto-root";
 
 /** Fields owned by a block converter; identity, type and children belong to clipboard. */
 export type BlockClipboardFields = Pick<
@@ -17,12 +19,36 @@ export type BlockClipboardFields = Pick<
 /** Fields owned by an element converter; clipboard places and identifies the resulting element. */
 export type ElementClipboardFields = Pick<EditorElementNode, "props">;
 
+/** Shared editor identity used to locate the occurrence's extensions. */
+export interface ClipboardCopyEditor {
+  /** Identity of the shared extension owner. */
+  readonly extensions: object;
+}
+
+/** Panel-scoped reads available during clipboard conversion. */
+export interface ClipboardPanel {
+  /** Identifies the shared editor owning this occurrence. */
+  readonly editor: ClipboardCopyEditor;
+  /** Resolves the roots visible in this occurrence. */
+  readonly blocks: Pick<ReactPanelApi["blocks"], "getRootIds">;
+  /** Resolves selected canvas elements in this occurrence. */
+  readonly elements: Pick<ReactPanelApi["elements"], "getElementNode">;
+  /** Reads the occurrence's current selection. */
+  readonly selection: Pick<ReactPanelApi["selection"], "get">;
+}
+
+/** Formatter borrowed when producing browser clipboard flavors. */
+export interface ClipboardFormattingEditor {
+  /** Serializes a bundle through registered portable formatters. */
+  readonly clipboardFormats: Pick<ReactEditorApi["clipboardFormats"], "formatBundle">;
+}
+
 /** Source information shared by a single copy, cut, or duplicate operation. */
 export interface ClipboardCopyContext {
   readonly operation: "copy" | "cut" | "duplicate";
   readonly sourceDocumentId: string;
   /** Omitted for document-only programmatic copy. */
-  readonly reactPanel?: ReactPanelApi;
+  readonly reactPanel?: ClipboardPanel;
   /** Ordered block siblings represented by this source panel. */
   readonly rootBlockIds: readonly string[];
 }
@@ -33,7 +59,7 @@ export interface ClipboardPasteContext {
   readonly sourceDocumentId?: string;
   readonly destinationDocumentId: string;
   /** Receiving mounted panel, absent for document-only programmatic operations. */
-  readonly reactPanel?: ReactPanelApi;
+  readonly reactPanel?: ClipboardPanel;
   /** Source IDs mapped to prepared destination IDs; text merge may reuse an existing block. */
   readonly blockIdMap: ReadonlyMap<string, string>;
   /** Source IDs mapped to new element IDs; omitted empty block cards have no entry. */
@@ -58,12 +84,19 @@ export interface ClipboardParseContext {
 
 export interface ClipboardParsers {
   /**
-   * Accepts an entire detached HTML subtree, including its children. Returning
-   * undefined lets the next parser try it; an empty result deliberately consumes it.
-   * Page parsers must return blocks. Edgeless parsers may also return elements.
+   * Converts a detached HTML subtree, including its children, without browser objects.
+   *
+   * Returning undefined lets the next parser try it; an empty result deliberately
+   * consumes it. Page parsers must return blocks. Edgeless parsers may also return
+   * elements. Tag names and attributes retain the browser parser's representation.
+   *
+   * @param element - Detached element data and its ordered descendants.
+   * @param context - Receiving surface and fallback block type.
+   * @returns Clipboard content to insert, or undefined to try the next parser.
+   * @throws Propagates converter failures to the clipboard operation.
    */
   readonly parseHTML?: (
-    element: Element,
+    element: HtmlElement,
     context: ClipboardParseContext,
   ) => ClipboardContent | undefined;
   /** Accepts a complete plain-text value, or returns undefined to keep the normal fallback. */

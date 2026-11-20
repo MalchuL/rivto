@@ -2,14 +2,15 @@ import { registerBlockListActions } from "../../../block-handle/actions";
 import { CheckboxBlockBehavior } from "../checkbox-block-behavior";
 import { NumberedListBlockBehavior } from "../numbered-list-block-behavior";
 import { ListBlockBehavior } from "../list-block-behavior";
-import type { ReactEditorApi } from "../../../../../editor/types";
+import type { ReactEditorExtensionApi } from "../../../../../editor/types";
+import type { PanelInputRegistration } from "../../../../../panels/types";
+import type { InputRoot } from "@chulane/rivto-root";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import { createCaretSelection } from "@chulane/rivto";
 import { BlockListSlot } from "../../../../../blocks/block-slot-controls/block-slot-controls";
-import type { ReactPanelApi } from "../../../../../panels/types";
-import { focusBlock } from "../../../../../managers";
+import type { ListShortcutPanel } from "./types";
 import type { BlockListType, ListShortcutPatch } from "../types";
 import { BLOCK_LIST_TYPES, isNumberedListType, resolveBlockListNumbers } from "../utils";
 import { listShortcutPatch } from "./utils";
@@ -24,7 +25,7 @@ import { listShortcutPatch } from "./utils";
  * @param reactEditor - Runtime receiving delegated content input events.
  * @returns No value.
  */
-export function registerListShortcuts(reactEditor: ReactEditorApi): void {
+export function registerListShortcuts(reactEditor: ReactEditorExtensionApi): void {
   registerBlockListActions(reactEditor);
   const listCommands: readonly { type: BlockListType; title: string }[] = [
     { type: "list", title: "List" },
@@ -84,18 +85,40 @@ export function registerListShortcuts(reactEditor: ReactEditorApi): void {
       return { plain, markdown: plain, html };
     },
   });
+  /**
+   * Converts a shortcut and schedules focus only for its originating registration.
+   *
+   * @param reactPanel - Receiving panel whose document and selection are updated.
+   * @param blockId - Block containing the shortcut.
+   * @param shortcut - List properties to apply with the content reset.
+   * @param inputRoot - Input Root captured for the original delivery.
+   * @param inputRegistration - Routing lifetime captured for the original delivery.
+   * @returns True when conversion was committed, or false when the registration is stale.
+   * @throws Propagates document, selection, and focus scheduling failures.
+   */
   const convert = (
-    reactPanel: ReactPanelApi,
+    reactPanel: ListShortcutPanel,
     blockId: string,
-    root: HTMLElement,
     shortcut: ListShortcutPatch,
-  ): void => {
+    inputRoot: Pick<InputRoot, "isAttached">,
+    inputRegistration: PanelInputRegistration,
+  ): boolean => {
+    if (!inputRegistration.isCurrent(inputRoot)) {
+      return false;
+    }
     reactPanel.batchUpdates(() => {
       reactPanel.blocks.updateBlock(blockId, { listProps: shortcut, content: "" });
       reactPanel.selection.set(createCaretSelection(blockId, 0));
     });
     // Only place the caret and its editing focus; list conversion is already committed.
-    reactPanel.selection.scheduleIfSelectionUnchanged(() => focusBlock(root, blockId, 0));
+    if (inputRegistration.isCurrent(inputRoot)) {
+      reactPanel.selection.scheduleIfSelectionUnchanged(() => {
+        if (inputRegistration.isCurrent(inputRoot)) {
+          reactPanel.selection.focusBlock(blockId, 0);
+        }
+      });
+    }
+    return true;
   };
 
   reactEditor.events.register(
@@ -104,21 +127,15 @@ export function registerListShortcuts(reactEditor: ReactEditorApi): void {
       type: "beforeinput",
       scope: "content",
     },
-    ({ reactPanel, raw: event, blockId, contentElement, root }) => {
-      if (
-        !(event instanceof InputEvent) ||
-        event.inputType !== "insertText" ||
-        event.data !== " " ||
-        !blockId
-      ) {
+    ({ reactPanel, textInput, blockId, readContentText, inputRoot, inputRegistration }) => {
+      if (textInput?.inputType !== "insertText" || textInput.data !== " " || !blockId) {
         return false;
       }
-      const shortcut = listShortcutPatch(`${contentElement?.textContent ?? ""} `);
+      const shortcut = listShortcutPatch(`${readContentText?.() ?? ""} `);
       if (!shortcut) {
         return false;
       }
-      convert(reactPanel, blockId, root, shortcut);
-      return true;
+      return convert(reactPanel, blockId, shortcut, inputRoot, inputRegistration);
     },
   );
 
@@ -128,11 +145,14 @@ export function registerListShortcuts(reactEditor: ReactEditorApi): void {
       type: "input",
       scope: "content",
     },
-    ({ reactPanel, raw: event, blockId, root }) => {
-      if (!(event instanceof InputEvent) || event.inputType !== "insertText" || !blockId) {
+    ({ reactPanel, textInput, blockId, inputRoot, inputRegistration }) => {
+      if (textInput?.inputType !== "insertText" || !blockId) {
         return false;
       }
       queueMicrotask(() => {
+        if (!inputRegistration.isCurrent(inputRoot)) {
+          return;
+        }
         const block = reactPanel.blocks.getBlockNode(blockId);
         const shortcut = block
           ? listShortcutPatch(block.content.replaceAll("\u00a0", " "))
@@ -140,7 +160,7 @@ export function registerListShortcuts(reactEditor: ReactEditorApi): void {
         if (!shortcut) {
           return;
         }
-        convert(reactPanel, blockId, root, shortcut);
+        convert(reactPanel, blockId, shortcut, inputRoot, inputRegistration);
       });
       return false;
     },
