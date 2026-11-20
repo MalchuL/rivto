@@ -53,11 +53,10 @@ test("creates every paragraph through the chosen trailing insertion target", asy
   ).toEqual(["paragraph", "paragraph", "paragraph"]);
   await expect(roots.last().locator("[data-block-content]")).toBeFocused();
   await expect(affordances).toHaveCount(3);
-  await expect
-    .poll(() =>
-      surface.evaluate((element) => element.lastElementChild?.hasAttribute("data-page-end-slot")),
-    )
-    .toBe(true);
+  // The insertion target follows the document tree. A nesting-lines overlay can follow both.
+  await expect(
+    surface.locator(":scope > .rivto-virtual-tree ~ [data-page-end-slot] .page-trailing-block"),
+  ).toHaveCount(3);
 
   await page.keyboard.press("Control+z");
   await expect(roots).toHaveCount(0);

@@ -21,7 +21,8 @@ async function loadBoard(page: Page, repeat: number, mode: "block" | "edgeless")
         id: "scroll-board",
         type: "kanban",
         content: "Scrolling board",
-        children: Array.from({ length: 8 }, (_, index) => ({
+        // Six lanes leave room for sustained scrolling on both surfaces.
+        children: Array.from({ length: 6 }, (_, index) => ({
           id: `scroll-lane-${index}`,
           type: "kanban-column",
           content: `Lane ${index}`,
@@ -79,7 +80,7 @@ for (const repeat of [0, 200]) {
           { timeout: 10_000 },
         )
         .toBeLessThan(1);
-      const destination = page.locator('[data-block-id="scroll-lane-7"]');
+      const destination = page.locator('[data-block-id="scroll-lane-5"]');
       const header = (await destination.locator(":scope > .rivto-block-row").boundingBox())!;
       await page.mouse.move(header.x + header.width / 2, header.y + header.height / 2);
       await expect(destination).toHaveAttribute("data-block-drop-active", "true");
@@ -92,7 +93,7 @@ for (const repeat of [0, 200]) {
             ).__rivtoDemo.editor.blocks.getParentId("scroll-card"),
           ),
         )
-        .toBe("scroll-lane-7");
+        .toBe("scroll-lane-5");
       await expect(page.locator(".rivto-block-drag-preview")).toHaveCount(0);
       const stopped = await board.evaluate((element) => element.scrollLeft);
       await page.evaluate(
