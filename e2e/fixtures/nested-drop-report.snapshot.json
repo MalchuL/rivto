@@ -37,10 +37,8 @@
             "checked": false,
             "collapsed": false
           },
-          "props": {
-            "bentoWidth": 220
-          },
-          "pluginData": {},
+          "props": {},
+          "pluginData": { "bentoWidth": 220 },
           "content": "A small idea",
           "children": []
         },
@@ -53,10 +51,8 @@
             "checked": false,
             "collapsed": false
           },
-          "props": {
-            "bentoWidth": 400
-          },
-          "pluginData": {},
+          "props": {},
+          "pluginData": { "bentoWidth": 400 },
           "content": "Room to explore. Drag this tile's left or right edge to resize. Heights follow your content, and tiles wrap with the editor width.",
           "children": []
         },

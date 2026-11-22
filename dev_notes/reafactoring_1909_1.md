@@ -50,7 +50,7 @@ Status: solved
 ### P1. Удалить три экспортируемых, но нигде не используемых символа
 
 - **Категория:** `delete`, сокращение публичной поверхности.
-- **Места:** `SelectionBlock` в `react-rivto-editor/src/managers/selection/editor-dom-selection.ts:109`, `viewOf` в `react-rivto-editor/src/managers/events/dom-nodes.ts:47`, `sliceBlockRange` в `rivto-editor-core/src/managers/selection-manager/selection-ranges.ts:115`.
+- **Места:** `SelectionBlock` в [editor-dom-selection.ts:109](https://github.com/MalchuL/rivto/blob/d909425bdee9640ffcd68238bbfda0466385c227/packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L109), `viewOf` в `react-rivto-editor/src/managers/events/dom-nodes.ts:47`, `sliceBlockRange` в `rivto-editor-core/src/managers/selection-manager/selection-ranges.ts:115`.
 - **Подтверждение:** для каждого имени глобальный поиск по `packages`, `demo`, `e2e`, `docs` возвращает только строку определения. `SelectionBlock` и `viewOf` не входят в корневой curated export React-пакета; `sliceBlockRange` проходит через wildcard barrel core-пакета, но не имеет ни одного потребителя или теста.
 - **Проблема:** exports обещают поддерживаемые контракты без поведения в самом продукте. Особенно `SelectionBlock` описан как промежуточная модель алгоритма, который больше её не принимает; `sliceBlockRange` — тривиальная оболочка над реально используемым `resolveBlockRange`.
 - **Решение:** удалить `SelectionBlock` и `viewOf`; удалить `sliceBlockRange`, оставив `resolveBlockRange` единственным источником правил диапазона. Если внешняя совместимость всё же станет требованием, сначала отметить deprecated и проверить реальные package consumers — текущие правила репозитория допускают breaking changes.
@@ -173,7 +173,7 @@ Status: solved
 ### P2. Слить `useEditorRootContext` с публичным `useEditorRoot`
 
 - **Категория:** `merge`, single-caller wrapper.
-- **Место:** `react-rivto-editor/src/editor-root-context.ts` и `hooks/editor/use-editor-root.ts`.
+- **Место:** `react-rivto-editor/src/panels/editor-root-context.ts` и `hooks/editor/use-editor-root.ts`.
 - **Подтверждение:** `useEditorRootContext()` вызывается ровно один раз — `useEditorRoot()` немедленно возвращает его результат. `UseEditorRootResult` структурно дублирует `EditorRootContextValue`. Сам context нужен `EditorView`, но отдельный hook поверх него — нет.
 - **Проблема:** один публичный вызов проходит через второй function/type с тем же контрактом; документация одной операции распределена между двумя файлами.
 - **Решение:** оставить внутренний `EditorRootContext`, а `useEditorRoot` пусть напрямую делает `useContext` и проверку отсутствия provider; `UseEditorRootResult` сделать alias внутреннего shape либо определить shape единожды. Удалить `useEditorRootContext`.

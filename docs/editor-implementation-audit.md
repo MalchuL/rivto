@@ -89,7 +89,7 @@ One semantic keydown action sets a closure boolean, while a separately configura
 
 ### 16. Cross-document DOM support is inconsistent
 
-`EventManager` correctly resolves `Element` from `root.ownerDocument.defaultView` ([event-manager.ts:253](../packages/react-rivto-editor/src/managers/events/event-manager.ts#L253)), but selection and edgeless extensions use global constructors and global `Node` constants, including [editor-dom-selection.ts:240](../packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L240), [text-selection.ts:141](../packages/react-rivto-editor/src/extensions/built-ins/selection/text-selection.ts#L141), and [edgeless-deletion.ts:28](../packages/react-rivto-editor/src/extensions/edgeless/edgeless-deletion.ts#L28). An editor in an iframe/other window can fail target checks and lose selection or keyboard behavior. Consistently use the root's realm or node-type duck typing, and add a foreign-document integration test.
+`EventManager` correctly resolves `Element` from `root.ownerDocument.defaultView` ([event-manager.ts:253](../packages/react-rivto-editor/src/managers/events/event-manager.ts#L253)), but selection and edgeless extensions use global constructors and global `Node` constants, including [editor-dom-selection.ts:240](https://github.com/MalchuL/rivto/blob/e55c0a41a760286a30ca29bacf7a8205e915f8e4/packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L240), [text-selection.ts:141](../packages/react-rivto-editor/src/extensions/built-ins/selection/text-selection.ts#L141), and [edgeless-deletion.ts:28](../packages/react-rivto-editor/src/extensions/edgeless/edgeless-deletion.ts#L28). An editor in an iframe/other window can fail target checks and lose selection or keyboard behavior. Consistently use the root's realm or node-type duck typing, and add a foreign-document integration test.
 
 ## Medium-priority correctness and API findings
 
@@ -163,7 +163,7 @@ Toolbar and properties UI use global `window`/`Node` ([tool-bar.tsx:58](../packa
 
 ### 34. Caret geometry performs synchronous layout once per character
 
-Vertical navigation measures a Range for each text offset ([block-dom.ts:171](../packages/react-rivto-editor/src/blocks/block-dom.ts#L171)); pointer fallback repeats similar work ([editor-dom-selection.ts:384](../packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L384)). Prefer browser caret hit-testing, cache line geometry until layout/content changes, or binary-search positions. The complexity is certain; user-visible threshold still needs a benchmark.
+Vertical navigation measures a Range for each text offset ([block-dom.ts:171](../packages/react-rivto-editor/src/dom/block-dom.ts#L171)); pointer fallback repeats similar work ([editor-dom-selection.ts:384](https://github.com/MalchuL/rivto/blob/e55c0a41a760286a30ca29bacf7a8205e915f8e4/packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L384)). Prefer browser caret hit-testing, cache line geometry until layout/content changes, or binary-search positions. The complexity is certain; user-visible threshold still needs a benchmark.
 
 ### 35. Pointer listeners can survive component unmount
 

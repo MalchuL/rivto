@@ -5,6 +5,12 @@ description: Implement or review ordinary Rivto block types and renderers using 
 
 # Rivto Blocks
 
+For every new block, read [interaction paths](references/interaction-paths.md) and
+fill the [implementation checklist](references/implementation-checklist.md) for
+the requested feature before implementation. Keep it in the working notes or
+response, mark inapplicable items with a reason, and update it with evidence as
+work finishes. Follow the same checklist for a review, scoped to the change.
+
 A renderer owns content, while Page owns the block occurrence, row, child traversal,
 selection frame and shared pointer/drop behavior. An ordinary block must work in
 an outline, column, tile, cell or Edgeless card without learning its parent type.

@@ -1,6 +1,5 @@
 import { useContext } from "react";
-import { ReactPanelContext } from "../../components/editor-panel/react-panel-context";
-import type { ReactPanelContextValue } from "../../components/editor-panel/types";
+import { ReactPanelContext, type ReactPanelContextValue } from "../../panels/react-panel-context";
 
 /**
  * Reads the complete internal EditorPanel context.

@@ -1,6 +1,7 @@
-/* Gesture cleanup releases this document-wide cursor, including cross-editor drags. */
+/* Gesture cleanup releases this document-wide cursor, including cross-editor drags.
+ * Only hovered elements need to override their own cursor during the gesture. */
 :root[data-block-drag-active],
-:root[data-block-drag-active] * {
+:root[data-block-drag-active] :hover {
   cursor: default !important;
 }
 

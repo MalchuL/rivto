@@ -20,6 +20,11 @@ test("collects every selected local path without consuming mixed text", () => {
       getData: (type) => (type === "text/uri-list" ? "file:///a.png\nfile:///b.png" : ""),
     }),
   ).toEqual(["file:///a.png", "file:///b.png"]);
+  expect(
+    findTransferredLocalFileUris({
+      getData: (type) => (type === "text/plain" ? "/a.png" : ""),
+    }),
+  ).toEqual([]);
 });
 
 test("only treats an empty URI list as redacted", () => {
@@ -60,12 +65,12 @@ test("uses the first non-comment URI and only accepts supported local file paths
   expect(findLocalFileUri("C:\\Users\\name\\file.txt")).toBe("C:\\Users\\name\\file.txt");
 });
 
-test("accepts remote images and local image paths without skipping the first URI", () => {
-  expect(findImageUri("# source\nhttps://example.test/image.png")).toBe(
-    "https://example.test/image.png",
-  );
+test("accepts local image paths without skipping the first URI", () => {
+  expect(findImageUri("# source\nhttps://example.test/image.png")).toBeUndefined();
   expect(findImageUri("file:///home/user/image.jpg")).toBe("file:///home/user/image.jpg");
   expect(findImageUri("/home/user/readme.txt\n/home/user/image.png")).toBeUndefined();
+  expect(findImageUri("https://example.test/article")).toBeUndefined();
+  expect(findImageUri("https://example.test/photo.jpg?size=large#view")).toBeUndefined();
 });
 
 test("uses generic binary metadata for unknown filename extensions", () => {

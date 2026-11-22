@@ -137,7 +137,7 @@ reactEditor.selection.focusCaret({ blockId, offset });
 
 ```
 
-Consolidate the duplicated text-offset conversion in packages/react-rivto-editor/src/managers/events/block-dom.ts:170 and packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts:519 underneath these operations.
+Consolidate the duplicated text-offset conversion in packages/react-rivto-editor/src/managers/events/block-dom.ts:170 and [editor-dom-selection.ts:519](https://github.com/MalchuL/rivto/blob/544a6c4ca69da79468b09e53203c4113fa528bd3/packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L519) underneath these operations.
 
 Native `Node` endpoints can still exist inside browser selection code. The portable boundary exposes `EditorPosition`.
 

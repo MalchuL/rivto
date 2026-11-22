@@ -1,10 +1,15 @@
 import { ReactPanel } from "./react-panel";
-import { createCaretSelection, createStructuralSelection } from "@chulane/rivto";
+import {
+  createCaretSelection,
+  createStructuralSelection,
+  PasteStrategyRegistry,
+} from "@chulane/rivto";
 import { convertLeafToContainer } from "../extensions/containers/convert-leaf-to-container";
 import { createReactEditor } from "../editor/react-editor";
 import { createTestCoreEditor } from "../test-utils";
 import { ChildrenPanel } from "@chulane/rivto";
 import { EmbeddingPanel } from "@chulane/rivto";
+const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
 
 async function fixture() {
   const document = await createTestCoreEditor();
@@ -74,6 +79,9 @@ test("panel roots and parents are relative while document hierarchy stays absolu
 test("rejects outside targets and protected root operations before any batch mutation", async () => {
   const f = await fixture();
   const before = f.document.dump();
+  expect(() => f.children.clipboard.copy(createStructuralSelection(["outside"]))).toThrow();
+  expect(() => f.children.clipboard.copyText(createCaretSelection("outside", 0))).toThrow();
+  expect(() => f.children.clipboard.copyElements(["outside-element"], f.embedding)).toThrow();
   expect(() =>
     f.children.blocks.updateBlocks([
       { id: "a", patch: { content: "changed" } },
@@ -94,7 +102,7 @@ test("rejects outside targets and protected root operations before any batch mut
     ]),
   ).toThrow();
   expect(() =>
-    f.children.elements.moveElements(["inside"], { root: true, beforeId: "outside-element" }),
+    f.children.elements.moveElements(["inside"], { parentId: null, beforeId: "outside-element" }),
   ).toThrow();
   expect(() => f.children.elements.removeElements(["inside", "container"])).toThrow();
   expect(f.document.dump()).toEqual(before);
@@ -158,6 +166,105 @@ test("paste keeps protected root text editable and inserts following lines insid
   await f.close();
 });
 
+test("pastes into an empty children panel without escaping its root", async () => {
+  const f = await fixture();
+  f.children.blocks.removeBlocks(["a", "b"]);
+  f.document.selection.clear();
+  f.children.clipboard.paste({ text: "new", defaultBlockType: "paragraph" });
+  expect(f.children.blocks.getBlocks().map((block) => block.content)).toEqual(["new"]);
+  expect(f.document.blocks.getRootIds()).toEqual(["outside", "root"]);
+  await f.close();
+});
+
+test("nested React panels use their own selection with the shared runtime", async () => {
+  const f = await fixture();
+  f.children.blocks.insertBlock({ id: "nested", type: "paragraph" }, { parentId: "a" });
+  const corePanel = new ChildrenPanel(f.children, { rootBlockId: "a" });
+  const nested = new ReactPanel(f.children, corePanel);
+  const root = {} as HTMLElement;
+  jestApi.spyOn(nested, "getRoot").mockReturnValue(root);
+  const activeRoot = jestApi.spyOn(nested.editor.panels, "getActiveRoot").mockReturnValue(root);
+  try {
+    expect(nested.editor).toBe(f.children.editor);
+    nested.selection.set(createCaretSelection("nested", 0));
+    expect(nested.selection.get()?.blocks[0]?.id).toBe("nested");
+    expect(corePanel.selection.get()?.blocks[0]?.id).toBe("nested");
+    expect(f.children.selection.get()).toBeUndefined();
+
+    const clipboard = nested.editor.clipboard;
+    const nestedSelection = createStructuralSelection(["nested"]);
+    f.document.selection.set(createStructuralSelection(["outside"]));
+    expect(clipboard.cut(undefined, nested)).toBeUndefined();
+    expect(nested.clipboard.cut()).toBeUndefined();
+    expect(() => nested.clipboard.cut(createStructuralSelection(["outside"]))).toThrow(
+      "Clipboard selection is outside panel",
+    );
+    expect(f.document.blocks.hasBlock("outside")).toBe(true);
+    expect(nested.clipboard.cut(nestedSelection)?.blocks.map(({ id }) => id)).toEqual(["nested"]);
+    expect(f.document.blocks.hasBlock("nested")).toBe(false);
+    expect(f.document.blocks.hasBlock("outside")).toBe(true);
+
+    f.document.history.undo();
+    nested.selection.set(nestedSelection);
+    expect(nested.clipboard.cut()?.blocks.map(({ id }) => id)).toEqual(["nested"]);
+    expect(f.document.blocks.hasBlock("nested")).toBe(false);
+  } finally {
+    activeRoot.mockRestore();
+    await nested.destroy();
+    await corePanel.destroy();
+    await f.close();
+  }
+});
+
+test("panel registrations remain shared after the registering occurrence closes", async () => {
+  const f = await fixture();
+  const run = jestApi.fn();
+  const dispose = f.children.slashCommands.register({
+    id: "panel-registration-test",
+    title: "Panel registration",
+    execute: run,
+  });
+  try {
+    expect(f.embedding.slashCommands.get("panel-registration-test")).toBeDefined();
+    expect(f.children.clipboard.pasteStrategies).toBe(f.embedding.clipboard.pasteStrategies);
+    await f.children.destroy();
+    f.embedding.slashCommands.execute("panel-registration-test", { blockId: "a" });
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ reactPanel: f.embedding }));
+    dispose();
+    expect(f.embedding.slashCommands.get("panel-registration-test")).toBeUndefined();
+  } finally {
+    dispose();
+    await f.embedding.destroy();
+    await f.close();
+  }
+});
+
+test("panel paste uses live shared strategies without copying registrations", async () => {
+  const f = await fixture();
+  const seen = jestApi.fn();
+  const dispose = f.document.clipboard.pasteStrategies.register("panel-observer", {
+    matches: () => true,
+    paste: (context) => {
+      seen(context.editor);
+      return undefined;
+    },
+  });
+  const register = jestApi.spyOn(PasteStrategyRegistry.prototype, "register");
+  try {
+    f.children.clipboard.paste({ text: "new", defaultBlockType: "paragraph" });
+    expect(seen).toHaveBeenCalledWith(f.children);
+    expect(register).not.toHaveBeenCalled();
+    dispose();
+    seen.mockClear();
+    f.children.clipboard.paste({ text: "again", defaultBlockType: "paragraph" });
+    expect(seen).not.toHaveBeenCalled();
+  } finally {
+    register.mockRestore();
+    dispose();
+    await f.close();
+  }
+});
+
 test("prepending a nested block keeps its sibling list and the protected root cannot be cut", async () => {
   const f = await fixture();
   f.embedding.blocks.insertBlock({ id: "grandchild", type: "paragraph" }, { parentId: "a" });
@@ -194,4 +301,37 @@ test("container conversion preserves the protected root identity without a sibli
     children: [],
   });
   await f.close();
+});
+
+test("structural selection deletion uses panel behavior context and undoes blocks and elements together", async () => {
+  const f = await fixture();
+  try {
+    let reject = true;
+    f.document.blockRegistry.registerBehavior({
+      isAvailable: (block) => block.id === "a",
+      onStructuralDelete: (context) => {
+        expect(context.blocks).toBe(f.children.blocks);
+        expect(context.parentId).toBeNull();
+        return reject ? "rejected" : "unhandled";
+      },
+    });
+    const selection = { ...createStructuralSelection(["a"]), elements: ["inside"] };
+    f.children.selection.set(selection);
+    f.document.history.clear();
+    f.children.selection.delete();
+    expect(f.document.blocks.hasBlock("a")).toBe(true);
+    expect(f.document.elements.hasElement("inside")).toBe(true);
+    expect(f.children.selection.get()).toEqual(f.document.selection.get());
+    expect(f.children.selection.get()?.blocks.map(({ id }) => id)).toEqual(["a"]);
+    reject = false;
+    f.children.selection.delete();
+    expect(f.document.blocks.hasBlock("a")).toBe(false);
+    expect(f.document.elements.hasElement("inside")).toBe(false);
+    expect(f.document.selection.get()).toBeUndefined();
+    f.document.history.undo();
+    expect(f.document.blocks.hasBlock("a")).toBe(true);
+    expect(f.document.elements.hasElement("inside")).toBe(true);
+  } finally {
+    await f.close();
+  }
 });

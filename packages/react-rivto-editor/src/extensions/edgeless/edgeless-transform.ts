@@ -73,7 +73,7 @@ const OBJECT_SELECTOR = "[data-edgeless-object-kind][data-edgeless-object-id]";
 const BLOCK_SELECTOR = "[data-block-id]";
 // Bento edge handles are not buttons. Exclude them so card transform does not
 // steal pointerdown before the tile can preview a width.
-const CONTROL_SELECTOR = `[data-block-content], [data-edgeless-ui], ${EDITOR_CONTROL_SELECTOR}, ${PREVENT_TEXT_EDITING_SELECTOR}, [contenteditable=true], [data-bento-resize-edge]`;
+const CONTROL_SELECTOR = `[data-block-content], [data-edgeless-ui], ${EDITOR_CONTROL_SELECTOR}, ${PREVENT_TEXT_EDITING_SELECTOR}, [contenteditable=true], [data-width-resize-edge]`;
 const CONNECTOR_PREVIEW_CLASS = "edgeless-connector-live-preview";
 const CONNECTOR_LABEL_CLASS = "edgeless-connector-label";
 const CONNECTOR_LABEL_PREVIEW_CLASS = "edgeless-connector-label-preview";
@@ -386,6 +386,7 @@ export class EdgelessTransformController {
    * @param eventDetail - Click count used to preserve double-click text editing.
    */
   finishControls(reactPanel: ReactPanelApi, commit: boolean, eventDetail = 1): void {
+    // Controls in another view of the same document cannot finish this gesture.
     if (this.reactPanel === reactPanel && this.start) {
       this.finish(commit, eventDetail);
     }
@@ -1056,7 +1057,9 @@ export class EdgelessTransformController {
                 frame: this.groupChildren(id).length ? undefined : frame,
                 props: {
                   ...(this.elements.getElementNode(id)?.type === "connector" ? {} : { rotation }),
-                  ...(active.kind === "resize" && this.elements.getElementNode(id)?.type === "block"
+                  ...(active.kind === "resize" &&
+                  this.elements.getElementNode(id)?.type === "block" &&
+                  active.frames.get(id)?.height !== frame.height // Specific case to keep autoHeight if we adjust width only
                     ? { autoHeight: false }
                     : {}),
                   ...this.connectorControlProps(id, frame, rotation),

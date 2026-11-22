@@ -11,7 +11,7 @@ it("restricts commands to a selected root and observes descendants entering or l
     type: "group",
     children: [{ ...shape, id: "nested", children: [{ ...shape, id: "leaf" }] }],
   });
-  const elements = new PanelElements(editor.elements, editor.getDocument(), root.id);
+  const elements = new PanelElements(editor, root.id);
   expect(elements.getElementNode(root.id)).toBeUndefined();
   const nodeChanged = jest.fn();
   const treeChanged = jest.fn();
@@ -47,7 +47,7 @@ it.each([10, 2000])(
         frame: { x: i, y: 0, width: 1, height: 1 },
       })),
     });
-    const scoped = new PanelElements(editor.elements, editor.getDocument(), root.id);
+    const scoped = new PanelElements(editor, root.id);
     const listeners = Array.from({ length: count }, () => jest.fn());
     const dispose = listeners.map((listener, i) =>
       scoped.subscribeElementNode(`node-${i}`, listener),

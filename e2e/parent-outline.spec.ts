@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 import type { ReactEditorApi } from "@chulane/rivto-react";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 type Host = {
-  __rivtoDemo: { reactEditor: ReactEditorApi };
+  __rivtoDemo: { reactEditor: ReactEditorApi; editor: DocumentEditorAPI };
   parentOutlineCalls: Array<{ parent: string; ids: readonly string[] }>;
 };
 
@@ -26,14 +27,14 @@ for (const mode of ["block", "edgeless"] as const) {
         });
         editor.load({ ...editor.dump(), blocks: [parent], elements: [], rootElementIds: [] });
         host.parentOutlineCalls = [];
-        editor.blockBehaviors.register({
+        host.__rivtoDemo.editor.blockRegistry.registerBehavior({
           /**
            * Selects only the seeded parent, independently of native block type.
            *
            * @param context - Current candidate block fields.
            * @returns Whether the candidate is the seeded parent.
            */
-          isAvailable: ({ block }) => block.id === parent.id,
+          isAvailable: (block) => block.id === parent.id,
           /**
            * Records and rejects the complete group before child indent runs.
            *
@@ -93,3 +94,45 @@ for (const mode of ["block", "edgeless"] as const) {
     });
   }
 }
+
+test("nested Backspace reaches the block's onOutdent once when the parent defers", async ({
+  page,
+}) => {
+  await page.goto("/?test_features=1");
+  await page.locator('[data-journal-document="today"] [data-block-content]').first().waitFor();
+  const { childId, parentId } = await page.evaluate(() => {
+    const host = window as unknown as Host;
+    const { editor } = host.__rivtoDemo;
+    const parent = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Parent",
+      children: [{ type: "paragraph", content: "Keep nested" }],
+    });
+    const childId = parent.children[0]!.id;
+    host.parentOutlineCalls = [];
+    editor.blockRegistry.registerBehavior({
+      isAvailable: (block) => block.id === childId,
+      /**
+       * Records the child's outdent request and keeps its original placement.
+       *
+       * @param context - Scoped structural context for the child.
+       * @param ids - Complete requested outdent group.
+       * @returns Rejected so the generic move is skipped.
+       */
+      onOutdent(context, ids) {
+        host.parentOutlineCalls.push({ parent: context.parentId!, ids: [...ids] });
+        return "rejected";
+      },
+    });
+    return { childId, parentId: parent.id };
+  });
+  const content = page.locator(`[data-block-id="${childId}"] [data-block-content]`).first();
+  await content.click();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Backspace");
+  expect(await page.evaluate(() => (window as unknown as Host).parentOutlineCalls)).toEqual([
+    { parent: parentId, ids: [childId] },
+  ]);
+  await expect(page.locator(`[data-block-id="${parentId}"]`).locator(content)).toBeFocused();
+  await expect(content).toHaveText("Keep nested");
+});

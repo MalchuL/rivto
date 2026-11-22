@@ -132,44 +132,79 @@
     0 0 0 3px var(--rivto-accent);
 }
 
-:root {
-  --rivto-block-gray: color-mix(in srgb, #64748b 18%, var(--rivto-background));
-  --rivto-block-red: color-mix(in srgb, #ef4444 18%, var(--rivto-background));
-  --rivto-block-orange: color-mix(in srgb, #f97316 18%, var(--rivto-background));
-  --rivto-block-yellow: color-mix(in srgb, #eab308 18%, var(--rivto-background));
-  --rivto-block-green: color-mix(in srgb, #22c55e 18%, var(--rivto-background));
-  --rivto-block-blue: color-mix(in srgb, #3b82f6 18%, var(--rivto-background));
-  --rivto-block-purple: color-mix(in srgb, #a855f7 18%, var(--rivto-background));
-}
-[data-block-id][data-block-background] {
-  border-radius: 8px;
-}
-[data-block-background="gray"] {
-  background-color: var(--rivto-block-gray);
-}
-[data-block-background="red"] {
-  background-color: var(--rivto-block-red);
-}
-[data-block-background="orange"] {
-  background-color: var(--rivto-block-orange);
-}
-[data-block-background="yellow"] {
-  background-color: var(--rivto-block-yellow);
-}
-[data-block-background="green"] {
-  background-color: var(--rivto-block-green);
-}
-[data-block-background="blue"] {
-  background-color: var(--rivto-block-blue);
-}
-[data-block-background="purple"] {
-  background-color: var(--rivto-block-purple);
-}
-
 /* Native pointer ownership is resolved by Page within each layout's bounds.
  * No viewport-wide pseudo-element participates in hit testing or scroll geometry.
  * Content remains above block-local decoration without changing handle geometry. */
 :is(.page-surface, .edgeless-card) .rivto-block-row > .rivto-block-content {
   position: relative;
   z-index: 1;
+}
+
+.block-color-custom {
+  position: relative;
+  overflow: hidden;
+}
+.block-color-custom .block-color-custom-palette {
+  fill: white;
+  stroke: black;
+  width: 16px;
+  height: 16px;
+}
+.block-color-custom .block-color-custom-check {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  color: #111;
+  filter: drop-shadow(0 0 1px white);
+}
+.block-color-custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100% !important;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.block-color-custom:focus-within {
+  box-shadow: 0 0 0 2px var(--rivto-accent);
+}
+
+.block-color-custom[data-selected] {
+  box-shadow:
+    0 0 0 1px var(--rivto-background),
+    0 0 0 3px var(--rivto-accent);
+}
+
+.block-color-alpha {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 9px 10px;
+  color: var(--rivto-muted-foreground);
+  font-size: 12px;
+}
+.block-color-alpha [data-slot="slider"] {
+  flex: 1;
+}
+.block-color-alpha-value {
+  min-width: 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.block-color-alpha [data-slot="slider-track"] {
+  height: 8px;
+  background:
+    linear-gradient(to right, transparent, var(--block-alpha-color)),
+    repeating-conic-gradient(#d4d4d8 0% 25%, #fff 0% 50%) 0 / 8px 8px;
+}
+.block-color-alpha [data-slot="slider-range"] {
+  background-color: transparent !important;
+}
+
+.block-color-swatch svg {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
 }

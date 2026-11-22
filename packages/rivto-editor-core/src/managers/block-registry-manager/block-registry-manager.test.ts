@@ -46,3 +46,33 @@ test("failed publication preserves its error and a rollback observer error after
   release();
   registry.destroy();
 });
+
+test("behavior registrations retain priority and references without publishing definition changes", () => {
+  const registry = new BlockRegistryManager();
+  const listener = jest.fn();
+  const stop = registry.subscribe(listener);
+  const first = { isAvailable: () => true };
+  const second = { isAvailable: () => true };
+  expect(() => registry.registerBehavior(first, Number.NaN)).toThrow("priority");
+  expect(registry.getBehaviorRegistrations()).toEqual([]);
+  const firstRelease = registry.registerBehavior(first, 10);
+  const sharedRelease = registry.registerBehavior(first, 10);
+  const secondRelease = registry.registerBehavior(second, 10);
+  expect(registry.getBehaviorRegistrations().map(({ behavior }) => behavior)).toEqual([
+    first,
+    second,
+  ]);
+  firstRelease();
+  firstRelease();
+  expect(registry.getBehaviorRegistrations().map(({ behavior }) => behavior)).toEqual([
+    first,
+    second,
+  ]);
+  sharedRelease();
+  expect(registry.getBehaviorRegistrations().map(({ behavior }) => behavior)).toEqual([second]);
+  expect(listener).not.toHaveBeenCalled();
+  registry.destroy();
+  expect(registry.getBehaviorRegistrations()).toEqual([]);
+  secondRelease();
+  stop();
+});

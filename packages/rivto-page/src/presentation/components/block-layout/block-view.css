@@ -6,6 +6,41 @@
   @apply page:rounded-[var(--rivto-block-radius,10px)];
 }
 
+.rivto-block[data-block-width] {
+  width: var(--rivto-block-own-width, auto);
+}
+
+.rivto-block[data-block-width-policy="grow"] {
+  width: max-content;
+  min-width: min(var(--rivto-block-own-width), 100%);
+  max-width: 100%;
+}
+
+.rivto-block[data-block-width-policy="scroll"] {
+  overflow-x: auto;
+}
+
+.rivto-block[data-block-width-policy="clip"] {
+  overflow-x: hidden;
+}
+
+.rivto-block[data-block-height-policy="grow"] {
+  min-height: var(--rivto-block-own-height);
+}
+
+.rivto-block[data-block-height-policy="scroll"],
+.rivto-block[data-block-height-policy="clip"] {
+  height: var(--rivto-block-own-height);
+}
+
+.rivto-block[data-block-height-policy="scroll"] {
+  overflow-y: auto;
+}
+
+.rivto-block[data-block-height-policy="clip"] {
+  overflow-y: hidden;
+}
+
 /* Selection belongs to the single block shell, including layouts without a row. */
 /* Layout surfaces consume this inherited fill while a subtree is selected.
  * Painting backgrounds directly preserves the exact theme color and leaves text,
@@ -19,4 +54,42 @@
 /* A selected ancestor already outlines the complete subtree. */
 .rivto-block[data-block-selected="true"] .rivto-block[data-block-selected="true"] {
   outline: none;
+}
+
+/* Each block owns its shell background override. */
+.rivto-block {
+  --rivto-block-shell-background: initial;
+}
+
+/* Each block supplies inherited text defaults; renderers may override individual elements. */
+/* Nested block shells start a new scope so their content uses its own defaults. */
+@scope (.rivto-block[data-block-text-color]) to (.rivto-block) {
+  .rivto-block-content {
+    color: var(--rivto-own-text-color);
+  }
+}
+@scope (.rivto-block[data-block-font-family]) to (.rivto-block) {
+  .rivto-block-content {
+    font-family: var(--rivto-own-font-family);
+  }
+}
+@scope (.rivto-block[data-block-font-size]) to (.rivto-block) {
+  .rivto-block-content {
+    font-size: var(--rivto-own-font-size);
+  }
+}
+@scope (.rivto-block[data-block-font-weight]) to (.rivto-block) {
+  .rivto-block-content {
+    font-weight: var(--rivto-own-font-weight);
+  }
+}
+@scope (.rivto-block[data-block-line-height]) to (.rivto-block) {
+  .rivto-block-content {
+    line-height: var(--rivto-own-line-height);
+  }
+}
+@scope (.rivto-block[data-block-text-alignment]) to (.rivto-block) {
+  .rivto-block-content {
+    text-align: var(--rivto-own-text-alignment);
+  }
 }

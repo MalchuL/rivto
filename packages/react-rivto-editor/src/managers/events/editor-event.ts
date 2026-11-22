@@ -37,6 +37,7 @@ export class EditorEvent<
    */
   constructor(init: EditorEventInit<Target, Type>) {
     this.raw = init.raw;
+    // Handlers need the panel that received this event even if focus moves during dispatch.
     this.reactPanel = init.reactPanel;
     this.root = init.root;
     this.mode = init.mode;

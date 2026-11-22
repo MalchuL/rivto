@@ -30,7 +30,7 @@ export class DocumentEditor implements DocumentEditorAPI {
   readonly blocks: BlockManager;
   /** Public owner of list-property defaults and semantic validation. */
   readonly blockListProps: BlockListPropsManager;
-  /** Public owner of native block definitions and property validation. */
+  /** Public owner of native block definitions, behavior registrations, and property validation. */
   readonly blockRegistry: BlockRegistryManager;
   /** Public owner of first-class canvas element commands. */
   readonly elements: ElementManager;
@@ -39,43 +39,44 @@ export class DocumentEditor implements DocumentEditorAPI {
   /** Named command handlers exposed to integrations and focused managers. */
   readonly commands = new CommandRegistry();
   /** Local text and structural selection state; never persisted to the document. */
-  readonly selection: SelectionManager;
+  readonly selection: DocumentEditorAPI["selection"];
   /** Local history and transaction batching for document changes. */
-  readonly history: HistoryManager;
+  readonly history: DocumentEditorAPI["history"];
   /** Framework-neutral structured and plain-text clipboard operations. */
-  readonly clipboard: ClipboardManager;
+  readonly clipboard: DocumentEditorAPI["clipboard"];
   /** Named subscribers notified whenever public runtime state changes. */
   private readonly listeners = new Listeners<{ editorChanged: void }>();
   /** Owned subscription cleanup callbacks called during `destroy()`. */
   private readonly unsubscribeFns: Array<() => void> = [];
   /** Monotonic snapshot incremented before notifying runtime subscribers. */
   private currentRevision = 0;
-  private readonly document: DocumentModel;
+  private readonly model: DocumentModel;
   private destroyed = false;
 
   /**
    * Creates a single-document runtime with stable managers and local interaction state.
    *
-   * @param options - Caller-owned document whose identity is fixed for this runtime; construction does not load other documents. Presentation is owned by the UI panel.
+   * @param options - Caller-owned document whose identity stays fixed for this runtime;
+   * construction does not load other documents and presentation belongs to the UI panel.
    * @throws If the document is missing or runtime initialization fails.
    */
   constructor(options: CreateDocumentEditorOptions) {
     if (!options.document) {
       throw new Error("Document is required");
     }
-    this.document = options.document;
-    this.history = new HistoryManager(this.document.history);
+    this.model = options.document;
+    this.history = new HistoryManager(this.model.history);
     this.blockRegistry = new BlockRegistryManager();
     this.blockListProps = new BlockListPropsManager();
-    this.blocks = new BlockManager(this);
+    this.blocks = new BlockManager(this, this.blockRegistry);
     this.elements = new ElementManager(this);
     this.selection = new SelectionManager(this);
     this.clipboard = new ClipboardManager(this);
     this.unsubscribeFns.push(
       this.blockRegistry.subscribe(() => this.notifyChanges()),
-      this.document.subscribe(() => this.notifyChanges()),
-      this.document.blocks.subscribeStructure(() => this.reconcileDocumentSelection()),
-      this.document.elements.subscribeMembership(() => this.reconcileDocumentSelection()),
+      this.model.subscribe(() => this.notifyChanges()),
+      this.model.blocks.subscribeStructure(() => this.reconcileDocumentSelection()),
+      this.model.elements.subscribeMembership(() => this.reconcileDocumentSelection()),
     );
   }
 
@@ -105,9 +106,13 @@ export class DocumentEditor implements DocumentEditorAPI {
     return this.listeners.subscribe("editorChanged", listener);
   }
 
-  /** @returns The model permanently owned by this editor's document operations. */
+  /**
+   * Reads the model supplied to the editor at construction.
+   *
+   * @returns The same caller-owned model used by every document operation.
+   */
   getDocument(): DocumentModel {
-    return this.document;
+    return this.model;
   }
 
   /**
@@ -121,7 +126,7 @@ export class DocumentEditor implements DocumentEditorAPI {
    * @throws When canonical snapshot validation fails or the CRDT cannot apply the update.
    */
   load(snapshot: EditorSnapshotUpdate): void {
-    this.document.loadSnapshot(snapshot);
+    this.model.loadSnapshot(snapshot);
     this.history.clear();
   }
 
@@ -131,7 +136,7 @@ export class DocumentEditor implements DocumentEditorAPI {
    * @returns Detached snapshot v7 suitable for persistence or transfer.
    */
   dump(): EditorSnapshot {
-    return this.document.getSnapshot();
+    return this.model.getSnapshot();
   }
 
   /**

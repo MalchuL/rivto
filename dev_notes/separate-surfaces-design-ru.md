@@ -79,7 +79,7 @@ edgeless integration проверяются отдельно; canonical model о
 | `managers/events/panel-dom.ts`                    | PanelDOM ограничивает поиск occurrence, но знает `.page-block-row`         | Общая маршрутизация остаётся; форма block DOM принадлежит page          |
 | `managers/clipboard/clipboard-manager.ts`         | Есть ветвление по фактическому surface type                                | Делегировать presentation policy, оставить форматы/валидацию общими     |
 | `styles/index.css`                                | В одном entry CSS всех поверхностей, контейнеров и расширений              | Раздельные CSS entry и проверка независимой сборки                      |
-| `components/editor-panel/types.ts`                | EditorPanelProps содержит page virtualization options                      | Перенести настройки на PageSurface                                      |
+| `panels/types.ts`                                 | EditorPanelProps содержит page virtualization options                      | Перенести настройки на PageSurface                                      |
 
 Не следует считать все файлы с `page` page-only: caret navigation, merge, indent,
 collapse, list behavior и DnD работают также внутри canvas-карточек. Не следует считать

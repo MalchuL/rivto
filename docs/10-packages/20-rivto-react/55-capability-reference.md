@@ -40,7 +40,7 @@
 
 ### `insertBlock(input, destination?)`
 
-- **Аргументы:** input; в DocumentEditorAPI — `{ parentId: string | null, beforeId?: string }`, в PanelAPI — `{ root: true, beforeId?: string } | { parentId: string, beforeId?: string }`. Без destination вставка идёт в конец корней соответствующего API.
+- **Аргументы:** input; в DocumentEditorAPI — `{ parentId: string | null, beforeId?: string }`, в PanelAPI — `{ parentId: null, beforeId?: string } | { parentId: string, beforeId?: string }`. Без destination вставка идёт в конец корней соответствующего API.
 - **Возвращает:** complete persisted block.
 - **Исключения:** preparation/core insertion errors.
 

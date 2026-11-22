@@ -1,6 +1,7 @@
+import { createContainerBackgroundProcessor } from "../../../blocks/style/background-color";
 /**
  * Optional responsive Bento container for ordinary editor blocks. Width
- * preferences live in block props; content controls height. Tile widths are
+ * preferences live in block styles; content controls height by default. Tile widths are
  * previewed from left and right edges without reflowing the wrap layout, then
  * persisted once the pointer is released. Shared tree, keyboard and drag
  * extensions retain ownership of hierarchy, Enter, selection and transactions.
@@ -20,7 +21,7 @@ import {
   ContainerSummaryTitle,
 } from "../container-summary-title";
 import type { ReactEditorExtension } from "../../../managers";
-import { BENTO_BLOCK_TYPE, bentoBehavior } from "./bento-behavior";
+import { BENTO_BLOCK_TYPE, bentoBehavior, restoreBentoSize } from "./bento-behavior";
 
 export { BENTO_BLOCK_TYPE } from "./bento-behavior";
 const SUMMARY_CLASS = "rivto-bento-summary";
@@ -95,8 +96,43 @@ function BentoModalWrapper({ block, children }: BlockWrapperProps) {
 export function bentoExtension(): ReactEditorExtension {
   return {
     id: "block.bento",
+    /**
+     * Installs Bento sizing, background defaults and block presentation for this editor.
+     *
+     * @param reactEditor - Runtime that owns the extension registrations.
+     * @returns Disposer that releases those registrations in reverse installation order.
+     */
     setup: (reactEditor) => {
       const disposers = [
+        // Defaults missing background on creation/conversion; removes the processor with the extension.
+        reactEditor.extensions.registerCleanup(
+          reactEditor.blocks.registerProcessor(
+            createContainerBackgroundProcessor(BENTO_BLOCK_TYPE),
+          ),
+        ),
+        // Normalize detached copies before their destination-specific enter hook runs.
+        // The processor does not inspect the destination parent: an ID absent from
+        // this document may carry Bento overrides from a copy or another document.
+        // Restore its saved dimensions first; a receiving Bento reapplies its size
+        // in onChildEnter. Existing blocks keep their current placement size.
+        reactEditor.extensions.registerCleanup(
+          reactEditor.blocks.registerProcessor({
+            id: "bento.restore-detached-width",
+            priority: 0,
+            /**
+             * Restores the saved dimensions of a detached block before its parent applies placement sizing.
+             *
+             * @param block - Input being prepared for insertion or update.
+             * @returns Existing input for a known ID, otherwise the input with its saved size restored.
+             */
+            processor: (block) => {
+              if (block.id && reactEditor.blocks.hasBlock(block.id)) {
+                return block;
+              }
+              return restoreBentoSize(block);
+            },
+          }),
+        ),
         reactEditor.blockTypes.register({
           definition: {
             type: BENTO_BLOCK_TYPE,

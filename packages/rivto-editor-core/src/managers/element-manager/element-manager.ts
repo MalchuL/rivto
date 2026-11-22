@@ -12,34 +12,50 @@ import type {
   ElementInput,
   ElementUpdate,
 } from "@chulane/document-model";
-import type { DocumentEditorAPI } from "../../editor/types";
+import type { ElementPropertyRegistry } from "../element-registry";
+import type { DocumentCommandsEditor } from "../../editor/types";
 import type { ElementProcessor } from "./element-pipe";
 import type { ElementManagerApi } from "../types";
 import { Pipe } from "../../utils/pipe";
 
-interface ElementProcessorRegistration {
-  readonly processor: ElementProcessor;
-  dispose: () => void;
+/** Editor capabilities required by document element operations. */
+export interface ElementManagerEditor extends DocumentCommandsEditor {
+  /** Type-specific validation for element data. */
+  readonly elementRegistry: ElementPropertyRegistry;
 }
 
 /** Public typed manager for generic first-class canvas elements. */
-export class ElementManager implements ElementManagerApi {
+export class ElementManager<
+  Editor extends ElementManagerEditor = ElementManagerEditor,
+> implements ElementManagerApi {
   /**
    * Editor-owned element processing pipeline.
    *
    * It remains stable across operations on different documents, so extension
    * processors follow this editor without becoming shared document state.
    */
-  private readonly pipe = new Pipe<ElementInput>();
-  private readonly processors = new Set<ElementProcessorRegistration>();
+  private readonly pipe: Pipe<ElementInput>;
+  private readonly processorDisposers: Set<() => void>;
+  private readonly ownsProcessors: boolean;
   private readonly subscriptions = new Set<() => void>();
 
   /**
    * Binds element commands to the owning document editor.
    *
-   * @param editor - Editor that owns this operation and its registrations.
+   * Without an owner, this manager owns its processor registrations; otherwise
+   * registrations remain owned by the supplied manager.
+   *
+   * @param editor - Editor providing the document and history for these operations.
+   * @param owner - Existing manager whose processor pipeline is borrowed, if any.
    */
-  constructor(private readonly editor: DocumentEditorAPI) {}
+  constructor(
+    protected readonly editor: Editor,
+    owner?: ElementManager,
+  ) {
+    this.pipe = owner ? owner.pipe : new Pipe<ElementInput>();
+    this.processorDisposers = owner?.processorDisposers ?? new Set();
+    this.ownsProcessors = !owner;
+  }
 
   /**
    * Reads the ordered direct child IDs of an element or document root IDs, excluding descendants.
@@ -116,16 +132,12 @@ export class ElementManager implements ElementManagerApi {
    * @throws If the processor ID is empty.
    */
   registerProcessor(processor: ElementProcessor): () => void {
-    const registration: ElementProcessorRegistration = {
-      processor,
-      dispose: this.pipe.register(processor),
-    };
-    this.processors.add(registration);
+    const dispose = this.pipe.register(processor);
+    this.processorDisposers.add(dispose);
     return () => {
-      if (!this.processors.delete(registration)) {
-        return;
+      if (this.processorDisposers.delete(dispose)) {
+        dispose();
       }
-      registration.dispose();
     };
   }
 
@@ -426,18 +438,31 @@ export class ElementManager implements ElementManagerApi {
     this.editor.history.batchUpdates(() => this.document.elements.removeElements(ids));
   }
 
-  /** Releases this manager's subscriptions and processors. */
+  /**
+   * Removes the subscriptions retained by this manager and its own processors.
+   *
+   * A panel borrows its source manager’s processing pipeline. Only the manager
+   * that created the pipeline disposes those registrations.
+   *
+   * @returns All local subscriptions and owned processors have been released.
+   */
   destroy(): void {
     this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions.clear();
-    this.processors.forEach((registration) => registration.dispose());
-    this.processors.clear();
+    if (this.ownsProcessors) {
+      this.processorDisposers.forEach((dispose) => dispose());
+      this.processorDisposers.clear();
+    }
   }
 
-  /** @returns The explicit document or throws outside a document context. */
+  /**
+   * Reads the document bound to this element manager.
+   *
+   * @returns The model used for element reads and mutations.
+   * @throws If the owner cannot supply a document.
+   */
   private get document(): DocumentModel {
-    const document = this.editor.getDocument();
-    return document;
+    return this.editor.getDocument();
   }
 
   /**

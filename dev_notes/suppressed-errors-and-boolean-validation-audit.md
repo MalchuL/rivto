@@ -118,7 +118,7 @@ list properties")`. The caller cannot identify the rejecting registration,
 ### 9. DOM selection errors silently fall back to stale or changed selection
 
 - **Locations:**
-  - `packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts:214`
+  - [editor-dom-selection.ts:214](https://github.com/MalchuL/rivto/blob/d909425bdee9640ffcd68238bbfda0466385c227/packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L214)
   - `packages/react-rivto-editor/src/managers/selection/dom-text-selection.ts:176`
   - `packages/react-rivto-editor/src/managers/events/selection.ts:76`
   - `packages/react-rivto-editor/src/extensions/built-ins/slash/slash-menu.tsx:76`

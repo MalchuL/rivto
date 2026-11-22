@@ -6,7 +6,7 @@ import {
 } from "@chulane/rivto-page";
 import type { EditorBlock } from "@chulane/rivto";
 import type { CrossDocumentPageRootController } from "../../extensions/block-drag/types";
-import type { CrossDocumentBlockPanel } from "../../extensions/block-drag/cross-document/panel";
+import type { BlockDragOperations } from "../../extensions/block-drag/block-drag-operations";
 import { crossDocumentPageRootControllers } from "../../extensions/block-drag/cross-document/target";
 
 /** One registered Page receiving attachment, shared by writing-page and canvas sources. */
@@ -21,7 +21,7 @@ export class PageDragOccurrence implements CrossDocumentPageRootController {
    * @param targets - Local Page geometry; foreign lookup stays with the source owner.
    */
   constructor(
-    readonly reactPanel: CrossDocumentBlockPanel,
+    readonly reactPanel: BlockDragOperations,
     readonly root: HTMLElement,
     readonly targets: Pick<BlockDropTargetsApi, "resolve">,
   ) {
@@ -67,7 +67,7 @@ export class PageDragOccurrence implements CrossDocumentPageRootController {
         ? new Set(sources.map(({ id }) => id))
         : new Set<string>();
     const accepts: BlockDropAcceptance = (destination) =>
-      this.reactPanel.editor.blockBehaviors.canMove({
+      this.reactPanel.editor.blocks.canMove({
         sources,
         destination: {
           parentId: destination.parentId,

@@ -205,7 +205,17 @@ export class BlockDOMSelection {
     const hit = root.ownerDocument.elementFromPoint(x, y);
     // A nested panel is one block in the originating surface. Its source rows
     // must not turn a host selection endpoint into a nearby editable sibling.
-    const block = this.getBlock(root, this.isElement(hit) ? hit : null);
+    if (!hit || !root.contains(hit)) {
+      return undefined;
+    }
+    let element: Element | null = hit;
+    let occurrence = element.closest<HTMLElement>(PANEL_SELECTOR);
+    while (occurrence && occurrence !== root) {
+      element = occurrence.parentElement;
+      occurrence = element?.closest<HTMLElement>(PANEL_SELECTOR) ?? null;
+    }
+    const block =
+      occurrence === root ? element?.closest<HTMLElement>(BLOCK_ID_SELECTOR) : undefined;
     if (!block || !root.contains(block)) {
       return undefined;
     }
@@ -221,6 +231,18 @@ export class BlockDOMSelection {
         : undefined;
     const target = nestedHit ?? block;
     return target.getAttribute(BLOCK_ID_ATTRIBUTE) ?? undefined;
+  }
+
+  /**
+   * Finds the nearest mounted block when the pointer starts in surface whitespace.
+   *
+   * @param root - Editor occurrence that owns the selectable blocks.
+   * @param x - Horizontal viewport coordinate.
+   * @param y - Vertical viewport coordinate.
+   * @returns The nearest block ID, or undefined when no block is mounted.
+   */
+  readNearestBlockId(root: HTMLElement, x: number, y: number): string | undefined {
+    return this.nearestNestedBlock(root, x, y)?.getAttribute(BLOCK_ID_ATTRIBUTE) ?? undefined;
   }
 
   /**
@@ -298,7 +320,8 @@ export class BlockDOMSelection {
    *
    * Those APIs return a Node (often Text) plus an offset. When the hit falls
    * outside the target content (or the browser only hit-tests the focused
-   * contenteditable), {@link nearestTextPoint} scans text nodes locally.
+   * contenteditable), scan text nodes in the chosen host and measure collapsed
+   * ranges to find the closest character offset.
    *
    * @param root - EditorPanel root that scopes which content hosts are valid.
    * @param x - Client X in viewport pixels.
@@ -306,7 +329,25 @@ export class BlockDOMSelection {
    * @returns Live `{ node, offset, content }`, or `undefined` if no content host exists.
    */
   readDOMSelectionPoint(root: HTMLElement, x: number, y: number): DOMSelectionPoint | undefined {
-    const content = this.contentNearPoint(root, x, y);
+    let content = root.ownerDocument
+      .elementFromPoint(x, y)
+      ?.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR);
+    if (!content || !root.contains(content) || !this.contains(root, content)) {
+      // A gutter or virtual gap has no direct content hit. Keep the first nearest host
+      // in DOM order so equally distant blocks resolve consistently.
+      content = undefined;
+      let nearestDistance = Infinity;
+      for (const candidate of root.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)) {
+        if (!this.blockIdForContent(candidate) || !this.contains(root, candidate)) {
+          continue;
+        }
+        const distance = this.distanceToRect(candidate.getBoundingClientRect(), x, y);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          content = candidate;
+        }
+      }
+    }
     if (!content) {
       return;
     }
@@ -319,7 +360,28 @@ export class BlockDOMSelection {
     if (node && offset !== undefined && content.contains(node)) {
       point = { node, offset, content };
     } else {
-      point = this.nearestTextPoint(content, x, y);
+      // Walk Text nodes only. Each visited `node` is a Node (#text), not an Element.
+      const walker = document.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
+      let best: DOMSelectionPoint | undefined;
+      let bestDistance = Number.POSITIVE_INFINITY;
+
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node.textContent ?? "";
+        for (let offset = 0; offset <= text.length; offset += 1) {
+          const range = document.createRange();
+          // Caret at character `offset` inside this Text node.
+          range.setStart(node, offset);
+          range.collapse(true);
+          const rect = range.getBoundingClientRect();
+          const distance = Math.hypot(x - rect.left, y - (rect.top + rect.height / 2));
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            best = { node, offset, content };
+          }
+        }
+      }
+      // Empty block: no Text children — use the content HTMLElement as the Node.
+      point = best ?? { node: content, offset: 0, content };
     }
     return point;
   }
@@ -388,9 +450,15 @@ export class BlockDOMSelection {
     position: EditorPosition,
   ): DOMSelectionPoint | undefined {
     let content = this.findContent(root, position.blockId);
-    if (!content && !this.hasMountedBlock(root, position.blockId)) {
-      BlockVirtualizationController.getForRoot(root)?.mountBlocks([position.blockId]);
-      content = this.findContent(root, position.blockId);
+    if (!content) {
+      // Only unmounted blocks need a virtual pin. A mounted structural shell has no native caret.
+      const shells = root.querySelectorAll<HTMLElement>(
+        `[data-block-id="${CSS.escape(position.blockId)}"]`,
+      );
+      if (![...shells].some((shell) => this.contains(root, shell))) {
+        BlockVirtualizationController.getForRoot(root)?.mountBlocks([position.blockId]);
+        content = this.findContent(root, position.blockId);
+      }
     }
     return content
       ? { ...BlockDOMSelection.pointAtOffset(content, position.offset), content }
@@ -534,27 +602,6 @@ export class BlockDOMSelection {
   }
 
   /**
-   * Returns every editable content host under `root` in visible DOM order.
-   *
-   * @param root - EditorPanel root Element that scopes the query.
-   * @returns HTMLElements matching `[data-block-content]` that have a block ID.
-   */
-  private orderedContents(root: HTMLElement): HTMLElement[] {
-    return [...root.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)].filter(
-      (content) => Boolean(this.blockIdForContent(content)) && this.contains(root, content),
-    );
-  }
-
-  /**
-   * Returns every rendered BlockView ID in visible depth-first DOM order.
-   *
-   * @param root - EditorPanel root Element that scopes the query.
-   */
-  private orderedBlockIds(_root: HTMLElement): readonly string[] {
-    return this.selection.getSelectableBlockIds();
-  }
-
-  /**
    * Maps one browser selection endpoint to a portable `{ blockId, offset }`.
    *
    * Core DOM → editor conversion. The browser gives a live caret as
@@ -661,68 +708,6 @@ export class BlockDOMSelection {
   }
 
   /**
-   * Finds the editable content under the pointer, or the nearest one in a gap.
-   *
-   * @param root - EditorPanel root that scopes ownership.
-   * @param x - Client X in viewport pixels.
-   * @param y - Client Y in viewport pixels.
-   * @returns The hit `[data-block-content]` Element, or the closest one by distance.
-   */
-  private contentNearPoint(root: HTMLElement, x: number, y: number): HTMLElement | undefined {
-    const hit = root.ownerDocument
-      .elementFromPoint(x, y)
-      ?.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR);
-    if (hit && root.contains(hit) && this.contains(root, hit)) {
-      return hit;
-    }
-    return this.orderedContents(root)
-      .map((content) => ({
-        content,
-        distance: this.distanceToRect(content.getBoundingClientRect(), x, y),
-      }))
-      .sort((left, right) => left.distance - right.distance)[0]?.content;
-  }
-
-  /**
-   * Brute-force caret lookup inside one content Element when browser hit-testing
-   * fails (common when focus is in a different contenteditable).
-   *
-   * Walks every Text node under `content` (SHOW_TEXT — character Nodes only,
-   * not Element tags), measures a collapsed Range rect at each character
-   * offset, and picks the closest to `(x, y)`.
-   *
-   * @param content - Editable block-content HTMLElement to scan.
-   * @param x - Client X in viewport pixels.
-   * @param y - Client Y in viewport pixels.
-   * @returns Best DOM endpoint; falls back to `(content Element, 0)` when empty.
-   */
-  private nearestTextPoint(content: HTMLElement, x: number, y: number): DOMSelectionPoint {
-    const document = content.ownerDocument;
-    // Walk Text nodes only. Each visited `node` is a Node (#text), not an Element.
-    const walker = document.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
-    let best: DOMSelectionPoint | undefined;
-    let bestDistance = Number.POSITIVE_INFINITY;
-
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const text = node.textContent ?? "";
-      for (let offset = 0; offset <= text.length; offset += 1) {
-        const range = document.createRange();
-        // Caret at character `offset` inside this Text node.
-        range.setStart(node, offset);
-        range.collapse(true);
-        const rect = range.getBoundingClientRect();
-        const distance = Math.hypot(x - rect.left, y - (rect.top + rect.height / 2));
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          best = { node, offset, content };
-        }
-      }
-    }
-    // Empty block: no Text children — use the content HTMLElement as the Node.
-    return best ?? { node: content, offset: 0, content };
-  }
-
-  /**
    * Resolves a plain-text character offset back to a live DOM `{ node, offset }`.
    *
    * Inverse of {@link readPosition}:
@@ -763,25 +748,6 @@ export class BlockDOMSelection {
   }
 
   /**
-   * Resolves an owning block, projecting nested occurrence hits onto their enclosing block.
-   *
-   * @param root - Current occurrence.
-   * @param element - Browser hit target.
-   * @returns Owning block, or null outside this occurrence.
-   */
-  private getBlock(root: HTMLElement, element: Element | null): HTMLElement | null {
-    if (!element || !root.contains(element)) {
-      return null;
-    }
-    let occurrence = element.closest<HTMLElement>(PANEL_SELECTOR);
-    while (occurrence && occurrence !== root) {
-      element = occurrence.parentElement;
-      occurrence = element?.closest<HTMLElement>(PANEL_SELECTOR) ?? null;
-    }
-    return occurrence === root ? (element?.closest<HTMLElement>(BLOCK_ID_SELECTOR) ?? null) : null;
-  }
-
-  /**
    * Finds editable content for a stable block ID.
    *
    * @param root - Current occurrence.
@@ -802,22 +768,6 @@ export class BlockDOMSelection {
       }
     }
     return undefined;
-  }
-
-  /**
-   * Distinguishes an unmounted block from a mounted structural block without editable text.
-   *
-   * Structural cards cannot supply a native text point. Requesting another mount
-   * for their existing shells would retain unnecessary virtual-root pins without
-   * a native selection change to release them.
-   *
-   * @param root - Editor occurrence whose mounted shells may be inspected.
-   * @param id - Stable identity of the requested text endpoint.
-   * @returns True for an existing shell owned by this occurrence, excluding nested editors.
-   */
-  private hasMountedBlock(root: HTMLElement, id: string): boolean {
-    const blocks = root.querySelectorAll<HTMLElement>(`[data-block-id="${CSS.escape(id)}"]`);
-    return Array.from(blocks).some((block) => this.contains(root, block));
   }
 
   /**

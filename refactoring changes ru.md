@@ -139,7 +139,7 @@ reactEditor.selection.focusCaret({ blockId, offset });
 
 ```
 
-Под этими операциями нужно объединить дублирующееся преобразование текстового смещения в DOM-позицию из packages/react-rivto-editor/src/managers/events/block-dom.ts:170 и packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts:519.
+Под этими операциями нужно объединить дублирующееся преобразование текстового смещения в DOM-позицию из packages/react-rivto-editor/src/managers/events/block-dom.ts:170 и [editor-dom-selection.ts:519](https://github.com/MalchuL/rivto/blob/544a6c4ca69da79468b09e53203c4113fa528bd3/packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L519).
 
 Нативные `Node` остаются внутри браузерного кода выделения. Через границу адаптера проходит `EditorPosition`.
 

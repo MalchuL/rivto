@@ -101,6 +101,7 @@ export class PageNavigationController extends BlockNavigation implements PageNav
    */
   static getForElement(element: HTMLElement): PageNavigationApi | undefined {
     const root = element.closest<HTMLElement>("[data-rivto-block-editor]");
+    // An embed can be inside a Page DOM root while owning its own keyboard navigation.
     if (!root || element.closest(PANEL_SELECTOR) !== root.closest(PANEL_SELECTOR)) {
       return undefined;
     }

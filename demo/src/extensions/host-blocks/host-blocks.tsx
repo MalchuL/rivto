@@ -872,10 +872,10 @@ export function mathBlockExtension(): ReactEditorExtension {
             /**
              * Selects only math blocks for this editing behavior.
              *
-             * @param context - Current block and owning editor.
+             * @param block - Block input whose type determines whether math editing applies.
              * @returns Whether the block contains math source.
              */
-            isAvailable: ({ block }) => block.type === MATH_BLOCK_TYPE,
+            isAvailable: (block) => block.type === MATH_BLOCK_TYPE,
             /**
              * Inserts a line break at the current caret within the caller's transaction.
              *

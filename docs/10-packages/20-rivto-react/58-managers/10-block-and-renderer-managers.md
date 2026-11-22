@@ -48,12 +48,12 @@ Defaults объединяются shallowly в registration order. Ошибка 
 
 ## `blockBehaviors` — цепочка поведения
 
-`register(behavior, priority = 0)` добавляет поведение, которое самостоятельно определяет применимость через обязательный `isAvailable(context)`. Больший приоритет выполняется первым; при равенстве сохраняется порядок регистрации. Тип блока больше не является ключом регистрации. Disposer снимает только свою регистрацию и автоматически принадлежит extension lifecycle; типовых `get/has/delete` и специального `fallback` нет.
+`register(behavior, priority = 0)` добавляет поведение, которое самостоятельно определяет применимость через обязательный `isAvailable(block)`. Больший приоритет выполняется первым; при равенстве сохраняется порядок регистрации. Тип блока больше не является ключом регистрации. Disposer снимает только свою регистрацию и автоматически принадлежит extension lifecycle; типовых `get/has/delete` и специального `fallback` нет.
 
-Контекст применимости общий для всех методов: `BlockBehaviorAvailabilityContext { editor, block }`. Он содержит runtime и текущие detached-данные одного блока без рекурсивных детей. Union, `kind`, имя операции и параметры перемещения отсутствуют; выбранный метод сам определяет операцию и проверяет специфичные для него условия. При перемещении registry проверяет источники и принимающий блок через тот же `isAvailable`, а каждую подходящую регистрацию вызывает один раз, даже если совпали несколько источников и parent. Только метод `canMove` получает `BlockMoveContext { sources, destination, editor, parent }`. Для root insertion принимающего блока нет, применимость проверяется по источникам, а метод получает `parent: null`. Foreign source передаётся напрямую, без поиска его ID в документе назначения. Предикат синхронный, не изменяет документ и вычисляется заново; доступность по native type не кэшируется.
+Предикат применимости получает текущие detached-данные одного блока без обязательных рекурсивных детей; он не зависит от React runtime и используется обоими реестрами. Union, `kind`, имя операции и параметры перемещения отсутствуют; выбранный метод сам определяет операцию и проверяет специфичные для него условия. При перемещении registry проверяет источники и принимающий блок через тот же `isAvailable`, а каждую подходящую регистрацию вызывает один раз, даже если совпали несколько источников и parent. Только метод `canMove` получает `BlockStructuralMoveContext { sources, destination, parent }`. Для root insertion принимающего блока нет, применимость проверяется по источникам, а метод получает `parent: null`. Foreign source передаётся напрямую, без поиска его ID в документе назначения. Предикат синхронный, не изменяет документ и вычисляется заново; доступность по native type не кэшируется.
 
 - `dispatch(action, context, ...args)` вызывает применимые методы до `handled` или `rejected`; `unhandled` и отсутствующий метод продолжают цепочку. Унаследованные методы вызываются обычным образом, без распознавания fallback.
-- `resolveAll(context)` возвращает применимые экземпляры в порядке приоритета для указанного блока и runtime.
+- `resolveAll(block)` возвращает применимые экземпляры в порядке приоритета для указанного блока и runtime.
 - `onSplit(context, target)` определяет свойства продолжения и выполняет Enter через общий алгоритм разделения. Первое применимое поведение с `handled` или `rejected` останавливает цепочку; свойства нескольких поведений не объединяются. При отсутствии специализированного обработчика `DefaultBlockBehavior` использует defaults writing factory.
 - `childrenVisible(block)` возвращает `false`, если хотя бы одно применимое поведение скрывает детей.
 - `canMove({ sources, destination })` проверяет семантическое перемещение независимо от keyboard или drag. Parent читается один раз; пустые sources, отсутствующий parent и beforeId не из его списка отклоняются. Любой применимый hook с `false` запрещает перемещение независимо от приоритета. Root insertion передаёт `parent: null`; ограничения источников продолжают действовать. Foreign sources проверяются по переданным снимкам, без поиска их ID в документе назначения. Проверка не изменяет документ и не заменяет core hierarchy validation.
@@ -70,12 +70,12 @@ Native поведения имеют приоритет `0`, list/collapse — `
 `prepareInput(input)` делегирует recursive preparation core `BlockManager`.
 
 `destination` задаёт реального parentId (null для document roots) и optional beforeId.
-ReactPanelApi принимает `{ root: true }` для своих корней либо локальный parentId и ограничивает операции поддеревом.
+ReactPanelApi принимает `{ parentId: null }` для своих корней либо локальный parentId и ограничивает операции поддеревом.
 
 ### Mutation methods
 
 - `insertBlock(input, destination?)` → complete persisted block; throws для invalid list props/core insertion.
-- `importForest(blocks, destination?, onError?)` accepts explicit `EditorBlock | EditorBlockInput` roots and returns `{ roots, idMap }`.
+- `importForest(blocks, destination?, options?)` accepts explicit `EditorBlock | EditorBlockInput` roots and returns `{ roots, idMap }`. `options.onError` supplies recovery, `options.ids` supplies a preallocated mapping, and `options.preserveIds` rejects missing, conflicting, or changed IDs before insertion.
 - `updateBlock(id, patch)` → complete persisted block; throws для missing/invalid operation.
 - `updateBlocks(updates)` → complete persisted blocks in input order; strict atomic core batch, throws если любая entry invalid.
 - `deleteListProps(id, keys)` → change `boolean`; throws для missing/invalid operation.

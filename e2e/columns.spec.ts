@@ -8,11 +8,17 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
  *
  * @param page - Browser page whose default demo document is replaced.
  * @param mode - Page or edgeless presentation of the same three-column board.
+ * @param card - Set borderless to false when the test uses controls in the outer gutter.
  * @returns Resolves once the document is seeded and the surface is selected.
  */
-async function openUnequalColumns(page: Page, mode: "block" | "edgeless") {
+async function openUnequalColumns(
+  page: Page,
+  mode: "block" | "edgeless",
+  card: { borderless?: boolean } = {},
+) {
   await page.goto("/?test_features=1");
-  await page.evaluate((mode) => {
+  const canvasCard = mode === "edgeless" ? card : undefined;
+  await page.evaluate((card) => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
     const columns = [8, 1, 3].map((count) => ({
@@ -29,15 +35,15 @@ async function openUnequalColumns(page: Page, mode: "block" | "edgeless") {
       blocks: [editor.blocks.getBlock(id)!],
       elements: [],
     });
-    if (mode === "edgeless") {
+    if (card) {
       editor.elements.insertElement({
         type: "block",
         zIndex: 0,
         frame: { x: 20, y: 20, width: 950, height: 500 },
-        props: { startBlockId: id, endBlockId: id },
+        props: { startBlockId: id, endBlockId: id, ...card },
       });
     }
-  }, mode);
+  }, canvasCard);
   await page.locator(`[data-editor-mode="${mode}"]`).click();
 }
 
@@ -108,7 +114,7 @@ for (const mode of ["block", "edgeless"] as const) {
       .toBe(true);
   });
   test(`extends every divider to the tallest column in ${mode} mode`, async ({ page }) => {
-    await openUnequalColumns(page, mode);
+    await openUnequalColumns(page, mode, { borderless: false });
     const board = page.locator('[data-block-type="columns"]').first();
     await board.scrollIntoViewIfNeeded();
     await expect

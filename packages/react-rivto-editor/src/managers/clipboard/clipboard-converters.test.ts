@@ -274,6 +274,45 @@ test("Cut formats before deleting and supplies its receiving panel to converters
   f.close();
 });
 
+test("document cut deletes the explicit selection and defaults to the current selection", async () => {
+  const f = await fixture();
+  try {
+    for (const id of ["explicit", "current"]) {
+      f.editor.blocks.insertBlock({ id, type: "paragraph", content: id });
+    }
+    const current = createStructuralSelection(["current"]);
+    f.editor.selection.set(current);
+    expect(f.clipboard.cut(createStructuralSelection(["explicit"]))?.blocks[0]?.id).toBe(
+      "explicit",
+    );
+    expect(f.editor.blocks.hasBlock("explicit")).toBe(false);
+    expect(f.editor.blocks.hasBlock("current")).toBe(true);
+    f.editor.selection.set(current);
+    expect(f.clipboard.cut()?.blocks[0]?.id).toBe("current");
+    expect(f.editor.blocks.hasBlock("current")).toBe(false);
+    expect(f.clipboard.cut()).toBeUndefined();
+  } finally {
+    f.close();
+  }
+});
+
+test("cut rejects a foreign source panel even when the selected block ID exists in both documents", async () => {
+  const source = await fixture();
+  const other = await fixture();
+  try {
+    for (const f of [source, other]) {
+      f.editor.blocks.insertBlock({ id: "shared-id", type: "paragraph" });
+    }
+    const selection = createStructuralSelection(["shared-id"]);
+    expect(() => source.clipboard.cut(selection, other.reactPanel)).toThrow("different document");
+    expect(source.editor.blocks.hasBlock("shared-id")).toBe(true);
+    expect(other.editor.blocks.hasBlock("shared-id")).toBe(true);
+  } finally {
+    source.close();
+    other.close();
+  }
+});
+
 for (const unrelated of [0, 200]) {
   test(`converter work follows the copied subtree, not ${unrelated} unrelated blocks`, async () => {
     const f = await fixture();

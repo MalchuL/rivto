@@ -307,6 +307,7 @@ export class TableResizeController {
     const remaining = new Set(ids);
     for (const cell of this.root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)) {
       const id = cell.getAttribute(BLOCK_ID_ATTRIBUTE)!;
+      // An embedded copy can contain the same cell ID but has its own resize preview.
       if (!remaining.has(id) || !isInPanel(this.root, cell)) {
         continue;
       }

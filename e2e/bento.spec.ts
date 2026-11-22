@@ -1,6 +1,6 @@
 import { blockDropRegion } from "./drop-regions";
 /** Browser coverage for responsive Bento layout, widths, shared modal and editing. */
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const RESIZE_RIGHT = "Resize Bento tile from the right";
@@ -12,25 +12,6 @@ const BENTO_TILES_SELECTOR =
   ":scope > .rivto-block-children > .rivto-bento-tile > .rivto-block-drop-wrapper-content > [data-block-id]";
 // Page owns the tile placement in both writing pages and canvas cards.
 const BENTO_ITEMS_SELECTOR = ":scope > .rivto-block-children > .rivto-bento-tile";
-
-/**
- * Drags one Bento edge handle by a horizontal pixel delta.
- *
- * @param page - Browser page owning the editor.
- * @param handle - Left or right resize separator.
- * @param dx - Horizontal movement in CSS pixels; positive is rightward.
- * @returns After pointer release.
- */
-async function dragResizeHandle(page: Page, handle: Locator, dx: number): Promise<void> {
-  await handle.hover();
-  const box = (await handle.boundingBox())!;
-  const x = box.x + box.width / 2;
-  const y = box.y + box.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x + dx, y, { steps: 8 });
-  await page.mouse.up();
-}
 
 for (const mode of ["block", "edgeless"]) {
   test(`Bento editing and layout in ${mode}`, async ({ page }) => {
@@ -45,7 +26,8 @@ for (const mode of ["block", "edgeless"]) {
           type: "block",
           zIndex: 0,
           frame: { x: 20, y: 20, width: 800, height: 600 },
-          props: { startBlockId: board.id, endBlockId: board.id },
+          // The expand button sits in the gutter of a framed card.
+          props: { startBlockId: board.id, endBlockId: board.id, borderless: false },
         });
       }
     }, mode);
@@ -64,9 +46,24 @@ for (const mode of ["block", "edgeless"]) {
     const rightHandle = first.getByRole("separator", { name: RESIZE_RIGHT });
     await expect(rightHandle).toBeVisible();
     const startWidth = await first.evaluate((element) => (element as HTMLElement).offsetWidth);
-    await dragResizeHandle(page, rightHandle, 80);
+    // Drag from the separator center and release to commit the preview width.
+    await rightHandle.hover();
+    const handleBounds = (await rightHandle.boundingBox())!;
+    const handleX = handleBounds.x + handleBounds.width / 2;
+    const handleY = handleBounds.y + handleBounds.height / 2;
+    await page.mouse.move(handleX, handleY);
+    await page.mouse.down();
+    await page.mouse.move(handleX + 80, handleY, { steps: 8 });
+    await page.mouse.up();
     const committed = `${Math.max(160, Math.min(960, startWidth + 80))}px`;
     await expect(first).toHaveCSS("flex-basis", committed);
+    const placementWidth = await first
+      .locator(":scope > .rivto-block-drop-wrapper-content")
+      .evaluate((element) => element.getBoundingClientRect().width);
+    const shellWidth = await first
+      .locator(":scope > .rivto-block-drop-wrapper-content > .rivto-block")
+      .evaluate((element) => element.getBoundingClientRect().width);
+    expect(shellWidth).toBeCloseTo(placementWidth, 0);
     const editable = first.getByRole("textbox").first();
     await editable.click();
     await page.keyboard.press("End");
@@ -135,9 +132,9 @@ test("Bento edge resize freezes siblings until pointer release", async ({ page }
   expect(mid.x).toBeCloseTo(before.x, 0);
   expect(mid.y).toBeCloseTo(before.y, 0);
   expect(mid.width).toBeCloseTo(before.width, 0);
-  await expect(first).toHaveAttribute("data-bento-resizing", "right");
+  await expect(first).toHaveAttribute("data-width-resizing", "right");
   await page.mouse.up();
-  await expect(first).not.toHaveAttribute("data-bento-resizing");
+  await expect(first).not.toHaveAttribute("data-width-resizing");
   await expect(first).toHaveCSS("flex-basis", `${Math.max(160, Math.min(960, startWidth + 90))}px`);
 
   await sibling.hover();
@@ -278,6 +275,21 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
   await expect(tiles).toHaveCount(3);
 
   const tile = tiles.filter({ has: page.getByText("From page", { exact: true }) }).first();
+  const tileId = (await tile.getAttribute("data-block-id"))!;
+  const resize = tile.locator("../..").getByRole("separator", {
+    name: "Resize Bento tile from the right",
+  });
+  await resize.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect
+    .poll(() =>
+      page.evaluate((id) => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        return editor.blocks.getBlockNode(id)?.pluginData.bentoWidth;
+      }, tileId),
+    )
+    .toBe(290);
   const tileHandle = tile.locator(`:scope > .${ROW_CLASS} .${handleClass}`);
   await tile.hover();
   await tileHandle.hover();
@@ -288,9 +300,23 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
   await page.mouse.move(title.x + title.width / 2, title.y + title.height / 2, { steps: 20 });
   await page.mouse.up();
   await expect(tiles).toHaveCount(2);
+  const moved = page.locator(`[data-block-id="${tileId}"]`).first();
+  await expect(moved).not.toHaveAttribute("data-block-width");
+  await expect(moved).not.toHaveCSS("width", "290px");
   await expect(
     page.locator("[data-block-id]").filter({ has: page.getByText("From page", { exact: true }) }),
   ).toHaveCount(1);
+  const secondBoardId = await page.evaluate((id) => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    const second = editor.blocks.insertBlock({ type: "bento", content: "Second board" });
+    editor.blocks.moveBlocks([id], second.id, "inside");
+    return second.id;
+  }, tileId);
+  const secondTile = page
+    .locator(`[data-block-id="${secondBoardId}"] .rivto-bento-tile`)
+    .filter({ has: page.locator(`[data-block-id="${tileId}"]`) });
+  await expect(secondTile).toHaveCSS("flex-basis", "290px");
 });
 
 test("drops a page block into an empty Bento grid", async ({ page }) => {
@@ -346,9 +372,9 @@ test("Escape cancels a Bento resize while retaining its expanded panel", async (
   await page.mouse.move(origin.x + origin.width / 2 + 80, origin.y + origin.height / 2, {
     steps: 8,
   });
-  await expect(tile).toHaveAttribute("data-bento-resizing", "right");
+  await expect(tile).toHaveAttribute("data-width-resizing", "right");
   await page.keyboard.press("Escape");
-  await expect(tile).not.toHaveAttribute("data-bento-resizing");
+  await expect(tile).not.toHaveAttribute("data-width-resizing");
   await expect(page.getByRole("dialog", { name: /^Expanded / })).toBeVisible();
   await page.mouse.up();
   expect((await tile.boundingBox())!.width).toBeCloseTo(before.width, 1);

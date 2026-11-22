@@ -1,5 +1,5 @@
 import type { BlockInput } from "@chulane/document-model";
-import type { DocumentEditorAPI, EditorElementNode } from "@chulane/rivto";
+import type { DocumentEditorAPI, EditorElementNode, HistoryBatch } from "@chulane/rivto";
 import { separatorBlockFactory } from "@chulane/rivto-react/block-factories";
 import {
   createBentoBlockInput,
@@ -19,7 +19,7 @@ interface JournalSeedEditor {
   /** Creates canvas cards referencing notebook sections. */
   readonly elements: Pick<DocumentEditorAPI["elements"], "insertElement">;
   /** Groups repeated seed insertions into one history batch. */
-  readonly history: Pick<DocumentEditorAPI["history"], "batchUpdates">;
+  readonly history: HistoryBatch;
 }
 
 /** The notebook sections are ordinary document blocks, separated into canvas cards. */
@@ -159,18 +159,18 @@ const JOURNAL_SECTIONS: BlockInput[][] = [
           type: "paragraph",
           content:
             "**A cooperative puzzle**\nWork together, take turns, and celebrate the small discoveries.",
-          props: { bentoWidth: 260 },
+          pluginData: { bentoWidth: 260 },
         },
         {
           type: "paragraph",
           content:
             "**A quick card game**\nSomething easy to teach, with another round always an option.",
-          props: { bentoWidth: 260 },
+          pluginData: { bentoWidth: 260 },
         },
         {
           type: "paragraph",
           content: "**A jigsaw by the window**\nLeave it out for anyone who wants to add a piece.",
-          props: { bentoWidth: 260 },
+          pluginData: { bentoWidth: 260 },
         },
       ],
     },
@@ -254,17 +254,6 @@ export function seedJournalDemo(editor: JournalSeedEditor, repeatCount: number):
       });
     }
   });
-  seedCanvasPlans(editor);
-}
-
-/**
- * Creates the diagrams, notes, and drawings with no initial canvas selection.
- *
- * @param editor - Editor whose registered visual commands create the plans.
- * @returns Canvas content has been inserted and the selection cleared.
- * @throws If a registered canvas command fails.
- */
-function seedCanvasPlans(editor: JournalSeedEditor): void {
   const morning = seedWeekendPlan(editor);
   seedRainPlan(editor, morning);
   seedPicnicPlan(editor);

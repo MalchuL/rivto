@@ -21,9 +21,6 @@ export type {
   BlockBehavior,
   BlockBehaviorAction,
   BlockBehaviorContext,
-  BlockOutlineContext,
   BlockBehaviorData,
-  BlockBehaviorAvailabilityContext,
   BlockBehaviorOutcome,
-  BlockMoveContext,
 } from "./types";

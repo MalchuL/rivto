@@ -1,4 +1,4 @@
-import { createStructuralSelection, type EditorBlock } from "@chulane/rivto";
+import { createStructuralSelection } from "@chulane/rivto";
 import {
   BlockDragRouter,
   type BlockDragAdapter,
@@ -8,11 +8,12 @@ import {
   type BlockDropTargetsApi,
   type ResolvedBlockDropTarget,
 } from "@chulane/rivto-page";
-import type { CrossDocumentBlockPanel } from "../../extensions/block-drag/cross-document/panel";
-import { CrossDocumentBlockTransfer } from "../../extensions/built-ins/clipboard/cross-document-block-transfer";
+import type { BlockDragOperations } from "../../extensions/block-drag/block-drag-operations";
+import { transferBlocksBetweenDocuments } from "../../block-transfer/cross-document-block-transfer";
 import { crossDocumentPageRootControllers } from "../../extensions/block-drag/cross-document/target";
 import type { CrossDocumentPageRootController } from "../../extensions/block-drag/types";
 import { PageDragOccurrence } from "./page-drag-occurrence";
+import { dispatchBlockSurfaceDrop } from "../block-surface-drop";
 
 /** One borrowed child-ID list in a bounded preview traversal; no descendants are copied. */
 interface PagePreviewCursor {
@@ -24,7 +25,7 @@ interface PagePreviewCursor {
 /** Validated translation into the existing grouped command's anchor syntax. */
 interface PageBlockMove {
   readonly targetId: string | null;
-  readonly receiver: CrossDocumentBlockPanel;
+  readonly receiver: BlockDragOperations;
   readonly position: "before" | "after" | "inside";
 }
 
@@ -37,7 +38,23 @@ export class PageBlockDrag implements BlockDragAdapter {
    *
    * @param panel - Source occurrence and bounded grouped commands.
    */
-  constructor(private readonly panel: CrossDocumentBlockPanel) {}
+  constructor(private readonly panel: BlockDragOperations) {}
+
+  /**
+   * Offers an unclaimed release to a surface in this occurrence and reports acceptance.
+   *
+   * The selected surface handler may move blocks and create elements before this
+   * method returns. No handler is called after this occurrence is detached.
+   *
+   * @param ids - Captured source roots from the active drag gesture.
+   * @param x - Release client X coordinate in CSS pixels.
+   * @param y - Release client Y coordinate in CSS pixels.
+   * @returns The surface handler's result, or false when the occurrence is detached or no surface accepts the release.
+   * @throws Propagates hit-testing or surface handler failures.
+   */
+  dropOutsideTargets(ids: readonly string[], x: number, y: number): boolean {
+    return this.occurrence ? dispatchBlockSurfaceDrop(this.occurrence.root, ids, x, y) : false;
+  }
 
   /**
    * Registers one receiving Page attachment shared by both surface implementations.
@@ -205,7 +222,7 @@ export class PageBlockDrag implements BlockDragAdapter {
     } else if (receiver.document.getDocument() === this.panel.document.getDocument()) {
       this.panel.document.blocks.moveBlocks([...ids], move.targetId, move.position);
     } else {
-      new CrossDocumentBlockTransfer(this.panel, receiver).move(ids, move);
+      transferBlocksBetweenDocuments(this.panel, receiver, ids, move);
     }
     if (receiver !== this.panel) {
       this.panel.selection.clear();
@@ -269,18 +286,40 @@ export class PageBlockDrag implements BlockDragAdapter {
     const siblings = (
       parent === null ? blocks.getRootIds() : receiver.document.blocks.getChildIds(parent)
     ).filter((id) => !selected.has(id));
-    if (!this.isCurrentGap(destination, siblings)) {
-      return;
+    if (destination.kind === "between") {
+      // Siblings may change during the drag. Both neighbors must still bound the captured gap.
+      const index =
+        destination.previousId === null ? 0 : siblings.indexOf(destination.previousId) + 1;
+      if (
+        (destination.previousId !== null && index === 0) ||
+        (siblings[index] ?? null) !== destination.nextId
+      ) {
+        return undefined;
+      }
     }
     const sources = ids.flatMap((id) => {
       const block = this.panel.blocks.getBlock(id);
       return block ? [block] : [];
     });
     const beforeId = destination.kind === "between" ? (destination.nextId ?? undefined) : undefined;
+    if (sources.length !== ids.length) {
+      return undefined;
+    }
+    // A cross-document drop preserves descendant IDs. Reject collisions before showing feedback.
+    if (!sameDocument) {
+      const pending = [...sources];
+      while (pending.length) {
+        const block = pending.pop()!;
+        if (receiver.document.blocks.hasBlock(block.id)) {
+          return undefined;
+        }
+        for (const child of block.children) {
+          pending.push(child);
+        }
+      }
+    }
     if (
-      sources.length !== ids.length ||
-      (!sameDocument && this.hasIdentityConflict(sources, receiver)) ||
-      !receiver.editor.blockBehaviors.canMove({
+      !receiver.editor.blocks.canMove({
         sources,
         destination: { parentId: parent, beforeId },
       })
@@ -298,48 +337,5 @@ export class PageBlockDrag implements BlockDragAdapter {
       return { targetId: last, position: "after", receiver };
     }
     return sameDocument ? undefined : { targetId: null, position: "after", receiver };
-  }
-
-  /**
-   * Rejects duplicate subtree identities before offering a foreign-document drop.
-   *
-   * @param sources - Current detached source roots already read for semantic permission.
-   * @param receiver - Destination model queried by stable ID, independently of its viewport.
-   * @returns Whether any source identity is already present in the destination document.
-   */
-  private hasIdentityConflict(
-    sources: readonly EditorBlock[],
-    receiver: CrossDocumentBlockPanel,
-  ): boolean {
-    const pending = [...sources];
-    while (pending.length) {
-      const block = pending.pop()!;
-      if (receiver.document.blocks.hasBlock(block.id)) {
-        return true;
-      }
-      for (const child of block.children) {
-        pending.push(child);
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Rejects stale neighbors rather than silently moving into a different gap.
-   *
-   * @param destination - Append or exact sibling-gap destination.
-   * @param siblings - Current receiving siblings excluding moving roots.
-   * @returns Whether the supplied neighbors remain adjacent in this list.
-   */
-  private isCurrentGap(destination: BlockDropDestination, siblings: readonly string[]): boolean {
-    if (destination.kind === "inside") {
-      return true;
-    }
-    const index =
-      destination.previousId === null ? 0 : siblings.indexOf(destination.previousId) + 1;
-    return (
-      (destination.previousId === null || index > 0) &&
-      (siblings[index] ?? null) === destination.nextId
-    );
   }
 }

@@ -1,56 +1,18 @@
+import type { BlockContextMenuRegistration } from "./types";
 import { focusSelectionCaret } from "../../../managers";
 import { deletePanelSelection } from "../selection/selection-deletion";
 import { createStructuralSelection } from "@chulane/rivto";
-import type {
-  BlockContextMenuContext,
-  BlockContextMenuEntry,
-} from "../../../managers/block-context-menu/types";
+import type { BlockContextMenuContext } from "../../../managers/block-context-menu/types";
 import { assertBlockMenuTargets } from "../../../managers/block-context-menu/targets";
 import { writeClipboardBundle } from "../../../managers/clipboard/browser-clipboard";
-
-/** Registration capability borrowed from the block context menu. */
-interface BlockContextMenuRegistration {
-  /**
-   * Registers a menu entry for the current extension lifecycle.
-   *
-   * @param entry - Menu contribution to register.
-   * @returns Disposer that removes the registered entry.
-   * @throws If the registry is inactive or the entry is invalid or duplicated.
-   */
-  register(entry: BlockContextMenuEntry): () => void;
-}
-
-/**
- * Copies selected root subtrees, optionally deleting them after a successful write.
- *
- * Returns without writing when the panel cannot produce a clipboard bundle. For
- * cut, targets and a freshly copied bundle are checked after the asynchronous
- * write. If the source changed, the copied data remains on the clipboard while
- * the document is left intact. Successful deletion uses container-aware policies.
- *
- * @param context - Invoking panel and captured ancestor-deduplicated root IDs.
- * @param cut - Whether to delete the unchanged source after copying it.
- * @returns Completion of the write and, for cut, source deletion and focus scheduling.
- * @throws If clipboard writing fails, targets disappear, the copied source changes,
- * or the invoking panel cannot perform deletion.
- */
-async function copyBlocks(context: BlockContextMenuContext, cut: boolean): Promise<void> {
-  const { reactPanel, rootIds } = context;
-  const bundle = reactPanel.clipboard.copy(createStructuralSelection([...rootIds]));
-  if (!bundle) {
-    return;
-  }
-  await writeClipboardBundle(reactPanel.editor.clipboardFormats, bundle);
-  if (cut) {
-    assertBlockMenuTargets(context);
-    // Do not remove edits that arrived while the clipboard permission prompt was open.
-    const current = reactPanel.clipboard.copy(createStructuralSelection([...rootIds]));
-    if (JSON.stringify(current) !== JSON.stringify(bundle)) {
-      throw new Error("Blocks changed while copying; copied content was kept and nothing was cut");
-    }
-    deleteMenuBlocks(context);
-  }
-}
+import {
+  CopyIcon,
+  ScissorsIcon,
+  Trash2Icon,
+  ListIcon,
+  ChevronsDownUpIcon,
+  ChevronsUpDownIcon,
+} from "lucide-react";
 
 /**
  * Registers Copy, Cut, and Delete contributions independently of slash commands.
@@ -63,13 +25,14 @@ async function copyBlocks(context: BlockContextMenuContext, cut: boolean): Promi
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
 export function registerBlockClipboardActions(menu: BlockContextMenuRegistration): void {
-  for (const [id, title, cut] of [
-    ["copy", "Copy", false],
-    ["cut", "Cut", true],
+  for (const [id, title, cut, icon] of [
+    ["copy", "Copy", false, CopyIcon],
+    ["cut", "Cut", true, ScissorsIcon],
   ] as const) {
     menu.register({
       id: `clipboard.${id}`,
       title,
+      icon,
       order: 80,
       /**
        * Copies or cuts the captured root subtrees through browser clipboard writing.
@@ -78,12 +41,32 @@ export function registerBlockClipboardActions(menu: BlockContextMenuRegistration
        * @returns Completion of the write and guarded deletion when this entry is Cut.
        * @throws If clipboard writing or the post-write source checks fail.
        */
-      execute: (context) => copyBlocks(context, cut),
+      execute: async (context) => {
+        const { reactPanel, rootIds } = context;
+        const bundle = reactPanel.clipboard.copy(createStructuralSelection([...rootIds]));
+        if (!bundle) {
+          return;
+        }
+        await writeClipboardBundle(reactPanel.editor.clipboardFormats, bundle);
+        if (cut) {
+          assertBlockMenuTargets(context);
+          // Do not remove edits that arrived while the clipboard permission prompt was open.
+          const current = reactPanel.clipboard.copy(createStructuralSelection([...rootIds]));
+          if (JSON.stringify(current) !== JSON.stringify(bundle)) {
+            throw new Error(
+              "Blocks changed while copying; copied content was kept and nothing was cut",
+            );
+          }
+          deleteMenuBlocks(context);
+        }
+      },
     });
   }
   menu.register({
     id: "block.delete",
     title: "Delete",
+    icon: Trash2Icon,
+    destructive: true,
     order: 100,
     execute: deleteMenuBlocks,
   });
@@ -102,7 +85,7 @@ export function registerBlockClipboardActions(menu: BlockContextMenuRegistration
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
 export function registerBlockListActions(menu: BlockContextMenuRegistration): void {
-  menu.register({ id: "list", title: "List style", kind: "submenu", order: 20 });
+  menu.register({ id: "list", title: "List style", icon: ListIcon, kind: "submenu", order: 20 });
   for (const [type, title] of [
     ["list", "Ordinary list"],
     ["numbered_list", "Numbered list"],
@@ -183,13 +166,14 @@ export function setSubtreesCollapsed(context: BlockContextMenuContext, collapsed
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
 export function registerBlockCollapseActions(menu: BlockContextMenuRegistration): void {
-  for (const [id, title, collapsed] of [
-    ["collapse", "Collapse subtree", true],
-    ["expand", "Expand whole subtree", false],
+  for (const [id, title, collapsed, icon] of [
+    ["collapse", "Collapse subtree", true, ChevronsDownUpIcon],
+    ["expand", "Expand whole subtree", false, ChevronsUpDownIcon],
   ] as const) {
     menu.register({
       id: `block.${id}`,
       title,
+      icon,
       order: 60,
       /**
        * Applies this entry's collapse state to all parent blocks in the selected subtrees.
@@ -221,7 +205,7 @@ function deleteMenuBlocks(context: BlockContextMenuContext): void {
     throw new Error("The invoking panel is no longer mounted");
   }
   reactPanel.selection.set(createStructuralSelection([...rootIds]));
-  deletePanelSelection(reactPanel, root);
+  deletePanelSelection(reactPanel);
   if (!focusSelectionCaret(root, reactPanel.selection)) {
     root.focus({ preventScroll: true });
   }

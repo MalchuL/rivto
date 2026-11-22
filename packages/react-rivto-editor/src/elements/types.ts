@@ -13,6 +13,8 @@ export interface BlockElementProps {
   readonly endBlockId: string;
   /** Missing/true fits the card height to all rendered blocks; false keeps a fixed frame. */
   readonly autoHeight?: boolean;
+  /** Overrides the automatic borderless appearance for a card with one root block. */
+  readonly borderless?: boolean;
   /** Clockwise canvas rotation in degrees; omitted values render without rotation. */
   readonly rotation?: number;
 }

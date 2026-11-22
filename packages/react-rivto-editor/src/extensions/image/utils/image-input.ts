@@ -58,34 +58,24 @@ export function isImageFile(file: File): boolean {
 }
 
 /**
- * Checks whether clipboard text is a host-resolvable local image path.
+ * Extracts one supported local image URI from clipboard text.
  *
- * @param uri - Candidate path or file URI.
- * @returns True for a supported image extension on an absolute local path.
- */
-function isLocalImageUri(uri: string): boolean {
-  return IMAGE_FILE_EXTENSION.test(uri) && isLocalFileUri(uri);
-}
-
-/**
- * Extracts one supported remote or local image URI from clipboard text.
- *
- * URI lists may contain comments; only the first non-comment line is considered.
+ * URI lists may contain comments; only the first non-comment line is considered. A supported image
+ * extension and an absolute local path are both required.
  *
  * @param text - URI-list or plain clipboard text.
  * @returns The supported URI, or undefined when no supported URI is present.
  */
 export function findImageUri(text: string): string | undefined {
   const uri = firstUriListEntry(text);
-  return uri && (/^https?:\/\//i.test(uri) || isLocalImageUri(uri)) ? uri : undefined;
+  return uri && IMAGE_FILE_EXTENSION.test(uri) && isLocalFileUri(uri) ? uri : undefined;
 }
 
 /**
  * Selects image URIs from transferable HTML or plain data.
  *
- * HTML must contain images and no other text, or one link whose text and
- * target are the same image URL. Plain text and URI lists must contain only
- * supported image references. Files take precedence over URIs.
+ * HTML must contain images and no other text. URI lists must contain only
+ * supported local image paths. Files take precedence over URIs.
  *
  * @param data - Browser clipboard or drag data, if available.
  * @returns Image URIs and alternative text in source order, or an empty array
@@ -110,22 +100,9 @@ export function findTransferredImageUris(data: DataTransfer | null): {
     if (images.length > 0 && !remaining.textContent?.trim()) {
       return images.map((image) => ({ uri: image.src, alt: image.alt }));
     }
-    const links = [...document.body.querySelectorAll("a")];
-    const uri =
-      findImageUri(data.getData("text/uri-list")) ?? findImageUri(data.getData("text/plain"));
-    if (
-      uri &&
-      images.length === 0 &&
-      links.length === 1 &&
-      links[0]!.href === uri &&
-      document.body.textContent?.trim() === uri &&
-      IMAGE_FILE_EXTENSION.test(links[0]!.pathname)
-    ) {
-      return [{ uri, alt: "" }];
-    }
     return [];
   }
-  const text = data.getData("text/uri-list") || data.getData("text/plain");
+  const text = data.getData("text/uri-list");
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())

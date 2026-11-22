@@ -12,7 +12,6 @@ import type { ReactPanelApi } from "../../panels/types";
 import type { KeyboardSelectionTarget } from "../../managers/keyboard/selection";
 import type { BlockBehaviorContext, BlockBehaviorOutcome } from "../types";
 import { focusCaret, scheduleBlockFocus } from "./focus-ops";
-import { createBlockOutlineContext } from "./context";
 
 /**
  * Slices a block at a caret and inserts a following writing block.
@@ -76,22 +75,13 @@ export function splitBlock(
 ): BlockBehaviorOutcome {
   const { reactPanel, block, root } = context;
   const { defaultWritingBlockFactory } = reactPanel.editor;
-  // Outdent empty block if
+  // Empty writing blocks lift one level when their outline boundary permits it.
   if (
     defaultWritingBlockFactory.isEmptyBlock(reactPanel.blocks.getBlockNode(block.id)!) &&
     reactPanel.blocks.canOutdent(block.id)
   ) {
     // Lift one permitted level per Enter, stopping at container outline floors.
-    const outlineContext = createBlockOutlineContext(
-      reactPanel,
-      block.id,
-      reactPanel.selection.get(),
-    );
-    if (outlineContext) {
-      reactPanel.batchUpdates(() =>
-        reactPanel.editor.blockBehaviors.dispatch("onOutdent", outlineContext, [block.id]),
-      );
-    }
+    reactPanel.batchUpdates(() => reactPanel.blocks.outdentBlocks([block.id]));
     focusCaret(reactPanel, root, block.id, 0);
     return "handled";
   }
@@ -99,8 +89,6 @@ export function splitBlock(
     ? Math.min(target.offset ?? 0, block.content.length)
     : block.content.length;
   const nextBlock = splitBlockAt(reactPanel, block, splitAt, listProps);
-  // Core mode can be edgeless while Enter comes from a page embedding.
-  // Only extend the canvas card's block range when editing its edgeless view.
   if (
     reactPanel.blocks.canRemove(block.id) &&
     block.children.length > 0 &&
@@ -110,10 +98,18 @@ export function splitBlock(
     // Insertion created a sibling. Indent then prepend so Enter places the
     // new writing block as the first visible child.
     reactPanel.blocks.indentBlock(nextBlock.id);
-    reactPanel.blocks.moveBlock(nextBlock.id, null);
-  } else if (
+    // A structural handler can reject indent or choose a different parent.
+    // Prepend only inside the branch that the split intended to enter.
+    if (reactPanel.blocks.getParentId(nextBlock.id) === block.id) {
+      reactPanel.blocks.moveBlock(nextBlock.id, null);
+    }
+  }
+  // Core mode can be edgeless while Enter comes from a page embedding.
+  // Only extend the canvas card's range when both halves remain roots of this view.
+  if (
     reactPanel.getSurfaceType() === "edgeless" &&
-    reactPanel.blocks.getRootIds().includes(block.id)
+    reactPanel.blocks.isRootBlock(block.id) &&
+    reactPanel.blocks.isRootBlock(nextBlock.id)
   ) {
     const element = reactPanel.elements
       .getElementNodes()

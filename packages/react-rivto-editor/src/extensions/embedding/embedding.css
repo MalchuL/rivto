@@ -46,6 +46,11 @@
   background: transparent;
 }
 
+/* A referenced block keeps its preferred width up to the space available here. */
+:where(.rivto-embedded-surface) .rivto-block[data-block-width] {
+  max-width: 100%;
+}
+
 [data-block-type="embedding"] > .rivto-block-row > .rivto-block-slot[data-slot-position="right"] {
   left: auto;
   right: 0;

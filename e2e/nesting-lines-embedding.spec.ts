@@ -10,9 +10,7 @@ test("embedded nesting lines follow the Edgeless camera and are removed with the
   await today.getByRole("button", { name: "Edgeless", exact: true }).click();
   const embedded = today.getByRole("region", { name: "Block editor" }).first();
   await expect(embedded.locator("[data-block-id]")).toHaveCount(5);
-  const paths = page.locator("[data-nesting-lines] path");
-  await expect(paths).toHaveCount(2);
-  const path = paths.nth(1);
+  const path = embedded.locator("[data-nesting-lines] path");
   await expect.poll(() => path.getAttribute("d")).toMatch(/^M /);
   const before = await path.getAttribute("d");
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
@@ -20,7 +18,7 @@ test("embedded nesting lines follow the Edgeless camera and are removed with the
   await expect
     .poll(() =>
       embedded.evaluate((root) => {
-        const overlay = document.querySelectorAll<SVGSVGElement>("[data-nesting-lines]")[1]!;
+        const overlay = root.querySelector<SVGSVGElement>("[data-nesting-lines]")!;
         const row = root.querySelectorAll<HTMLElement>(".rivto-block-row")[0]!;
         const y = Number(
           overlay
@@ -38,14 +36,15 @@ test("embedded nesting lines follow the Edgeless camera and are removed with the
   await expect
     .poll(() =>
       embedded.evaluate((root) => {
-        const overlay = document.querySelectorAll<SVGSVGElement>("[data-nesting-lines]")[1]!;
+        const overlay = root.querySelector<SVGSVGElement>("[data-nesting-lines]")!;
         const viewport = root.closest<HTMLElement>(".edgeless-viewport")!;
-        const inset = overlay.style.clipPath.match(/inset\(([-\d.]+)px ([-\d.]+)px ([-\d.]+)px/)!;
-        return Math.abs(
-          overlay.getBoundingClientRect().bottom -
-            Number(inset[3]) -
-            viewport.getBoundingClientRect().bottom,
-        );
+        return viewport.contains(overlay) && getComputedStyle(viewport).overflowY === "hidden"
+          ? Math.abs(
+              overlay.getBoundingClientRect().top -
+                root.getBoundingClientRect().top -
+                root.clientTop,
+            )
+          : Infinity;
       }),
     )
     .toBeLessThan(1);

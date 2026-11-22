@@ -25,6 +25,18 @@ afterEach(async () => {
   root.remove();
 });
 
+it("checks event registrations in the receiving panel's namespace", () => {
+  const seen: boolean[] = [];
+  const dispose = panel.events.register({ id: "local", type: "click" }, (event) => {
+    seen.push(panel.events.has("local", event.raw));
+  });
+  clickRoot();
+  expect(seen).toEqual([true]);
+  dispose();
+  clickRoot();
+  expect(seen).toEqual([true]);
+});
+
 it("rolls back failed native attachment and permits the registration ID to be reused", () => {
   const failure = new Error("native attachment failed");
   const stale = jestApi.fn();

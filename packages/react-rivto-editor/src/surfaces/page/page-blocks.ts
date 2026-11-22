@@ -3,10 +3,9 @@ import type {
   BlockEditorBlocks,
   BlockEditorNodePatch,
   BlockEditorNodeSnapshot,
-  BlockListType,
 } from "@chulane/rivto-page";
 import type { BlockBehaviorsApi } from "../../managers/blocks/block-behaviors-api";
-import { BLOCK_BACKGROUND_COLORS } from "../../extensions/built-ins/block-handle/colors";
+import { isBlockStyle } from "../../blocks/style/block-style";
 
 /** Panel capabilities borrowed by the structural projection, without lifecycle ownership. */
 interface PageBlockHost {
@@ -105,14 +104,19 @@ export class PageBlocks implements BlockEditorBlocks {
    * second block cache or invalidation index. Behavior changes invalidate only
    * projections that are subsequently read. Uncolored host blocks use transparent
    * shells so body decorations and whole-subtree selection remain visible; explicit
-   * palette colors still resolve to their host CSS variables.
+   * colors remain portable values and are rendered without palette-token resolution.
    *
    * @param blockId - Accessible node or the hidden panel boundary.
    * @returns Stable structural projection, or undefined when unavailable.
    * @throws Propagates host node reads and visibility-rule failures.
    */
   getBlockNode(blockId: string): BlockEditorNodeSnapshot | undefined {
-    const node = this.readNode(blockId);
+    // The hidden panel root still supplies the child list for its displayed subtree.
+    const node =
+      this.panel.blocks.getBlockNode(blockId) ??
+      (blockId === this.panel.rootBlockId
+        ? this.panel.document.blocks.getBlockNode(blockId)
+        : undefined);
     if (!node) {
       return undefined;
     }
@@ -120,19 +124,26 @@ export class PageBlocks implements BlockEditorBlocks {
     if (cached?.revision === this.behaviors.revision) {
       return cached.snapshot;
     }
-    const background = node.listProps.backgroundColor;
+    const style = isBlockStyle(node.listProps.style) ? node.listProps.style : undefined;
+    // Portable lists can carry extension metadata that has no Page decoration.
+    const listTypeValue = node.listProps.type;
+    const listType =
+      listTypeValue === "list" ||
+      listTypeValue === "checkbox" ||
+      listTypeValue === "numbered_list" ||
+      listTypeValue === "start_numbered_list" ||
+      listTypeValue === "continue_numbered_list"
+        ? listTypeValue
+        : undefined;
     const snapshot: BlockEditorNodeSnapshot = {
       id: node.id,
       type: node.type,
       childIds: node.childIds,
-      listType: this.readListType(node.listProps.type),
+      listType,
       checked: node.listProps.checked === true,
       collapsed: !this.behaviors.childrenVisible(node),
       dropPlacement: this.behaviors.childDropPlacement(node),
-      color:
-        typeof background === "string" && background
-          ? `var(--rivto-block-${background})`
-          : "transparent",
+      style,
     };
     this.projections.set(node, { revision: this.behaviors.revision, snapshot });
     return snapshot;
@@ -185,9 +196,9 @@ export class PageBlocks implements BlockEditorBlocks {
    * Converts Page controls to one history batch of bounded host writes, preserving unrelated list properties.
    *
    * @param blockId - Existing node within the panel's editable boundary.
-   * @param patch - Structural decorations; color must be a host palette expression.
+   * @param patch - Structural decorations and an optional portable semantic block style.
    * @returns The validated panel update and its synchronous notifications have completed.
-   * @throws If the node is inaccessible, the color is unsupported, or panel validation fails.
+   * @throws If the node is inaccessible, the block style is unsupported, or panel validation fails.
    */
   updateBlockNode(blockId: string, patch: BlockEditorNodePatch): void {
     const node = this.panel.blocks.getBlockNode(blockId);
@@ -207,16 +218,13 @@ export class PageBlocks implements BlockEditorBlocks {
     if (patch.collapsed !== undefined) {
       listProps.collapsed = patch.collapsed;
     }
-    if (patch.color === null) {
-      removals.push("backgroundColor");
-    } else if (patch.color !== undefined) {
-      const color = BLOCK_BACKGROUND_COLORS.find(
-        (value) => value && `var(--rivto-block-${value})` === patch.color,
-      );
-      if (!color) {
-        throw new Error("Unsupported Page background color");
+    if (patch.style === null) {
+      removals.push("style");
+    } else if (patch.style !== undefined) {
+      if (!isBlockStyle(patch.style)) {
+        throw new Error("Unsupported Page block style");
       }
-      listProps.backgroundColor = color;
+      listProps.style = patch.style;
     }
     const candidate = { ...node.listProps, ...listProps };
     this.panel.document.blockListProps.prepare(candidate);
@@ -232,39 +240,5 @@ export class PageBlocks implements BlockEditorBlocks {
         this.panel.blocks.deleteListProps(blockId, removals);
       }
     });
-  }
-
-  /**
-   * Reads only a panel member or its explicitly configured hidden boundary.
-   *
-   * @param blockId - Requested model identity.
-   * @returns Existing cached node, or undefined outside the occurrence.
-   */
-  private readNode(blockId: string): EditorBlockNode | undefined {
-    return (
-      this.panel.blocks.getBlockNode(blockId) ??
-      (blockId === this.panel.rootBlockId
-        ? this.panel.document.blocks.getBlockNode(blockId)
-        : undefined)
-    );
-  }
-
-  /**
-   * Narrows host list metadata to Page's supported structural list modes.
-   *
-   * @param value - Opaque persisted list annotation.
-   * @returns Supported list mode, or undefined for no recognized list decoration.
-   */
-  private readListType(value: unknown): BlockListType | undefined {
-    switch (value) {
-      case "list":
-      case "checkbox":
-      case "numbered_list":
-      case "start_numbered_list":
-      case "continue_numbered_list":
-        return value;
-      default:
-        return undefined;
-    }
   }
 }

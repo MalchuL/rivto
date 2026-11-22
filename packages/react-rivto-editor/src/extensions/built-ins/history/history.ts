@@ -68,6 +68,7 @@ export function registerHistory(
     if (!root) {
       return;
     }
+    // All views share document history. The panel that received the shortcut owns the DOM caret.
     reactPanel.document.history[action]();
     // Only restore selection and its focus here; undo/redo has already changed the document.
     reactPanel.selection.scheduleIfSelectionUnchanged(() => {

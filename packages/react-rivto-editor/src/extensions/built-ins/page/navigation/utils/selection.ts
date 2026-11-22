@@ -20,7 +20,6 @@ import {
 } from "../../../../../constants";
 import type { ReactPanelApi } from "../../../../../panels/types";
 import { focusBlock } from "../../../../../managers";
-import type { PanelSelectionApi } from "../../../../../managers/selection/api";
 import { PageNavigationController } from "../../../../../surfaces/page/page-navigation-controller";
 import { pageEntries } from "./outline";
 import { navigationOutlineBlocks } from "./scope";
@@ -35,7 +34,7 @@ export type { VerticalDirection } from "./types";
  * @returns Current selection when present.
  */
 export function currentNavigationSelection(
-  selectionManager: PanelSelectionApi,
+  selectionManager: Pick<ReactPanelApi["selection"], "readDOM" | "get">,
 ): Selection | undefined {
   return selectionManager.readDOM() ?? selectionManager.get();
 }
@@ -123,6 +122,7 @@ export function focusAdjacentEditor(root: HTMLElement, direction: VerticalDirect
   PageNavigationController.getForElement(adjacent)?.mountFirstOrLastBlock(
     direction === "up" ? -1 : 1,
   );
+  // Skip editors inside the adjacent container when looking for the next caret position.
   const blocks = findPanelElements(adjacent, BLOCK_ID_SELECTOR);
   if (direction === "up") {
     blocks.reverse();

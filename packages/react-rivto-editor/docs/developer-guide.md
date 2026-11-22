@@ -13,7 +13,7 @@ Rivto separates persisted data, document commands, and React presentation:
 ## Shared editor and panels
 
 `createReactEditor({ editor: documentApi, extensions })` installs shared infrastructure once.
-Use `panel` for a core `PanelAPI` and `reactPanel` for a `ReactPanelApi`; the latter extends the core contract and exposes `reactPanel.blocks` and `reactPanel.elements` directly. Events, behavior contexts, clipboard contexts and element render/property props expose the React occurrence as `reactPanel`.
+Use `panel` for a core `PanelAPI` and `reactPanel` for a `ReactPanelApi`; they also implement `DocumentEditorAPI` and `ReactEditorApi`, respectively. The panel exposes bounded `blocks`, `elements`, selection and clipboard directly while sharing editor registrations and history. Events, behavior contexts, clipboard contexts and element render/property props expose the React occurrence as `reactPanel`.
 
 Pass it as `<EditorPanel editor={editor}>`. `usePanel()` returns the bounded core panel;
 `useReactPanel()` and event payloads return its browser API. Document-wide operations
@@ -29,7 +29,7 @@ and it can be copied. Both implementations independently restrict elements using
 `panel.blocks` and `panel.elements` expose bounded reads and editing operations. `panel.subscribe(listener)` forwards the document-editor change stream, including changes outside the panel and block-definition updates. It does not emit on registration or selection changes; the returned function unsubscribes. Use the focused block and element subscriptions when a component observes only specific data. `panel.batchUpdates(callback)` groups synchronous changes into one shared document undo step; `panel.batchUpdatesWithoutHistory(callback)` runs maintenance changes without an undo entry. Both return the callback result and propagate errors without rolling back earlier writes. Nested transactions retain the outer capture policy. For components that only read or edit content, use `usePanel()`; use `useReactPanel()` for DOM interaction, selection, events, mode or presentation registrations. Read `panel.blocks.getBlockNode(id)` or `panel.elements.getElementNode(id)` inside deferred handlers to obtain current values and check that the entity still belongs to the panel before writing. Rendered hook snapshots are for rendering, not later read-modify-write operations.
 Top-level parents are null relative to the panel; DocumentEditorAPI returns actual parents.
 Outside destinations and targets are rejected before batch writes. Panel insertion uses
-`{ root: true, beforeId? }` or `{ parentId, beforeId? }`; document insertion uses actual
+`{ parentId: null, beforeId? }` or `{ parentId, beforeId? }`; document insertion uses actual
 `{ parentId: string | null, beforeId? }`. Omitted destinations append to the corresponding roots.
 
 Each React panel owns its mode; pass a `ModeManager` explicitly to retain or share mode.
@@ -161,6 +161,11 @@ trailing paragraph-creation affordance. Block drag is opt-in through
 `/Separator` or `Primary+Shift+Enter` inserts a real separator plus a focused
 paragraph below it. Root separators partition edgeless cards; nested separators
 remain ordinary rendered blocks.
+In Page, a separator's children appear inside a collapsible dashed frame at 50%
+opacity by default, configurable with `--rivto-separator-children-opacity`.
+Direct children omit the nesting line, while deeper outlines retain it
+and support ordinary nesting and drag placement. Children of a root separator
+are not shown in Edgeless; a nested separator remains part of its card.
 Individual built-ins are exported from `@chulane/rivto-react/extensions`.
 
 `edgelessPreset()` includes `edgelessVisualsExtension()` and its registered built-in element types. Its categorized
@@ -365,7 +370,7 @@ src/
     blocks/               internal block/renderer registries
     events/               delegated browser event runtime
     extensions/           setup ownership and mounted UI
-    selection/            DOM selection bridge
+    selection/            native DOM selection snapshots for editable text
     slash/                React-owned slash-command registry
     surfaces/             surface/wrapper registry
   surfaces/
@@ -373,18 +378,26 @@ src/
     edgeless/
   capabilities.ts         public contract re-exports
   editor/                 shared runtime, storage and creation options
-  panels/                 concrete panels, bounded block/element operations and contracts
-  components/editor-panel/ document/subtree component, props and shared contexts
-  components/editor-embed/ protected embedding component and its props
+  panels/                 concrete panels, shared provider and contexts, bounded operations and contracts
+    managers/             per-panel selection, clipboard, events, keyboard, slash commands and block menus
+    editor-panel/         document/subtree component and its props
+    editor-embed/         protected embedding component and its props
   hooks/editor/           public editor hooks and internal context readers
 ```
+
+Extensions borrow the receiving view through the public `ReactPanelApi` contract
+(available internally from `panels/types`), editor hooks or the event context.
+Shared block-menu operations belong in `managers/block-context-menu/` and DOM
+queries scoped to a rendered occurrence belong in `panels/panel-dom.ts`.
+An extension that mounts a view can import the `EditorPanel` or `EditorEmbed`
+component directly. Panel managers and React contexts are internal to the integration.
 
 Recommended reading order:
 
 1. `demo/src/App.tsx`
 2. `src/editor/react-editor.ts` and `src/panels/types.ts`
 3. `src/extensions/built-ins/built-ins.ts`
-4. `src/components/editor-panel/editor-panel.tsx`
+4. `src/panels/editor-panel/editor-panel.tsx`
 5. `src/hooks/blocks/use-block.ts`
 6. `src/surfaces/page/page-block.tsx`
 7. `src/managers/events/event-manager.ts`
@@ -447,11 +460,11 @@ registration uses `behavior`, alongside `definition` and `render`.
 The `BlockNode` React component still renders the block shell.
 Several behaviors can be registered with
 `runtime.blockBehaviors.register(behavior, priority = 0)`. Each implements
-`isAvailable({ editor, block })` using current detached block fields. Every method
+`isAvailable(block)` using current detached block fields. Every method
 uses the same availability context without a discriminator or operation name.
 During movement, the registry tests source blocks and the receiving parent and
 calls each matching registration's canMove method once. Only canMove receives
-sources, destination, editor, and the resolved parent as its BlockMoveContext.
+sources, destination, and the resolved parent as its BlockStructuralMoveContext.
 The called method owns any operation-specific eligibility. Higher priorities run first,
 with stable registration order at ties. Native behaviors use `0`, list/collapse
 use `-100`, and `DefaultBlockBehavior` is an ordinary registration at `-1000`.

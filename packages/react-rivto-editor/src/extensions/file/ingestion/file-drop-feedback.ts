@@ -108,6 +108,7 @@ export class FileDropFeedback {
       const ElementConstructor = root.ownerDocument.defaultView?.Element;
       const element =
         ElementConstructor && next instanceof ElementConstructor ? next : next.parentElement;
+      // Entering an embedded panel ends drop feedback in the surrounding panel.
       if (element && isInPanel(root, element)) {
         return;
       }

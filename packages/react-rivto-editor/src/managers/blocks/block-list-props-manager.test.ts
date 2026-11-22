@@ -14,10 +14,11 @@ test("custom onSplit owns continuation properties and is released with its exten
     extensions: [defaultWritingBlockExtension()],
   });
   try {
+    expect(editor.blockListProps).toBe(editor.editor.blockListProps);
     const remove = editor.editor.extensions.install({
       id: "custom.list",
       setup: (runtime) => {
-        runtime.blockListProps.register({
+        editor.blockListProps.register({
           id: "custom.list",
           defaults: { hidden: false, sequence: 0 },
           isValid: (value) =>
@@ -70,6 +71,7 @@ test("custom onSplit owns continuation properties and is released with its exten
     expect(editor.editor.blocks.getBlockNode(block.id)?.content).toBe("abcd");
     expect(editor.editor.blocks.hasBlock(next.id)).toBe(false);
     remove();
+    expect(core.blockListProps.has("custom.list")).toBe(false);
     expect(editor.editor.blockBehaviors.childrenVisible(block)).toBe(true);
     const withoutExtension = pressEnter();
     expect(withoutExtension.content).toBe("cd");

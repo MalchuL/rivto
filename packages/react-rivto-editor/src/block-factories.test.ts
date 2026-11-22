@@ -1,3 +1,4 @@
+import type { BlockInput } from "@chulane/document-model";
 import { createCaretSelection, type EditorBlockNode } from "@chulane/rivto";
 import {
   createBlockFactory,
@@ -9,18 +10,14 @@ import { insertBlockElementSeparator } from "./elements/block-element-projection
 import { defaultWritingBlockExtension } from "./extensions/built-ins/built-ins";
 import { createBlockBehaviorContext } from "./block-behaviors/utils/context";
 import { DefaultBlockBehavior } from "./block-behaviors/default-block-behavior";
-import type {
-  BlockBehavior,
-  BlockBehaviorAvailabilityContext,
-  BlockBehaviorOutcome,
-} from "./block-behaviors/types";
+import type { BlockBehavior, BlockBehaviorOutcome } from "./block-behaviors/types";
 import { firstKeyboardTarget } from "./managers/keyboard/selection";
 import { createTestCoreEditor, createTestReactEditor } from "./test-utils";
 
 class ResetRejectingBehavior implements BlockBehavior {
   /** @param context - Block being checked. @returns Whether the custom image behavior applies. */
-  isAvailable(context: BlockBehaviorAvailabilityContext): boolean {
-    return context.block.type === "image";
+  isAvailable(context: BlockInput): boolean {
+    return context.type === "image";
   }
 
   /** Keeps custom block state by refusing the default empty-text reset. */

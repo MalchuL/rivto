@@ -6,7 +6,12 @@ import { createTestReactEditor as createReactEditor } from "../test-utils";
  *
  * @module
  */
-import { createCaretSelection } from "@chulane/rivto";
+import {
+  createCaretSelection,
+  type BlockStructuralBehavior,
+  type BlockStructuralMoveContext,
+} from "@chulane/rivto";
+import type { BlockInput } from "@chulane/document-model";
 import { createTestCoreEditor } from "../test-utils";
 
 import {
@@ -17,12 +22,16 @@ import { createTableBlockInput, tableExtension } from "../extensions/containers/
 import { firstKeyboardTarget } from "../managers/keyboard/selection";
 import { createBlockBehaviorContext } from "./utils/context";
 import { DefaultBlockBehavior } from "./default-block-behavior";
-import type { BlockBehavior, BlockBehaviorAvailabilityContext, BlockMoveContext } from "./types";
 
-class RejectingBlockBehavior implements BlockBehavior {
-  /** @param context - Block being checked. @returns Whether this paragraph behavior applies. */
-  isAvailable(context: BlockBehaviorAvailabilityContext): boolean {
-    return context.block.type === "paragraph";
+class RejectingBlockBehavior implements BlockStructuralBehavior {
+  /**
+   * Limits the movement veto to paragraphs.
+   *
+   * @param block - Current fields of the proposed block.
+   * @returns Whether this behavior applies to the block.
+   */
+  isAvailable(block: BlockInput): boolean {
+    return block.type === "paragraph";
   }
 
   /**
@@ -31,7 +40,7 @@ class RejectingBlockBehavior implements BlockBehavior {
    * @param context - Unused candidate destination.
    * @returns Always `false`.
    */
-  canMove(context: BlockMoveContext): boolean {
+  canMove(context: BlockStructuralMoveContext): boolean {
     return false;
   }
 }
@@ -47,10 +56,9 @@ test("resolve falls back to DefaultBlockBehavior and indent stays free at the ro
     { type: "paragraph", content: "Second" },
     editor.blocks.getInsertionDestinationAfter(first),
   ).id;
-  const behaviors = reactPanel.editor.blockBehaviors.resolveAll({
-    editor: reactPanel.editor,
-    block: editor.blocks.getBlockNode(second)!,
-  });
+  const behaviors = reactPanel.editor.blockBehaviors.resolveAll(
+    editor.blocks.getBlockNode(second)!,
+  );
   expect(behaviors[0]).toBeInstanceOf(DefaultBlockBehavior);
   expect(behaviors.some((behavior) => !(behavior instanceof DefaultBlockBehavior))).toBe(false);
   editor.blocks.indentBlock(second);
@@ -70,14 +78,14 @@ test("asks the resolved behavior whether a drop is accepted", async () => {
       defaultWritingBlockExtension(),
       {
         id: "test.reject-drop",
-        setup: (reactEditor) => reactEditor.blockBehaviors.register(rejectingBehavior),
+        setup: (reactEditor) => reactEditor.blockRegistry.registerBehavior(rejectingBehavior),
       },
     ],
   });
   const targetId = editor.blocks.insertBlock({ type: "paragraph" }).id;
 
   expect(
-    reactPanel.editor.blockBehaviors.canMove({
+    reactPanel.editor.blocks.canMove({
       destination: { parentId: targetId },
       sources: [editor.blocks.getBlock(targetId)!],
     }),
@@ -86,6 +94,49 @@ test("asks the resolved behavior whether a drop is accepted", async () => {
   reactPanel.editor.destroy();
   editor.destroy();
 });
+
+test.each(["block", "edgeless"] as const)(
+  "Enter leaves the continuation after its source when a behavior rejects indent in %s",
+  async (mode) => {
+    const editor = await createTestCoreEditor({ registerWritingBlock: false });
+    const reactPanel = createReactEditor({
+      editor,
+      extensions: [defaultWritingBlockExtension()],
+    });
+    try {
+      reactPanel.mode.set(mode);
+      const source = editor.blocks.insertBlock({
+        type: "paragraph",
+        content: "beforeafter",
+        children: [{ type: "paragraph", content: "existing child" }],
+      });
+      reactPanel.editor.blockElements.reconcile();
+      const card = reactPanel.elements
+        .getElementNodes()
+        .find((element) => element.props.endBlockId === source.id)!;
+      editor.blockRegistry.registerBehavior({
+        isAvailable: () => true,
+        onIndent: () => "rejected",
+      });
+      const caret = createCaretSelection(source.id, 6);
+      const context = createBlockBehaviorContext(reactPanel, source.id, {} as HTMLElement, caret)!;
+      reactPanel.blockBehaviors.dispatch("onSplit", context, firstKeyboardTarget(caret)!);
+
+      expect(
+        editor.blocks.getRootIds().map((id) => editor.blocks.getBlockNode(id)?.content),
+      ).toEqual(["before", "after"]);
+      const endBlockId = mode === "edgeless" ? editor.blocks.getRootIds()[1] : source.id;
+      expect(reactPanel.elements.getElementNode(card.id)?.props.endBlockId).toBe(endBlockId);
+      expect(editor.blocks.getChildIds(source.id)).toEqual(
+        source.children.map((child) => child.id),
+      );
+    } finally {
+      await reactPanel.destroy();
+      await reactPanel.editor.destroy();
+      await editor.destroy();
+    }
+  },
+);
 
 test.each(["checkbox", "numbered_list", "start_numbered_list", "continue_numbered_list"])(
   "empty %s clears its marker before outdenting one level per Enter",
@@ -295,22 +346,22 @@ test("drop validation checks the destination parent and every source snapshot", 
       const content = editor.blocks.insertBlock({ type: "paragraph" });
       const destination = { parentId: parent.id };
       expect(
-        reactPanel.editor.blockBehaviors.canMove({ destination: destination, sources: [content] }),
+        reactPanel.editor.blocks.canMove({ destination: destination, sources: [content] }),
       ).toBe(false);
       expect(
-        reactPanel.editor.blockBehaviors.canMove({
+        reactPanel.editor.blocks.canMove({
           destination: destination,
           sources: [{ ...shell, id: "foreign-shell" }],
         }),
       ).toBe(true);
       expect(
-        reactPanel.editor.blockBehaviors.canMove({
+        reactPanel.editor.blocks.canMove({
           destination: destination,
           sources: [shell, content],
         }),
       ).toBe(false);
       expect(
-        reactPanel.editor.blockBehaviors.canMove({
+        reactPanel.editor.blocks.canMove({
           destination: { ...destination, parentId: null },
           sources: [shell],
         }),
@@ -321,7 +372,7 @@ test("drop validation checks the destination parent and every source snapshot", 
         shellType === "table-cell"
       ) {
         expect(
-          reactPanel.editor.blockBehaviors.canMove({
+          reactPanel.editor.blocks.canMove({
             destination: { parentId: shell.id },
             sources: [{ ...content, id: "foreign-content" }],
           }),

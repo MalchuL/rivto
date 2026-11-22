@@ -2,10 +2,45 @@ import { localFileBridgePlugin } from "./local-file-bridge";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 import { reviewReportFilesPlugin } from "./review-report-files";
 
 export default defineConfig({
   plugins: [
+    {
+      name: "demo-git-title",
+      /**
+       * Adds the current Git branch and commit to the demo title when available.
+       *
+       * @param html - Demo HTML before Vite serves or builds it.
+       * @returns HTML with Git information, or the original HTML if Git fails.
+       */
+      transformIndexHtml(html) {
+        try {
+          const cwd = fileURLToPath(new URL("..", import.meta.url));
+          const branch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+            cwd,
+            stdio: ["ignore", "pipe", "ignore"],
+          })
+            .toString()
+            .trim();
+          const commit = execFileSync("git", ["rev-parse", "--short=7", "HEAD"], {
+            cwd,
+            stdio: ["ignore", "pipe", "ignore"],
+          })
+            .toString()
+            .trim()
+            .slice(0, 7);
+          const title = `${branch} (${commit})`
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;");
+          return html.replace("Rivto editor demo</title>", `Rivto editor demo - ${title}</title>`);
+        } catch {
+          return html;
+        }
+      },
+    },
     // Compiles the editor's Tailwind source stylesheet (aliased below) so class
     // edits in packages/react-rivto-editor hot-reload without a package build.
     {

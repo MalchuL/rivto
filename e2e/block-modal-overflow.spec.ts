@@ -19,7 +19,7 @@ for (const label of ["Kanban", "Bento", "Table"]) {
               type: "block",
               zIndex: 0,
               frame: { x: 20, y: 20, width: 800, height: 600 },
-              props: { startBlockId: board.id, endBlockId: board.id },
+              props: { startBlockId: board.id, endBlockId: board.id, borderless: false },
             });
           }
         },

@@ -1,4 +1,5 @@
 import type { BlockEditorNodeApi } from "./block-editor-node-api";
+import type { BlockStyle } from "../../adapter/block-style";
 import type {
   BlockEditorBlocks,
   BlockEditorNodePatch,
@@ -79,16 +80,6 @@ export class BlockEditorNode implements BlockEditorNodeApi {
   }
 
   /**
-   * Reads the resolved CSS background color or expression supplied by the host.
-   *
-   * @returns Current CSS background value, or undefined for a default background or an unavailable node.
-   * @throws Propagates host read failures.
-   */
-  get color(): string | undefined {
-    return this.getSnapshot()?.color;
-  }
-
-  /**
    * Reads the immutable host snapshot for React external-store comparison.
    *
    * The stable node object is not itself a snapshot. No object is allocated here;
@@ -159,14 +150,27 @@ export class BlockEditorNode implements BlockEditorNodeApi {
   }
 
   /**
-   * Changes the block background through the host's supported presentation fields.
+   * Replaces this block's local appearance through the host.
    *
-   * @param color - Host-supported CSS background value, or null to remove the local background override.
-   * @returns The host update has completed without changing other presentation fields.
-   * @throws If destroyed/unavailable or the host rejects the color or update.
+   * @param style - Complete style, or null to remove it.
+   * @returns The host update has completed.
+   * @throws If the node is unavailable or the host rejects the update.
    */
-  setColor(color: string | null): void {
-    this.update({ color });
+  setStyle(style: BlockStyle | null): void {
+    this.update({ style });
+  }
+
+  /**
+   * Copies the current block appearance without exposing the host snapshot.
+   *
+   * The host may contain malformed persisted fields; their values are preserved,
+   * so consumers reading untrusted documents must check individual fields.
+   *
+   * @returns A detached style, or an empty object when absent.
+   * @throws If the host read or cloning fails.
+   */
+  getStyle(): BlockStyle {
+    return JSON.parse(JSON.stringify(this.getSnapshot()?.style ?? {}));
   }
 
   /**

@@ -4,12 +4,12 @@ import { BlockChildrenControlsContext, BlockItemControlsContext } from "./block-
 import { BlockSlots } from "../../slots/block-slots";
 import { useBlockLayoutState } from "./block-layout-context";
 import { useBlockRegion } from "./use-block-region";
-import type { BlockEditorTheme } from "../../block-editor-theme";
+import type { BlockCssProperties } from "./block-css-properties";
 
 /** Native row attributes and interior JSX, including an independently placed BlockContent. */
 export interface BlockRowProps extends HTMLAttributes<HTMLDivElement> {
   /** Native styles and the existing shared geometry/theme tokens. */
-  readonly style?: BlockEditorTheme;
+  readonly style?: BlockCssProperties;
   /** Automatic contributions by default; manual layouts place BlockSlot explicitly. */
   readonly slots?: "automatic" | "manual";
   /** JSX contents arranged by the owning layout; no recursive traversal is performed here. */

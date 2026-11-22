@@ -9,6 +9,7 @@ import { PageDragContext } from "../../surfaces/page/page-drag-context";
 import { blockMenuTargets } from "../../managers/block-context-menu/targets";
 import type { BlockContextMenuContext } from "../../managers/block-context-menu/types";
 import { BlockContextMenu } from "./menu";
+import { useAlignHandleToFirstTextLine } from "./use-align-handle-to-first-text-line";
 
 /** Application-owned navigation and optional handle artwork; no persisted icon state is introduced. */
 export interface BlockHandleOptions extends Pick<DragHandleProps, "clickMovementThreshold"> {
@@ -77,6 +78,7 @@ export function BlockHandle({
   const pageDragEnabled = useContext(PageDragContext);
   const reactPanel = useReactPanel();
   const button = useRef<HTMLButtonElement>(null);
+  useAlignHandleToFirstTextLine(button, block, alwaysVisible ?? options.alwaysVisible ?? false);
   const [menu, setMenu] = useState<{ context: BlockContextMenuContext; x: number; y: number }>();
   /**
    * Captures structural selection targets before mounting the menu at an anchor.

@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 import { blockIdSelector } from "./dom-markers";
 
 const TODAY = '[data-journal-document="today"]';
@@ -111,6 +112,30 @@ async function pasteStructured(content: Locator, structured: string, plain: stri
 
 function block(page: Page, id: string): Locator {
   return page.locator(TODAY).locator(blockIdSelector(id));
+}
+
+/**
+ * Places the fixture roots together in one visible Edgeless card.
+ *
+ * @param page - Demo page containing the fixture document.
+ * @param ids - Nonempty ordered list of existing root IDs to display.
+ * @returns Resolves after switching to the canvas containing the card.
+ */
+async function showCanvasCard(page: Page, ids: string[]): Promise<void> {
+  await page.evaluate((ids) => {
+    const { editor } = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+      .__rivtoDemo;
+    const snapshot = editor.dump();
+    const blocks = ids.map((id) => snapshot.blocks.find((block) => block.id === id)!);
+    editor.load({ ...snapshot, blocks, elements: [], rootElementIds: [] });
+    editor.elements.insertElement({
+      type: "block",
+      zIndex: 0,
+      frame: { x: 20, y: 20, width: 700, height: 500 },
+      props: { startBlockId: ids[0], endBlockId: ids.at(-1) },
+    });
+  }, ids);
+  await page.locator('[data-editor-mode="edgeless"]').click();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -363,14 +388,12 @@ test("updates a table of contents and navigates to its heading", async ({ page }
       }
     ).__rivtoDemo.editor.blocks.updateBlock(id, { listProps: { collapsed: true } });
   }, collapsed.id);
-  await page.locator('[data-editor-mode="edgeless"]').click();
+  await showCanvasCard(page, [tocId, collapsed.id]);
   const viewport = page.locator(".edgeless-viewport");
   const panX = await viewport.getAttribute("data-edgeless-pan-x");
   const panY = await viewport.getAttribute("data-edgeless-pan-y");
   const zoom = await viewport.getAttribute("data-edgeless-zoom");
-  await block(page, tocId)
-    .getByRole("button", { name: "Scroll target heading" })
-    .click({ force: true });
+  await block(page, tocId).getByRole("button", { name: "Scroll target heading" }).click();
   await expect(heading).toHaveCount(1);
   await expect(viewport).toHaveAttribute("data-edgeless-pan-x", panX ?? "");
   await expect(viewport).toHaveAttribute("data-edgeless-pan-y", panY ?? "");
@@ -507,7 +530,9 @@ test("selects host blocks on the page and the canvas", async ({ page }) => {
   const ids = [callout.id, bookmark.id, contents.id, equation.id];
 
   for (const mode of ["block", "edgeless"] as const) {
-    await page.locator(`[data-editor-mode="${mode}"]`).click();
+    if (mode === "edgeless") {
+      await showCanvasCard(page, ids);
+    }
     await page.evaluate(() => {
       (
         window as unknown as {
@@ -521,7 +546,6 @@ test("selects host blocks on the page and the canvas", async ({ page }) => {
       const anchor = (await content.count()) > 0 ? content : row.locator(".demo-toc");
       await anchor.click({
         modifiers: ["Control"],
-        force: mode === "edgeless",
         position: { x: 4, y: 4 },
       });
       await expect(row).toHaveAttribute("data-block-selected", "true");

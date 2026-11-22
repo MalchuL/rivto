@@ -22,27 +22,55 @@ import {
   TextPasteStrategy,
   type PasteContext,
   type PastePlacement,
+  type PasteStrategy,
 } from "./strategies";
 import { PasteStrategyRegistry } from "./strategies";
 import type { DocumentEditorAPI } from "../../editor/types";
-import type { ClipboardManagerApi } from "../types";
+import type {
+  BlockManagerApi,
+  ClipboardManagerApi,
+  ElementManagerApi,
+  HistoryBatch,
+  SelectionManagerApi,
+} from "../types";
+
+/** Capabilities used to copy, cut, and paste through the receiving editor or panel. */
+interface ClipboardEditor extends Pick<DocumentEditorAPI, "getDocument"> {
+  readonly blocks: PasteContext["editor"]["blocks"] &
+    Pick<BlockManagerApi, "hasBlock" | "canRemove">;
+  readonly elements: Pick<ElementManagerApi, "hasElement">;
+  readonly selection: Pick<SelectionManagerApi, "resolveBlockSelection" | "get" | "set" | "delete">;
+  readonly history: HistoryBatch;
+}
 
 /** Framework-neutral clipboard operations over blocks with per-block offsets. */
 export class ClipboardManager implements ClipboardManagerApi {
   /** Paste algorithms constructed once for this editor and consulted by id. */
-  readonly pasteStrategies = new PasteStrategyRegistry();
+  readonly pasteStrategies: PasteStrategyRegistry;
 
   /**
-   * Creates the clipboard owner and registers core paste strategies.
-   * @param editor - Owning editor providing block and selection operations.
+   * Binds clipboard operations to an editor and its block and selection boundaries.
+   *
+   * Without a supplied registry, the manager creates the registry and registers
+   * the built-in strategies. A supplied registry stays owned by its source and
+   * remains live, including registrations made after construction.
+   * @param editor - Editor or panel providing bounded block and selection operations.
+   * @param pasteStrategies - Optional source-owned strategy registry to borrow.
    */
-  constructor(private readonly editor: DocumentEditorAPI) {
+  constructor(
+    private readonly editor: ClipboardEditor,
+    pasteStrategies?: PasteStrategyRegistry,
+  ) {
+    this.pasteStrategies = pasteStrategies ?? new PasteStrategyRegistry();
+    if (pasteStrategies) {
+      return;
+    }
     this.pasteStrategies.register(
       PRESERVE_NEWLINES_PASTE_STRATEGY_ID,
-      new PreserveNewlinesPasteStrategy(editor),
+      new PreserveNewlinesPasteStrategy(),
     );
-    this.pasteStrategies.register(TEXT_PASTE_STRATEGY_ID, new TextPasteStrategy(editor));
-    this.pasteStrategies.register(BLOCK_PASTE_STRATEGY_ID, new BlockPasteStrategy(editor));
+    this.pasteStrategies.register(TEXT_PASTE_STRATEGY_ID, new TextPasteStrategy());
+    this.pasteStrategies.register(BLOCK_PASTE_STRATEGY_ID, new BlockPasteStrategy());
   }
 
   /**
@@ -52,6 +80,9 @@ export class ClipboardManager implements ClipboardManagerApi {
    */
   copy(selection?: Selection): ClipboardBundle | undefined {
     const current = selection ?? this.editor.selection.get();
+    if (current) {
+      this.requireSelection(current);
+    }
     const range = this.editor.selection.resolveBlockSelection(current);
     if (!range) {
       return undefined;
@@ -110,14 +141,48 @@ export class ClipboardManager implements ClipboardManagerApi {
    * concrete caret for command and host adapters that position a native cursor
    * without interpreting Rivto's generic selection shape.
    * @param input - Clipboard flavors, placement and optional editing range.
+   * @param strategies - Optional ordered algorithms for this invocation; defaults to the live shared registry.
    * @returns Resulting text caret, or undefined for structural/no-op paste.
    */
-  paste(input: ClipboardPasteInput = {}): EditorPosition | undefined {
-    let context = this.createPasteContext(input);
+  paste(
+    input: ClipboardPasteInput = {},
+    strategies: readonly PasteStrategy[] = this.pasteStrategies.getPasteStrategies(),
+  ): EditorPosition | undefined {
+    if (input.textTarget) {
+      this.requireSelection(input.textTarget);
+    }
+    const { parentId, afterId } = input.placement ?? {};
+    if (parentId != null && !this.editor.blocks.hasBlock(parentId)) {
+      throw new Error("Paste parent is outside editor");
+    }
+    if (afterId != null && !this.editor.blocks.canRemove(afterId)) {
+      throw new Error("Paste anchor is outside editor or protected");
+    }
+    // Invalid structured clipboard data still allows plain-text strategies to run.
+    let bundle: ClipboardBundle | undefined;
+    try {
+      const candidate =
+        input.bundle ?? (input.structured ? (JSON.parse(input.structured) as unknown) : undefined);
+      if (candidate !== undefined) {
+        validateClipboardBundle(candidate);
+        bundle = candidate;
+      }
+    } catch {
+      bundle = undefined;
+    }
+    let context: PasteContext = {
+      editor: this.editor,
+      bundle,
+      blockIdMap: input.blockIdMap,
+      text: input.text,
+      defaultBlockType: input.defaultBlockType,
+      selection: input.textTarget ?? this.editor.selection.get(),
+      onPrepareError: input.onPrepareError,
+    };
     const placement: PastePlacement = input.placement ?? {};
     let caret: EditorPosition | undefined;
     this.editor.history.batchUpdates(() => {
-      this.pasteStrategies.getPasteStrategies().forEach((strategy) => {
+      strategies.forEach((strategy) => {
         if (!strategy.matches(context, placement)) {
           return;
         }
@@ -144,29 +209,18 @@ export class ClipboardManager implements ClipboardManagerApi {
   }
 
   /**
-   * Builds the shared strategy context from a host paste request.
-   * @param input - Clipboard flavors and optional editing range.
-   * @returns Context with a validated bundle and the paste-time selection.
+   * Checks explicit clipboard selection members before reading or changing content.
+   *
+   * @param selection - Clipboard source or paste target selection.
+   * @returns After every selected block and element is visible to this editor.
+   * @throws If a member is absent or outside the editor's boundary.
    */
-  private createPasteContext(input: ClipboardPasteInput): PasteContext {
-    let bundle: ClipboardBundle | undefined;
-    try {
-      const candidate =
-        input.bundle ?? (input.structured ? (JSON.parse(input.structured) as unknown) : undefined);
-      if (candidate !== undefined) {
-        validateClipboardBundle(candidate);
-        bundle = candidate;
-      }
-    } catch {
-      bundle = undefined;
+  private requireSelection(selection: Selection): void {
+    if (
+      selection.blocks.some(({ id }) => !this.editor.blocks.hasBlock(id)) ||
+      selection.elements?.some((id) => !this.editor.elements.hasElement(id))
+    ) {
+      throw new Error("Clipboard selection is outside editor");
     }
-    return {
-      bundle,
-      blockIdMap: input.blockIdMap,
-      text: input.text,
-      defaultBlockType: input.defaultBlockType,
-      selection: input.textTarget ?? this.editor.selection.get(),
-      onPrepareError: input.onPrepareError,
-    };
   }
 }

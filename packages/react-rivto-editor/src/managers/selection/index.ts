@@ -1,3 +1,2 @@
-export * from "./panel-selection-manager";
-export * from "./dom-text-selection";
-export * from "./editor-dom-selection";
+export { restoreDOMSelection, saveDOMSelection } from "./dom-text-selection";
+export type { SavedDOMSelection } from "./dom-text-selection";

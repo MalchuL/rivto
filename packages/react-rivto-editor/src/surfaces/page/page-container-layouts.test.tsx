@@ -89,11 +89,16 @@ it("owns Bento tile width on its Page item and restores it through undo", async 
     fixture.core.history.stopCapturing();
     fixture.mount();
     expect(fixture.container.querySelectorAll("[data-block-id]")).toHaveLength(2);
-    expect(fixture.container.querySelectorAll('[role="separator"]')).toHaveLength(2);
+    expect(fixture.container.querySelectorAll('[role="separator"]')).toHaveLength(3);
+    expect(
+      fixture.container.querySelector(
+        '[role="button"][aria-label="Resize Bento tile from the bottom-right"]',
+      ),
+    ).not.toBeNull();
     const tile = fixture.container.querySelector<HTMLElement>(".rivto-bento-tile")!;
     expect(tile.style.getPropertyValue("--rivto-bento-width")).toBe("280px");
     fixture.resize("Resize Bento tile from the right");
-    expect(fixture.panel.blocks.getBlockNode(tileId)?.props.bentoWidth).toBe(290);
+    expect(fixture.panel.blocks.getBlockNode(tileId)?.pluginData.bentoWidth).toBe(290);
     expect(tile.style.getPropertyValue("--rivto-bento-width")).toBe("290px");
     act(() => fixture.core.history.undo());
     expect(tile.style.getPropertyValue("--rivto-bento-width")).toBe("280px");

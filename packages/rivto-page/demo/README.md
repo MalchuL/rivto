@@ -60,15 +60,13 @@ frames; this is a rendering proxy, not the complete latency of opening a native
 dropdown. Separate pointer scenarios exercise checkbox and collapse controls,
 including mounted descendant counts and targeted reads.
 
-`node.color` / `node.setColor(...)` specify a resolved CSS background value. The demo
-owns the named gray/red/orange/yellow/green/blue/purple choices in constants.ts.
-Its controls translate a selected name into a CSS expression before calling the node
-command; the adapter validates that example value. Default sends null and removes
-the local override; text retains its color. A future production adapter must resolve
-persisted listProps.backgroundColor tokens into CSS values and own any reverse
-mapping when applying a color command. Page receives no palette names or registry.
-The example CSS expressions can reference demo-owned --demo-color-* variables;
-these are not package theme parameters. The demo does not supply required geometry
+`node.getStyle()` and `node.setStyle(...)` read and replace the block's semantic
+appearance. The demo owns its named background choices and stores explicit hex
+colors rather than CSS variable references. The adapter keeps these choices in its
+own snapshots; Page receives no palette names or registry. Reset removes the local
+background; text retains its color.
+The demo palette supplies explicit hex colors and does not persist CSS variable
+references; host CSS tokens remain presentation details rather than block data. The demo does not supply required geometry
 variables or CSS from react-rivto-editor. The concrete renderer does not style the
 block background.
 

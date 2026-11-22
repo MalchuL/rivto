@@ -221,6 +221,15 @@ function copyElementForReport(element: EditorElementNode): EditorElementNode {
   return copy;
 }
 
+/** Live reads borrowed while collecting the blocks and canvas elements for a report. */
+interface ReviewSnapshotEditor {
+  readonly blocks: Pick<
+    DocumentEditorAPI["blocks"],
+    "hasBlock" | "getParentId" | "getRootIds" | "getBlockNode" | "getBlock"
+  >;
+  readonly elements: Pick<DocumentEditorAPI["elements"], "getElementNodes">;
+}
+
 /**
  * Captures the root-block window and source placement around a Review block.
  *
@@ -232,7 +241,7 @@ function copyElementForReport(element: EditorElementNode): EditorElementNode {
  * @returns Detached snapshot plus report placement from the same live read.
  */
 export function captureBlockReview(
-  editor: DocumentEditorAPI,
+  editor: ReviewSnapshotEditor,
   reviewId: string,
   blocksAbove: number,
   blocksBelow: number,
@@ -288,7 +297,7 @@ export function captureBlockReview(
     return [copy];
   });
   return {
-    snapshot: createReviewSnapshot(editor, blocks, elements),
+    snapshot: createReviewSnapshot(blocks, elements),
     previousReportSiblingId: siblingIndex > 0 ? siblingIds[siblingIndex - 1]! : null,
     nextReportSiblingId:
       siblingIndex >= 0 && siblingIndex + 1 < siblingIds.length
@@ -312,7 +321,7 @@ export function captureBlockReview(
  * @returns Detached loadable schema-v9 snapshot.
  */
 export function captureElementReviewSnapshot(
-  editor: DocumentEditorAPI,
+  editor: ReviewSnapshotEditor,
   reviewId: string,
   elementsAbove: number,
   elementsBelow: number,
@@ -393,12 +402,11 @@ export function captureElementReviewSnapshot(
       }
       return copy;
     });
-  return createReviewSnapshot(editor, blocks, elements);
+  return createReviewSnapshot(blocks, elements);
 }
 
 /** Builds complete canvas roots for the captured subset, promoting children whose parents were omitted. */
 function createReviewSnapshot(
-  editor: DocumentEditorAPI,
   blocks: EditorBlock[],
   elements: EditorElementNode[],
 ): EditorSnapshot {

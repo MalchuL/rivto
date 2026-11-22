@@ -96,6 +96,10 @@ Token groups:
 Canvas cards no longer inherit `--rivto-block-surface-padding`; hosts that used
 it to customize cards should set `--rivto-edgeless-card-padding` instead.
 
+`--rivto-separator-children-opacity` controls the opacity of content inside a
+separator's child frame. It defaults to `0.5` and accepts CSS opacity values;
+set it on the editor or a separator ancestor to customize the presentation.
+
 Add a token when a feature introduces a color or dimension a host should be
 able to change; reference it from utilities with the Tailwind variable
 shorthand (`text-(--rivto-todo-accent)`, `shadow-(--rivto-edgeless-chrome-shadow)`,
@@ -188,6 +192,44 @@ not survive generation. An ESLint rule rejects `@/` imports inside the package.
 Treat `src/components/ui/` as vendored: re-run `ui:add` to refresh a primitive
 rather than editing it by hand, and put package-specific wrappers (such as
 `ui-scope.ts` or feature components) outside that directory.
+
+### Block dimensions
+
+The `BlockStyle` presentation contract is exported by `@chulane/rivto-page`; Page
+uses it when rendering a block's `listProps.style`. Persisted style data may also contain
+unknown or malformed fields, so consumers inspect values before using them.
+
+Block `listProps.style.size` accepts `width` and `height` as CSS lengths; unitless
+values mean pixels. `heightPolicy` defaults to `grow` (minimum height); `scroll`
+and `clip` fix the height and respectively scroll or hide overflow. Bento uses
+`pluginData.bentoWidth` on each direct child for tile placement, clamped to
+160–960 pixels. Entering Bento saves the block's previous style width in plugin
+data and applies the Bento width to its style. Resizing updates both values;
+leaving Bento restores the original style width. The Bento preference is ignored
+outside Bento and is preserved when a block moves between boards. Placement can
+also be limited by the available container width.
+
+Bento also offers a bottom handle for height and a bottom-right corner handle
+for both dimensions. The height preference and overflow policy are retained in
+plugin data, while the previous style height and policy are restored on exit.
+Shrinking below the content switches an unset or `grow` height policy to `scroll`;
+an explicitly chosen `scroll` or `clip` policy is preserved. Handles support arrow
+keys, Shift for larger steps, and Escape to cancel an active pointer resize.
+Custom block layouts can use `BlockResizeHandles` with selected `edges`, including
+corners, to expose only the directions they support.
+
+Kanban columns use the block style width and the same resize controls. Their default
+layout shares available space with a 240-pixel preferred width; an explicitly
+sized column uses its preferred width clamped to 160–960 pixels. The board
+remains horizontally scrollable when its columns do not fit.
+
+`widthPolicy` may be `grow`, `scroll`, or `clip`. When omitted, the width keeps
+its existing fixed-width behavior. `grow` uses the width as a minimum and grows
+with content up to the available width; Bento also caps it at 960 pixels. `scroll`
+and `clip` retain the specified width and respectively scroll or hide horizontal
+overflow. Ordinary text wrapping remains controlled by its renderer. Browsers may
+compute visible overflow on one axis as `auto` when the other axis is scrollable
+or clipped.
 
 ### Floating panels and sortable content
 

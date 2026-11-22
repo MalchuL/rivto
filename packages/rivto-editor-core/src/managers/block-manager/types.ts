@@ -13,3 +13,17 @@ export interface BlockPrepareErrorHandler {
    */
   (block: EditorBlockInput, error: unknown): EditorBlockInput;
 }
+
+/** Identity requirements for importing a complete block forest. */
+export interface BlockImportOptions {
+  /** Optional replacement when preparing a block fails. */
+  readonly onError?: BlockPrepareErrorHandler;
+  /** Source-to-destination IDs allocated before the import. */
+  readonly ids?: ReadonlyMap<string, string>;
+  /**
+   * Preserve every source ID and reject missing or conflicting IDs before insertion.
+   * Preparation must leave the original identity set unchanged, including when an
+   * explicit ID mapping is supplied. Defaults to false, allowing remapping.
+   */
+  readonly preserveIds?: boolean;
+}

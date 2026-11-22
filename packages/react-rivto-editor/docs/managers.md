@@ -106,7 +106,9 @@ Manager-owned registrations then unwind in reverse order. The event manager
 disconnects native listeners through DOMEventListeners after extension teardown.
 ReactPanel cancels local DOM work and releases its local subscriptions on unmount;
 the host retains and releases its storage acquisition separately.
-the public ReactPanelApi has no destroy method and never destroys its core editor.
+The public ReactPanelApi exposes `destroy()` to release the occurrence's resources;
+it never destroys its shared editor. The component creating the core panel owns
+and destroys that panel separately.
 
 ## Prioritized block behaviors
 
@@ -115,27 +117,37 @@ The list extension installs separate checkbox, numbered-list, and ordinary-list
 behaviors. Child visibility belongs to `CollapseBlockBehavior`; property validation
 and interaction registration retain their own extension cleanup.
 
+Structural outline, deletion, movement, and direct-child transition hooks are registered on the core editor's
+`blockRegistry.registerBehavior(behavior, priority)`. The block registry owns the
+registrations; the block manager owns a strategy that selects their hooks. Block operations
+remain responsible for document mutations and history. Their applicability
+receives the detached candidate block; for transitions, the old parent's exit hooks run before the new
+parent's enter hooks. They prepare child fields before document writes and are
+owned by the editor performing the change. Dispose the registration with the
+extension; undo and redo replay the recorded changes without invoking hooks.
+The React registry below still owns keyboard and presentation-dependent actions; registering
+a React behavior also registers the same instance for core structural operations.
+
 `blockBehaviors.register(behavior, priority = 0)` registers an instance with a
-required `isAvailable(context)` predicate. Larger priorities run first; ties keep
+required `isAvailable(block)` predicate. Larger priorities run first; ties keep
 registration order. Native behaviors use `0`, list/collapse use `-100`, and the
 ordinary `DefaultBlockBehavior` registration uses `-1000`. These values are not
 reserved. Omitted methods and `"unhandled"` continue the chain; `"handled"` and
 `"rejected"` stop it. Inherited methods are invoked normally, without inspecting
-method identities or inserting a special fallback. Each disposer removes its
-exact registration. Type-indexed `get`, `has`, `delete`, and `fallback` are removed.
+method identities or inserting a special fallback. Each disposer releases its
+registration in both registries. Identical core instances at equal priority share one
+entry until every owner releases it. Type-indexed `get`, `has`, `delete`, and `fallback` are removed.
 
-Availability always receives `BlockBehaviorAvailabilityContext { editor, block }`:
-the runtime and current detached persisted block fields, without recursive children.
-This context is identical for actions, split inheritance, visibility, and move
+Availability receives the current detached block fields directly, without requiring
+recursive children or exposing the React runtime. Both registries apply the same predicate.
+This context is identical for actions, split inheritance, and visibility
 applicability. There is no union, kind, operation name, source/destination role,
 pointer coordinate, or optional movement field. The called method already determines
 its operation; method-specific eligibility belongs inside that method. Predicates
 must be synchronous and must not mutate document state. Availability is reevaluated
-from current input, never cached solely by native type. During movement, foreign
-source fields are supplied directly with the destination runtime, even when their
-IDs collide with local IDs; applicability never resolves source IDs locally.
+from current input, never cached solely by native type.
 
-Use `dispatch()` for actions and `resolveAll(context)` for applicable instances.
+Use `dispatch()` for actions and `resolveAll(block)` for applicable instances.
 Native container behaviors implement their own applicability and specialize only
 demonstrated differences; the container base no longer inherits generic outline
 actions. Geometry is declared by Page layout primitives: `BlockChildren` supplies the child axis,
@@ -151,7 +163,7 @@ with its presentation, and rollback releases installed resources after setup fai
 `blockTypes.subscribe()` observes creation and removal of complete definitions;
 metadata readers update through these same core lifecycle notifications. Subscriptions
 disconnect automatically after registration teardown when the React runtime is destroyed.
-No core registration API is added. Metadata does not enable an extension.
+Structural behavior can be installed together with a React block registration. Metadata does not enable an extension.
 The former behavior `resolve(blockId)` metadata query is removed.
 
 Outline dispatch first invokes the current parent's `onChildIndent` or
@@ -160,23 +172,24 @@ Both chains use stable priority ordering and the unchanged requested ID group.
 `handled` and `rejected` stop dispatch. Enter and Backspace resolve fresh shallow
 contexts and invoke this same entry point inside a panel batch. Parent restrictions belong to concrete container behaviors,
 not geometry annotations or the generic container base. Standard indent/outdent
-algorithms live directly in `DefaultBlockBehavior.onIndent` and `onOutdent`, with
-private helpers for selected roots and shallow move permissions. Keyboard callers
-prepare contexts and dispatch requests directly; headless test helpers live only
+algorithms live in the core block manager; panel block operations
+invoke them after the registered structural behaviors defer. The core block manager
+invokes applicable handlers one at a time by action and priority. Keyboard callers
+use `panel.blocks.indentBlocks` or `panel.blocks.outdentBlocks`; headless test helpers live only
 in `test-utils.ts`. Container child insertion belongs to
 `ContainerBlockBehavior.appendWritingBlock`, while seeded slash conversion is
 shared through `extensions/containers/convert-leaf-to-container.ts`. Core eligibility, tail-adoption preflight and handled no-ops
 remain unchanged, without redispatch from the default implementation.
 
-Structural deletion also uses `blockBehaviors.dispatch("onStructuralDelete", context, ids)`.
-The registry visits the supplied IDs in order, skips missing blocks, and consults
+Structural deletion uses `panel.blocks.removeBlocks(ids)`; the panel selection manager calls it for whole-block selections and deletes selected elements in the same batch.
+The panel block operation visits the supplied IDs in order, skips missing blocks, and consults
 each distinct matching behavior on its first selected block only. All handlers
 receive the complete group. Handled/rejected claims the selection; universal
-deferral leaves generic deletion with the selection extension. Batching and DOM
-focus stay with that extension. Chain execution is a private registry method;
-there is no separate `dispatchBlockAction` utility.
+deferral performs generic deletion in the core block manager. Batching and DOM
+focus remain coordinated with the selection extension. Panel operations use the same core behavior
+chain for each selected block, excluding behaviors already consulted for the group.
 
-`canMove({ sources, destination })` accepts shallow moved-root fields and the core
+`editor.blocks.canMove({ sources, destination })` accepts shallow moved-root fields and the core
 `BlockDestination { parentId, beforeId? }`: omitted beforeId appends. It resolves
 the destination parent once and rejects missing parents, invalid insertion neighbors,
 and empty sources. Foreign snapshots are inspected directly even when their IDs
@@ -188,9 +201,8 @@ registration. Behaviors without a canMove method are skipped before applicabilit
 Each registration matching at least one of those blocks calls its canMove method
 once, even when several sources and the parent match. A root insertion has no
 receiving block: source applicability still runs and the movement method receives
-parent null, preserving source restrictions. `BlockMoveContext` is the movement
-method's argument: sources, destination, editor, and the parent resolved once by
-the registry. The public query accepts only its sources and destination. This query
+parent null, preserving source restrictions. `BlockStructuralMoveContext` supplies
+the sources, destination, and the parent resolved once by the core manager. The public query accepts only its sources and destination. This query
 neither mutates nor replaces core hierarchy validation. Drag feedback and commit,
 keyboard block moves,
 and Tab/Shift+Tab use it. Outdent preflights both the lifted roots and the later

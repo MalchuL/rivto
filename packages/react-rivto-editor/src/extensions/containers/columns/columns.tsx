@@ -58,48 +58,34 @@ const COUNT_VALUE_CLASS = "min-w-[1.5ch] text-center tabular-nums";
 const DIVIDERS_CLASS = "rivto-columns-dividers";
 
 /**
- * Rejects counts that would create an empty or overflowing column board.
- * @param value - Requested column count.
- * @returns The accepted integer in the supported range.
- */
-function columnCount(value: number): number {
-  if (!Number.isInteger(value) || value < COLUMNS_MIN_COUNT || value > COLUMNS_MAX_COUNT) {
-    throw new Error(
-      `Columns count must be an integer from ${COLUMNS_MIN_COUNT} to ${COLUMNS_MAX_COUNT}`,
-    );
-  }
-  return value;
-}
-
-/**
- * Creates one column shell, optionally seeded with a writing block.
- *
- * @param writingBlock - Nested default writing block; omitted for an empty lane.
- * @returns Portable column input.
- */
-function createColumnInput(writingBlock?: EditorBlockInput): EditorBlockInput {
-  return {
-    type: COLUMNS_COLUMN_BLOCK_TYPE,
-    content: "",
-    children: writingBlock ? [structuredClone(writingBlock)] : [],
-  };
-}
-
-/**
  * Creates a headerless column board with equally sized columns.
+ *
+ * Every lane gets its own detached copy of the supplied writing block.
  *
  * @param count - Initial column count; defaults to two.
  * @param writingBlock - Seeded writing block cloned into every lane.
  * @returns Portable board subtree inserted through the ordinary block manager.
+ * @throws If the count is outside the supported integer range.
  */
 export function createColumnsBlockInput(
   count = COLUMNS_DEFAULT_COUNT,
   writingBlock?: EditorBlockInput,
 ): EditorBlockInput {
+  if (!Number.isInteger(count) || count < COLUMNS_MIN_COUNT || count > COLUMNS_MAX_COUNT) {
+    throw new Error(
+      `Columns count must be an integer from ${COLUMNS_MIN_COUNT} to ${COLUMNS_MAX_COUNT}`,
+    );
+  }
+
+  // Each lane owns a separate copy of the writing block subtree.
   return {
     type: COLUMNS_BLOCK_TYPE,
     content: "",
-    children: Array.from({ length: columnCount(count) }, () => createColumnInput(writingBlock)),
+    children: Array.from({ length: count }, () => ({
+      type: COLUMNS_COLUMN_BLOCK_TYPE,
+      content: "",
+      children: writingBlock ? [structuredClone(writingBlock)] : [],
+    })),
   };
 }
 
@@ -144,7 +130,7 @@ export function setColumnsCount(
     }
     const removed = columns.slice(next);
     relocateColumnContents(
-      reactPanel,
+      reactPanel.document.blocks,
       removed.map((column) => column.id),
     );
     reactPanel.blocks.removeBlocks(removed.map((column) => column.id));

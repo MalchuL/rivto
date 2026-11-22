@@ -1,41 +1,4 @@
 import type { ClipboardManager } from "./clipboard-manager";
-import type {
-  ClipboardBundle,
-  ClipboardPasteInput,
-  EditorPosition,
-  Selection,
-} from "@chulane/rivto";
-
-/** Clipboard operations bound to one rendered editor panel. */
-export interface PanelClipboardApi {
-  /**
-   * Copies the supplied selection, or this panel's current selection, as structured data.
-   * @param selection - Optional override read against this document; never changes selection.
-   * @returns A detached clipboard bundle, or undefined when nothing can be copied.
-   */
-  copy(selection?: Selection): ClipboardBundle | undefined;
-  /**
-   * Copies an explicit text selection using current document content and offsets.
-   * @param selection - Text range to serialize; a collapsed caret copies no content.
-   * @returns A detached clipboard bundle, or undefined when the selection is empty.
-   */
-  copyText(selection: Selection): ClipboardBundle | undefined;
-  /**
-   * Copies this panel's selection, then deletes it through the selection manager.
-   * @returns The copied bundle, or undefined when no copyable selection exists; nothing is deleted in that case.
-   */
-  cut(): ClipboardBundle | undefined;
-  /**
-   * Pastes through the shared strategies with this panel as the receiving surface.
-   *
-   * An explicit textTarget takes precedence over the panel's current selection.
-   * Without either, an empty structural selection prevents borrowing another panel's
-   * caret. Panel-aware strategies receive this panel even if a nested paste changes focus.
-   * @param input - Structured bundle, text, and placement options; defaults to an empty input.
-   * @returns The resulting caret position, or undefined when no strategy returns one.
-   */
-  paste(input?: ClipboardPasteInput): EditorPosition | undefined;
-}
 
 /** Clipboard operations available to editor components and extensions. */
 export interface ClipboardApi {
@@ -163,9 +126,24 @@ export interface ClipboardApi {
    * @param reactPanel - Source panel defining Panel roots; omitted for a document-only copy.
    * @param operation - Copy, cut or duplicate intent supplied to converters; defaults to copy.
    * @returns Detached payload, or undefined for an empty selection. Does not write the document.
-   * @throws If a converter rejects the copied data.
+   * @throws If the source panel belongs to another document, the selection is outside its boundaries,
+   * or a converter rejects the copied data.
    */
   readonly copy: ClipboardManager["copy"];
+
+  /**
+   * Copies the supplied selection and checks portable formats before deleting its content.
+   *
+   * The panel owns selection lookup and deletion when supplied. Otherwise the document
+   * owns both. Conversion and formatting finish before deletion begins.
+   *
+   * @param selection - Content to cut, defaulting to the selection of the chosen owner.
+   * @param reactPanel - Source panel providing selection boundaries and converter context.
+   * @returns Detached copied bundle, or undefined when there is no copyable selection.
+   * @throws If the panel belongs to another document, the selection is outside the panel,
+   * conversion or formatting fails, or deletion fails.
+   */
+  readonly cut: ClipboardManager["cut"];
 
   /**
    * Copies an explicit text selection through block converters, excluding unselected children.
@@ -173,16 +151,10 @@ export interface ClipboardApi {
    * @param selection - Block text ranges to copy.
    * @param reactPanel - Optional source panel supplied to converters.
    * @returns Detached partial-text bundle, or undefined when there is no text to copy.
+   * @throws If the source panel belongs to another document, the selection is outside its boundaries,
+   * or a converter rejects the copied data.
    */
   readonly copyText: ClipboardManager["copyText"];
-
-  /**
-   * Copies the runtime selection and checks portable formats before deleting it.
-   *
-   * @returns Detached copied bundle, or undefined for an empty selection.
-   * @throws If copy or formatting rejects the data; deletion has not started in that case.
-   */
-  readonly cut: ClipboardManager["cut"];
 
   /**
    * Prepares structured data through type converters, then invokes core paste strategies.

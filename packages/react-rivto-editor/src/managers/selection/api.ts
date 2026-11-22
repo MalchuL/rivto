@@ -1,10 +1,10 @@
-import type { Selection } from "@chulane/rivto";
+import type { Selection, SelectionManagerApi } from "@chulane/rivto";
 
 /** Selection commands and DOM synchronization for one EditorPanel.
  * The model selection is shared by the document. Reads expose it only in the active
  * panel (or the default panel before activation) and within that panel's subtree,
  * except isBlockSelected, which exposes shared whole-block coverage for rendering. */
-export interface PanelSelectionApi {
+export interface PanelSelectionApi extends SelectionManagerApi {
   /** @returns A detached selection, or undefined when empty or owned by another panel. */
   get(): Selection | undefined;
   /**
@@ -15,13 +15,19 @@ export interface PanelSelectionApi {
   /** Clears the document's shared selection, including selection last set by another panel. */
   clear(): void;
   /**
-   * Subscribes to changes of the document's shared model selection.
-   * @param listener - Called after effective selection changes, including changes in other panels.
-   * @returns Function that removes the subscription.
+   * Subscribes to changes of the document's shared model selection and its panel membership.
+   * @param listener - Called after effective selection changes, including changes in other panels, or when a move changes panel membership.
+   * @returns Function that removes the subscription; destroying this panel also removes it.
    */
   subscribe(listener: () => void): () => void;
-  /** Deletes the selected content through core when this panel owns the selection; otherwise does nothing. */
-  delete(): void;
+  /**
+   * Deletes content through the bounded core selection manager.
+   *
+   * @param selection - Explicit panel content, defaulting to the active panel selection.
+   * @returns After deletion, or without changes for inaccessible or protected content.
+   * @throws If a bounded mutation fails.
+   */
+  delete(selection?: Selection): void;
   /** Returns the shared immutable selection snapshot, retaining identity until selection changes.
    * Returns undefined when empty, outside this subtree, or owned by another panel.
    * Use get() when a detached copy is needed; do not mutate this snapshot. */

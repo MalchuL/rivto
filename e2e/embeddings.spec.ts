@@ -1147,6 +1147,18 @@ test("edits source through shared-runtime embeds, survives source pane closure, 
   await expect(embeds.first().locator("[data-block-content]").first()).toHaveText(
     "Source has no pane",
   );
+  const sourcePanelCount = () =>
+    page.evaluate(() => {
+      const { panes } = (window as unknown as { __rivtoDocuments: DemoInspection })
+        .__rivtoDocuments;
+      return [...panes].find((pane) => pane.id === "source")!.reactEditor.panels.getRoots().size;
+    });
+  await expect.poll(sourcePanelCount).toBe(3);
+  await page.getByRole("button", { name: "Close references", exact: true }).click();
+  await expect.poll(sourcePanelCount).toBe(1);
+  await expect(
+    page.locator('[data-document-pane="source"] [data-block-content]').first(),
+  ).toHaveText("Source has no pane");
 });
 
 test("references follow the same block into a new document identity without persisting that identity", async ({
