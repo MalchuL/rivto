@@ -1,7 +1,7 @@
 import { normalizeResizeWidth, getStyleWidth } from "./block-resize-size";
 import type { EditorBlockNode, EditorBlockPatch } from "@chulane/rivto";
 import { BLOCK_ID_ATTRIBUTE } from "../../../constants";
-import { isBlockStyle } from "../../../blocks/block-style";
+import { isBlockStyle } from "../../../blocks/style/block-style";
 import {
   MIN_RESIZE_HEIGHT,
   MAX_RESIZE_HEIGHT,

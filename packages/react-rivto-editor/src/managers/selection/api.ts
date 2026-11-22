@@ -20,8 +20,14 @@ export interface PanelSelectionApi extends SelectionManagerApi {
    * @returns Function that removes the subscription; destroying this panel also removes it.
    */
   subscribe(listener: () => void): () => void;
-  /** Deletes the selected content through core when this panel owns the selection; otherwise does nothing. */
-  delete(): void;
+  /**
+   * Deletes content through the bounded core selection manager.
+   *
+   * @param selection - Explicit panel content, defaulting to the active panel selection.
+   * @returns After deletion, or without changes for inaccessible or protected content.
+   * @throws If a bounded mutation fails.
+   */
+  delete(selection?: Selection): void;
   /** Returns the shared immutable selection snapshot, retaining identity until selection changes.
    * Returns undefined when empty, outside this subtree, or owned by another panel.
    * Use get() when a detached copy is needed; do not mutate this snapshot. */

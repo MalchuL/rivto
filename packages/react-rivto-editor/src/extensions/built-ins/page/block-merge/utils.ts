@@ -6,7 +6,7 @@
 import { createStructuralSelection } from "@chulane/rivto";
 import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_SELECTOR } from "../../../../constants";
 import type { ReactPanelApi } from "../../../../panels/types";
-import { findRenderedBlock } from "../../../../blocks/block-dom";
+import { findRenderedBlock } from "../../../../dom/block-dom";
 
 /** Returns true when a block shell directly owns an editable content host. */
 function hasOwnedEditableContent(block: HTMLElement): boolean {

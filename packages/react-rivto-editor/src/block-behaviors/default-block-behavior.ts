@@ -15,7 +15,7 @@ import {
   owningBlockElement,
 } from "../extensions/built-ins/page/navigation/utils/scope";
 import type { KeyboardSelectionTarget } from "../managers/keyboard/selection";
-import { findAdjacentEditableBlock, findParentBlock, findRenderedBlock } from "../blocks/block-dom";
+import { findAdjacentEditableBlock, findParentBlock, findRenderedBlock } from "../dom/block-dom";
 import { focusCaret, scheduleBlockFocus } from "./utils/focus-ops";
 import { mergeBlocks, resetToWritingType, splitBlock } from "./utils/text-ops";
 import type { BlockBehavior, BlockBehaviorContext, BlockBehaviorOutcome } from "./types";

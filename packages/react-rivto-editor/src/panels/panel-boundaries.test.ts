@@ -190,6 +190,24 @@ test("nested React panels use their own selection with the shared runtime", asyn
     expect(nested.selection.get()?.blocks[0]?.id).toBe("nested");
     expect(corePanel.selection.get()?.blocks[0]?.id).toBe("nested");
     expect(f.children.selection.get()).toBeUndefined();
+
+    const clipboard = nested.editor.clipboard;
+    const nestedSelection = createStructuralSelection(["nested"]);
+    f.document.selection.set(createStructuralSelection(["outside"]));
+    expect(clipboard.cut(undefined, nested)).toBeUndefined();
+    expect(nested.clipboard.cut()).toBeUndefined();
+    expect(() => nested.clipboard.cut(createStructuralSelection(["outside"]))).toThrow(
+      "Clipboard selection is outside panel",
+    );
+    expect(f.document.blocks.hasBlock("outside")).toBe(true);
+    expect(nested.clipboard.cut(nestedSelection)?.blocks.map(({ id }) => id)).toEqual(["nested"]);
+    expect(f.document.blocks.hasBlock("nested")).toBe(false);
+    expect(f.document.blocks.hasBlock("outside")).toBe(true);
+
+    f.document.history.undo();
+    nested.selection.set(nestedSelection);
+    expect(nested.clipboard.cut()?.blocks.map(({ id }) => id)).toEqual(["nested"]);
+    expect(f.document.blocks.hasBlock("nested")).toBe(false);
   } finally {
     activeRoot.mockRestore();
     await nested.destroy();

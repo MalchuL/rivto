@@ -1,8 +1,7 @@
 import type { BlockProcessor } from "@chulane/rivto";
 import { isBlockStyle } from "./block-style";
 
-/** Explicit default background stored for colored containers. */
-const CONTAINER_DEFAULT_BACKGROUND = "#eceef6";
+import { DEFAULT_CONTAINER_BACKGROUND } from "./background-color-constants";
 
 /**
  * Creates a block-owned processor that fills a container's missing background.
@@ -49,7 +48,7 @@ export function createContainerBackgroundProcessor(type: string): BlockProcessor
               !Array.isArray(style.background)
                 ? style.background
                 : {}),
-              color: CONTAINER_DEFAULT_BACKGROUND,
+              color: DEFAULT_CONTAINER_BACKGROUND,
             },
           },
         },
@@ -57,29 +56,6 @@ export function createContainerBackgroundProcessor(type: string): BlockProcessor
     },
   };
 }
-
-/** Named background palette controls; names are not stored in block data. */
-export const BLOCK_BACKGROUND_COLORS = [
-  "",
-  "gray",
-  "transparent",
-  "red",
-  "orange",
-  "yellow",
-  "green",
-  "blue",
-  "purple",
-] as const;
-
-/** Concrete palette colors; persisted blocks never depend on CSS variable names. */
-export const BLOCK_PALETTE_COLORS: Readonly<Record<string, string>> = {
-  red: "#fcdddd",
-  orange: "#fee6d5",
-  yellow: "#fbf1d3",
-  green: "#d7f5e2",
-  blue: "#dce9fd",
-  purple: "#efe0fe",
-};
 
 /** Persisted color split into its base and alpha percentage. */
 type BlockBackgroundColor = {

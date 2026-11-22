@@ -1,4 +1,4 @@
-import { createContainerBackgroundProcessor } from "../../blocks/background-color";
+import { createContainerBackgroundProcessor } from "../../blocks/style/background-color";
 import { BLOCK_TEXT_METADATA_KEY } from "../../managers/selection/block-text-metadata";
 import { ListTodoIcon } from "lucide-react";
 /**

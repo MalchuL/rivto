@@ -122,12 +122,13 @@ export class PanelSelection implements SelectionManagerApi {
    *
    * Structural deletion protects an included root. Text replacement retains the
    * first block and publishes its resulting caret; all changes share one history batch.
+   *
+   * @param selection - Content to delete, defaulting to the current bounded selection.
    * @returns After deletion, or without changes when selection is absent, outside, or protected.
    * @throws If a bounded command or structural behavior fails.
    */
-  delete(): void {
-    const selection = this.get();
-    if (!selection) {
+  delete(selection = this.selection.get()): void {
+    if (!selection || !this.contains(selection)) {
       return;
     }
     if (

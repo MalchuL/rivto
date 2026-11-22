@@ -1,7 +1,6 @@
 import type { ReactPanelApi } from "../../types";
-import type { ClipboardApi, SharedClipboardOperations } from "../../../managers/clipboard/api";
+import type { ClipboardApi } from "../../../managers/clipboard/api";
 import type { PanelClipboardApi } from "./panel-clipboard-api";
-import type { Selection } from "@chulane/rivto";
 
 /** Clipboard operations use this panel; parsers, formatters, and strategies stay document-owned. */
 export class PanelClipboardManager implements PanelClipboardApi {
@@ -24,7 +23,7 @@ export class PanelClipboardManager implements PanelClipboardApi {
    */
   constructor(
     /** Shared clipboard operations borrowed from the document runtime. */
-    private readonly clipboard: SharedClipboardOperations,
+    private readonly clipboard: ClipboardApi,
     private readonly reactPanel: ReactPanelApi,
   ) {}
   /**
@@ -169,15 +168,8 @@ export class PanelClipboardManager implements PanelClipboardApi {
    * @returns Clipboard bundle, or undefined when no selection can be copied.
    * @throws If the selection is outside the panel or a converter fails.
    */
-  copy: ClipboardApi["copy"] = (selection, _panel, operation) => {
-    const current = selection ?? this.reactPanel.selection.get();
-    if (!current) {
-      // There is no panel selection to serialize.
-      return undefined;
-    }
-    this.requireSelection(current);
-    return this.clipboard.copy(current, this.reactPanel, operation);
-  };
+  copy: ClipboardApi["copy"] = (selection, _panel, operation) =>
+    this.clipboard.copy(selection, this.reactPanel, operation);
   /**
    * Copies an explicit text selection through this panel's block converters, excluding unselected children.
    *
@@ -185,31 +177,18 @@ export class PanelClipboardManager implements PanelClipboardApi {
    * @returns Detached partial-text clipboard bundle, or undefined when there is no text to copy.
    * @throws If the selection is outside the panel or a converter fails.
    */
-  copyText: ClipboardApi["copyText"] = (selection) => {
-    this.requireSelection(selection);
-    return this.clipboard.copyText(selection, this.reactPanel);
-  };
+  copyText: ClipboardApi["copyText"] = (selection) =>
+    this.clipboard.copyText(selection, this.reactPanel);
   /**
    * Formats a cut bundle before deleting the panel selection so formatting failures leave content intact.
    *
+   * @param selection - Selection to cut, defaulting to this panel's current selection.
+   * @param _panel - Compatibility argument. This manager always uses its own panel.
    * @returns Cut bundle, or undefined when no selection can be copied.
-   * @throws If conversion or formatting fails before deletion.
+   * @throws If the selection is outside the panel, conversion or formatting fails, or deletion fails.
    */
-  cut: PanelClipboardApi["cut"] = () => {
-    const selection = this.reactPanel.selection.get();
-    if (!selection) {
-      // There is no panel selection to cut.
-      return;
-    }
-    const bundle = this.clipboard.copy(selection, this.reactPanel, "cut");
-    if (!bundle) {
-      // An empty copy must leave the original content intact.
-      return;
-    }
-    this.reactPanel.editor.clipboardFormats.formatBundle(bundle);
-    this.reactPanel.selection.delete();
-    return bundle;
-  };
+  cut: PanelClipboardApi["cut"] = (selection, _panel) =>
+    this.clipboard.cut(selection, this.reactPanel);
   /**
    * Pastes clipboard input through this panel's scoped operations.
    *
@@ -221,20 +200,4 @@ export class PanelClipboardManager implements PanelClipboardApi {
    */
   paste: ClipboardApi["paste"] = (input, _panel, operation) =>
     this.clipboard.paste(input, this.reactPanel, operation);
-
-  /**
-   * Rejects explicit selections containing records outside this occurrence.
-   *
-   * @param selection - Candidate clipboard source selection.
-   * @returns After every selected record is found inside this panel.
-   * @throws If any selected block or element is outside the panel.
-   */
-  private requireSelection(selection: Selection): void {
-    if (
-      selection.blocks.some(({ id }) => !this.reactPanel.blocks.hasBlock(id)) ||
-      selection.elements?.some((id) => !this.reactPanel.elements.hasElement(id))
-    ) {
-      throw new Error("Clipboard selection is outside panel");
-    }
-  }
 }

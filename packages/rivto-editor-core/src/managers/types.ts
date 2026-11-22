@@ -809,8 +809,14 @@ export interface SelectionManagerApi {
   resolveBlockSelection(selection?: Selection): ResolvedSelection | undefined;
   /** @param selection - New local selection. @returns No value. */
   set(selection: Selection): void;
-  /** @returns No value after deleting selected content. */
-  delete(): void;
+  /**
+   * Deletes selected content through the owner's block and element operations.
+   *
+   * @param selection - Content to delete, defaulting to the current selection.
+   * @returns After deletion or when there is no deletable content.
+   * @throws If a delegated mutation fails.
+   */
+  delete(selection?: Selection): void;
   /** @returns No value after clearing selection. */
   clear(): void;
   /**

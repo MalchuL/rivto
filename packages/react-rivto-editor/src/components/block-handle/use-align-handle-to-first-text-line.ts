@@ -13,7 +13,7 @@ import type { EditorBlockNode } from "@chulane/rivto";
  * @param alwaysVisible - Whether the host displays the handle without row interaction.
  * @returns No value; listeners and pending frames are released on cleanup.
  */
-export function useHandleAlignment(
+export function useAlignHandleToFirstTextLine(
   button: RefObject<HTMLButtonElement | null>,
   block: EditorBlockNode,
   alwaysVisible: boolean,

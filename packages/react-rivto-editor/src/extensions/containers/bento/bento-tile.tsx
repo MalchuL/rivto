@@ -1,7 +1,7 @@
 import { BlockDropWrapper, type BlockChildrenItemProps } from "@chulane/rivto-page";
 import { useState, type CSSProperties } from "react";
 import { useBlockNode } from "../../../hooks";
-import { isBlockStyle } from "../../../blocks/block-style";
+import { isBlockStyle } from "../../../blocks/style/block-style";
 import { BlockResizeHandles } from "../block-resize/block-resize-handles";
 import { MAX_RESIZE_WIDTH } from "../block-resize/block-resize-constants";
 import { normalizeResizeWidth } from "../block-resize/block-resize-size";

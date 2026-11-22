@@ -5,7 +5,7 @@ import type {
   BlockEditorNodeSnapshot,
 } from "@chulane/rivto-page";
 import type { BlockBehaviorsApi } from "../../managers/blocks/block-behaviors-api";
-import { isBlockStyle } from "../../blocks/block-style";
+import { isBlockStyle } from "../../blocks/style/block-style";
 
 /** Panel capabilities borrowed by the structural projection, without lifecycle ownership. */
 interface PageBlockHost {

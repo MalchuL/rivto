@@ -13,7 +13,7 @@ import { ContainerBlockBehavior } from "../../../block-behaviors/container-block
 import type { BlockChildBehaviorContext } from "@chulane/rivto";
 import type { BlockInput } from "@chulane/document-model";
 import type { EditorBlockInput } from "@chulane/rivto";
-import { isBlockStyle } from "../../../blocks/block-style";
+import { isBlockStyle } from "../../../blocks/style/block-style";
 import {
   BENTO_ORIGINAL_WIDTH_PLUGIN_ID,
   BENTO_WIDTH_PLUGIN_ID,

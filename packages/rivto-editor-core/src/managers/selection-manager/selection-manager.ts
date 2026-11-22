@@ -181,10 +181,13 @@ export class SelectionManager implements SelectionManagerApi {
    *
    * Invalid offsets (reversed, non-integer, or outside the live length) splice
    * as an empty slice on that block instead of aborting the whole operation.
-   * @returns No value.
+   *
+   * @param selection - Content to delete, defaulting to the document selection.
+   * @returns After deleting the selected content or finding no live members.
+   * @throws If a delegated mutation fails.
    */
-  delete(): void {
-    deleteSelection(this.editor, this, this.get());
+  delete(selection = this.get()): void {
+    deleteSelection(this.editor, this, selection);
   }
 
   /** Clears selection without notifying when already empty. */

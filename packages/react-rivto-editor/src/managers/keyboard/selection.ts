@@ -9,7 +9,7 @@ import type { Selection } from "@chulane/rivto";
 import { createCaretSelection, isCaretSelection } from "@chulane/rivto";
 import type { PanelSelectionApi } from "../selection/api";
 import type { BlocksApi } from "../blocks/blocks-api";
-import { findBlockFromEvent, focusBlock } from "../../blocks/block-dom";
+import { findBlockFromEvent, focusBlock } from "../../dom/block-dom";
 
 /** One block target resolved from the current selection for a keyboard command. */
 export interface KeyboardSelectionTarget {

@@ -20,7 +20,11 @@ export interface PanelClipboardApi extends ClipboardApi {
    */
   readonly copyText: ClipboardApi["copyText"];
   /**
-   * Copies this panel's selection, then deletes it through the selection manager.
+   * Copies the supplied selection, then deletes its content through this panel's selection manager.
+   *
+   * @param selection - Selection to cut, defaulting to the panel's current selection.
+   * @param reactPanel - Compatibility argument. This manager always uses its own panel.
+   * @throws If the selection is outside the panel, conversion or formatting fails, or deletion fails.
    * @returns The copied bundle, or undefined when no copyable selection exists; nothing is deleted in that case.
    */
   readonly cut: ClipboardApi["cut"];

@@ -367,16 +367,24 @@ export class ClipboardManager {
    * @param reactPanel - Source panel defining Panel roots; omitted for a document-only copy.
    * @param operation - Copy, cut or duplicate intent supplied to converters; defaults to copy.
    * @returns Detached payload, or undefined for an empty selection. Does not write the document.
-   * @throws If a converter rejects the copied data.
+   * @throws If the source panel belongs to another document, the selection is outside its boundaries,
+   * or a converter rejects the copied data.
    */
   copy(
     selection?: Selection,
     reactPanel?: ReactPanelApi,
     operation: ClipboardCopyContext["operation"] = "copy",
   ): ClipboardBundle | undefined {
-    const current = selection ?? reactPanel?.selection.get() ?? this.document.selection.get();
+    const current = selection ?? (reactPanel?.selection ?? this.document.selection).get();
+    if (!current) {
+      // There is no selection in the requested owner to serialize.
+      return;
+    }
+    if (reactPanel) {
+      this.requirePanelSelection(reactPanel, current);
+    }
     let bundle = this.document.clipboard.copy(current);
-    if (current?.elements?.length) {
+    if (current.elements?.length) {
       const elements = this.collectElements(current.elements, reactPanel ?? this.editor);
       const included = new Set(elements.blocks.map((block) => block.id));
       elements.blocks.push(...(bundle?.blocks.filter((block) => !included.has(block.id)) ?? []));
@@ -390,24 +398,42 @@ export class ClipboardManager {
    * @param selection - Block text ranges to copy.
    * @param reactPanel - Optional source panel supplied to converters.
    * @returns Detached partial-text bundle, or undefined when there is no text to copy.
+   * @throws If the source panel belongs to another document, the selection is outside its boundaries,
+   * or a converter rejects the copied data.
    */
   copyText(selection: Selection, reactPanel?: ReactPanelApi): ClipboardBundle | undefined {
+    if (reactPanel) {
+      this.requirePanelSelection(reactPanel, selection);
+    }
     const bundle = this.document.clipboard.copyText(selection);
     return bundle ? this.convertCopy(bundle, reactPanel) : undefined;
   }
 
   /**
-   * Copies the runtime selection and checks portable formats before deleting it.
-   * @returns Detached copied bundle, or undefined for an empty selection.
-   * @throws If copy or formatting rejects the data; deletion has not started in that case.
+   * Copies the supplied selection and checks portable formats before deleting its content.
+   *
+   * The panel owns selection lookup and deletion when supplied. Otherwise the document
+   * owns both. Conversion and formatting finish before deletion begins.
+   *
+   * @param selection - Content to cut, defaulting to the selection of the chosen owner.
+   * @param reactPanel - Source panel providing selection boundaries and converter context.
+   * @returns Detached copied bundle, or undefined when there is no copyable selection.
+   * @throws If the panel belongs to another document, the selection is outside the panel,
+   * conversion or formatting fails, or deletion fails.
    */
-  cut(): ClipboardBundle | undefined {
-    const bundle = this.copy(undefined, undefined, "cut");
+  cut(selection?: Selection, reactPanel?: ReactPanelApi): ClipboardBundle | undefined {
+    const owner = reactPanel?.selection ?? this.document.selection;
+    const current = selection ?? owner.get();
+    if (!current) {
+      return;
+    }
+    const bundle = this.copy(current, reactPanel, "cut");
     if (!bundle) {
+      // An empty copy must leave the original content intact.
       return;
     }
     this.editor.clipboardFormats.formatBundle(bundle);
-    this.document.selection.delete();
+    owner.delete(current);
     return bundle;
   }
 
@@ -754,6 +780,26 @@ export class ClipboardManager {
       return [{ ...input, childIds: source.childIds.flatMap((child) => idMap.get(child) ?? []) }];
     });
     return { nodes, idMap, referencedBlocks };
+  }
+
+  /**
+   * Rejects clipboard selections containing records outside this occurrence.
+   *
+   * @param reactPanel - Source panel defining the visible records.
+   * @param selection - Candidate clipboard source selection.
+   * @returns After every selected record is found inside this panel.
+   * @throws If the panel belongs to another document or any selected record is outside the panel.
+   */
+  private requirePanelSelection(reactPanel: ReactPanelApi, selection: Selection): void {
+    if (reactPanel.getDocument() !== this.document.getDocument()) {
+      throw new Error("Clipboard source panel belongs to a different document");
+    }
+    if (
+      selection.blocks.some(({ id }) => !reactPanel.blocks.hasBlock(id)) ||
+      selection.elements?.some((id) => !reactPanel.elements.hasElement(id))
+    ) {
+      throw new Error("Clipboard selection is outside panel");
+    }
   }
 
   /**

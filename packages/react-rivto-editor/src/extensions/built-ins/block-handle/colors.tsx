@@ -17,12 +17,11 @@ import { assertBlockMenuTargets } from "../../../managers/block-context-menu/tar
 
 import { Slider } from "../../../components/ui/slider";
 import {
-  BLOCK_BACKGROUND_COLORS,
-  BLOCK_PALETTE_COLORS,
-  formatBlockBackground,
-  parseBlockBackground,
-} from "../../../blocks/background-color";
-import { isBlockStyle } from "../../../blocks/block-style";
+  DEFAULT_BLOCK_BACKGROUND_COLORS,
+  DEFAULT_BLOCK_PALETTE_COLORS,
+} from "../../../blocks/style/background-color-constants";
+import { formatBlockBackground, parseBlockBackground } from "../../../blocks/style/background-color";
+import { isBlockStyle } from "../../../blocks/style/block-style";
 
 /**
  * Reads a block's explicit background color for the menu.
@@ -86,7 +85,7 @@ function updateBackgroundColors(
 }
 
 /** Background swatches exposed in the block menu, in display order. */
-const VISIBLE_BACKGROUND_COLORS = BLOCK_BACKGROUND_COLORS.filter(
+const VISIBLE_BACKGROUND_COLORS = DEFAULT_BLOCK_BACKGROUND_COLORS.filter(
   (color) => color && color !== "gray",
 );
 
@@ -207,7 +206,9 @@ function BlockBackgroundColors(context: BlockContextMenuContext) {
     return () => menu.removeEventListener("keydown", routeTab, true);
   }, []);
 
-  const [palette, setPalette] = useState<Readonly<Record<string, string>>>(BLOCK_PALETTE_COLORS);
+  const [palette, setPalette] = useState<Readonly<Record<string, string>>>(
+    DEFAULT_BLOCK_PALETTE_COLORS,
+  );
   useLayoutEffect(() => {
     const group = groupRef.current;
     const canvas = document.createElement("canvas");
@@ -217,7 +218,7 @@ function BlockBackgroundColors(context: BlockContextMenuContext) {
     if (!group || !painter) {
       return;
     }
-    const next = { ...BLOCK_PALETTE_COLORS };
+    const next = { ...DEFAULT_BLOCK_PALETTE_COLORS };
     for (const button of group.querySelectorAll<HTMLButtonElement>("[data-background-token]")) {
       const token = button.dataset.backgroundToken;
       if (!token || token === "transparent") {
@@ -488,7 +489,7 @@ function BackgroundAlpha({ context, value, color, flushPendingColor }: Backgroun
 /**
  * Registers the inline menu renderer for a block's persisted style background.
  *
- * The palette accepts BLOCK_BACKGROUND_COLORS and six/eight-digit hex colors and
+ * The palette accepts DEFAULT_BLOCK_BACKGROUND_COLORS and six/eight-digit hex colors and
  * palette colors with alpha. Missing backgrounds have no local override. The custom
  * contribution mounts swatches in the active menu rather than introducing a submenu.
  *

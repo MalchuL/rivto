@@ -1,4 +1,4 @@
-import { isBlockStyle } from "../../../blocks/block-style";
+import { isBlockStyle } from "../../../blocks/style/block-style";
 import { MAX_RESIZE_WIDTH, MIN_RESIZE_WIDTH } from "./block-resize-constants";
 
 /**

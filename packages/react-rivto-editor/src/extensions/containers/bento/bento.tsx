@@ -1,4 +1,4 @@
-import { createContainerBackgroundProcessor } from "../../../blocks/background-color";
+import { createContainerBackgroundProcessor } from "../../../blocks/style/background-color";
 /**
  * Optional responsive Bento container for ordinary editor blocks. Width
  * preferences live in block styles; content controls height by default. Tile widths are

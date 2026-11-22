@@ -114,20 +114,21 @@ export class PanelSelectionManager implements PanelSelectionApi {
   }
 
   /**
-   * Deletes the active panel's selected content within its block and element boundaries.
+   * Deletes the supplied or active selection within this panel's block and element boundaries.
    *
    * Structural block removal and selected element deletion share one history batch.
    * A structural behavior that claims the block group leaves the selection intact.
    * Text and element-only selections follow the same bounded core deletion path.
    *
+   * @param selection - Explicit panel content, defaulting to the active panel selection.
    * @returns After deletion, or without changes for an inaccessible selection.
    * @throws If a structural behavior or delegated deletion fails.
    */
-  delete(): void {
-    if (!this.isSelectionInActivePanel()) {
+  delete(selection = this.get()): void {
+    if (!selection) {
       return;
     }
-    this.panelSelection.delete();
+    this.panelSelection.delete(selection);
   }
 
   /**
@@ -344,7 +345,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
    * Block-only subtree containment is cached by selection identity and block revision.
    * Selected elements are checked live because element moves have an independent hierarchy.
    *
-   * This guards get(), snapshot(), delete(), and isElementSelected(); it does not
+   * This guards get(), snapshot(), zero-argument delete(), and isElementSelected(); it does not
    * assign ownership or focus a panel. isBlockSelected() deliberately bypasses it so an original block
    * and its embeddings can all display the same structural selection.
    *
