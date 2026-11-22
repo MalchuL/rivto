@@ -134,7 +134,11 @@ test("nested block Review captures an exact root slice and strips recursive repo
     ],
   });
 
-  const { snapshot, ...placement } = captureBlockReview(editor, "review", 1, 1, true);
+  const { snapshot, ...placement } = captureBlockReview(editor, "review", {
+    blocksAbove: 1,
+    blocksBelow: 1,
+    includeReportBlock: true,
+  });
   assert.deepEqual(
     snapshot.blocks.map(({ id }) => id),
     ["a", "container", "c"],
@@ -160,7 +164,10 @@ test("nested block Review captures an exact root slice and strips recursive repo
     parentReportId: "container",
   });
 
-  const withoutReport = captureBlockReview(editor, "review", 1, 1).snapshot;
+  const withoutReport = captureBlockReview(editor, "review", {
+    blocksAbove: 1,
+    blocksBelow: 1,
+  }).snapshot;
   assert.deepEqual(
     withoutReport.blocks[1].children.map(({ id }) => id),
     ["before-review", "after-review"],
@@ -191,7 +198,10 @@ test("root Review placement uses null boundaries and can omit its root", () => {
     listProps: {},
     children: [],
   };
-  const capture = captureBlockReview(createEditor({ roots: [review, next] }), "review", 0, 0);
+  const capture = captureBlockReview(createEditor({ roots: [review, next] }), "review", {
+    blocksAbove: 0,
+    blocksBelow: 0,
+  });
 
   assert.deepEqual(capture.snapshot.blocks, []);
   assert.deepEqual(
@@ -266,7 +276,10 @@ test("element Review uses z-order, closes groups, and detaches connectors", () =
   });
   const editor = createEditor({ roots: [leaf("root-a", "A"), leaf("root-b", "B")], elements });
 
-  const snapshot = captureElementReviewSnapshot(editor, "review", 2, 0);
+  const snapshot = captureElementReviewSnapshot(editor, "review", {
+    elementsAbove: 2,
+    elementsBelow: 0,
+  });
   assert.deepEqual(
     snapshot.elements.map(({ id }) => id),
     ["connector", "group", "review", "child"],

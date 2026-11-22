@@ -335,6 +335,9 @@ export class BrowserInputRegion implements FocusableInputRegion {
   /**
    * Finds the first descendant matching a selector without crossing nested boundaries.
    *
+   * The captured descendant stays usable only while no excluded boundary separates it
+   * from this region, including when an existing element moves to another block.
+   *
    * @param selector - Desired descendant selector.
    * @param boundarySelector - Descendant boundaries excluded from the search.
    * @returns The first captured region, or undefined when absent or inactive.
@@ -344,16 +347,24 @@ export class BrowserInputRegion implements FocusableInputRegion {
     if (!this.isActive()) {
       return undefined;
     }
-    const pending = Array.from(this.#state.element.children);
-    while (pending.length) {
-      const element = pending.shift()!;
-      if (element.matches(boundarySelector)) {
-        continue;
-      }
+    const scope = this.#state.element;
+    // Rejecting a boundary prunes its entire subtree from the document-order walk.
+    const walker = scope.ownerDocument.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT, (node) =>
+      (node as Element).matches(boundarySelector)
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT,
+    );
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const element = node as Element;
       if (element.matches(selector)) {
-        return this.isActive() ? this.captureDescendant(element, selector) : undefined;
+        const region = this.captureDescendant(
+          element,
+          selector,
+          boundarySelector,
+          (boundary) => boundary === scope || !scope.contains(boundary),
+        );
+        return region.isActive() ? region : undefined;
       }
-      pending.unshift(...element.children);
     }
     return undefined;
   }
@@ -373,7 +384,14 @@ export class BrowserInputRegion implements FocusableInputRegion {
     const { root, element } = this.#state;
     const regions = Array.from(element.querySelectorAll(selector))
       .filter((candidate) => candidate.closest(boundarySelector) === root)
-      .map((candidate) => this.captureDescendant(candidate, selector, boundarySelector));
+      .map((candidate) =>
+        this.captureDescendant(
+          candidate,
+          selector,
+          boundarySelector,
+          (boundary) => boundary === root,
+        ),
+      );
     return this.isActive() ? regions : [];
   }
 
@@ -1087,21 +1105,28 @@ export class BrowserInputRegion implements FocusableInputRegion {
    *
    * @param element - Captured descendant.
    * @param selector - Selector the descendant must continue to match.
-   * @param boundarySelector - Optional occurrence boundary selector.
+   * @param boundarySelector - Selector used to recheck live ownership after reparenting.
+   * @param acceptsBoundary - Tests the nearest matching boundary when one exists.
    * @returns Opaque descendant capability bounded by this region.
    */
   private captureDescendant(
     element: Element,
     selector: string,
-    boundarySelector?: string,
-  ): InputRegion {
+    boundarySelector: string,
+    acceptsBoundary: (boundary: Element) => boolean,
+  ): BrowserInputRegion {
     return new BrowserInputRegion({
       root: this.#state.root,
       element,
       owner: element,
       ownerSelector: selector,
-      boundarySelector,
-      isAttached: () => this.isActive() && this.#state.element.contains(element),
+      isAttached: () => {
+        if (!this.isActive() || !this.#state.element.contains(element)) {
+          return false;
+        }
+        const boundary = element.closest(boundarySelector);
+        return !boundary || acceptsBoundary(boundary);
+      },
     });
   }
 }

@@ -17,17 +17,13 @@ it.each(["selection cancellation", "root notification", "deactivation"])(
     const replace = () => {
       if (replacing) {
         replacing = false;
-        releaseReplacement = registry.registerPanel(root, core.getDocument());
+        releaseReplacement = registry.registerPanel(root);
       }
     };
-    const release = registry.registerPanel(
-      root,
-      core.getDocument(),
-      undefined,
-      undefined,
-      stage === "deactivation" ? replace : undefined,
-      stage === "selection cancellation" ? replace : undefined,
-    );
+    const release = registry.registerPanel(root, {
+      deactivate: stage === "deactivation" ? replace : undefined,
+      cancelSelection: stage === "selection cancellation" ? replace : undefined,
+    });
     const unsubscribe = registry.subscribeRoots(() => {
       if (stage === "root notification") {
         replace();
@@ -73,21 +69,16 @@ it("keeps a new pointer gesture started by a replacement during selection cleanu
   const roots = elements.map((element) => new BrowserInputRoot(element));
   let releaseReplacement: (() => void) | undefined;
   let replace = false;
-  const release = registry.registerPanel(
-    roots[0],
-    core.getDocument(),
-    undefined,
-    undefined,
-    undefined,
-    () => {
+  const release = registry.registerPanel(roots[0], {
+    cancelSelection: () => {
       if (replace) {
         replace = false;
-        releaseReplacement = registry.registerPanel(roots[0], core.getDocument());
+        releaseReplacement = registry.registerPanel(roots[0]);
         elements[0].dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
       }
     },
-  );
-  const releaseOther = registry.registerPanel(roots[1], core.getDocument());
+  });
+  const releaseOther = registry.registerPanel(roots[1]);
   let received: object | undefined;
   const groups = [
     { type: "pointerdown", target: "document" as const, capture: false, passive: false },

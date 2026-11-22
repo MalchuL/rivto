@@ -105,8 +105,6 @@ export type PanelRoutingRoot = EditorEventInputRoot &
 
 /** Resources owned by one mounted panel registration. */
 export interface RegisteredPanel {
-  /** Document displayed by this occurrence. */
-  readonly document: DocumentModel;
   /** Optional root block restricting the displayed subtree. */
   readonly rootBlockId?: string;
   /** Borrowed panel API, absent for registrations without interaction handlers. */
@@ -127,6 +125,15 @@ export interface RegisteredPanel {
    * @returns Pending local selection work has been cancelled.
    */
   readonly cancelSelection?: () => void;
+}
+
+/** Panel API, subtree and lifecycle callbacks supplied by the occurrence owner. */
+export interface PanelRegistrationOptions extends Pick<
+  RegisteredPanel,
+  "rootBlockId" | "api" | "deactivate" | "cancelSelection"
+> {
+  /** Receives the staged routing lifetime before registration listeners run. */
+  readonly receiveInput?: PanelInputReceiver;
 }
 
 /**

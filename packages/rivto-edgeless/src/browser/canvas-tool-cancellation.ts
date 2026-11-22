@@ -1,3 +1,4 @@
+import { collectCleanupErrors } from "../utils/release-resources";
 import type { CanvasEvents } from "./canvas-events";
 import type { CanvasToolSession } from "../types/tool-session";
 
@@ -45,14 +46,7 @@ export function subscribeCanvasToolCancellation(
     throw error;
   }
   return () => {
-    const errors: unknown[] = [];
-    for (const release of [releaseKey, releaseBlur]) {
-      try {
-        release();
-      } catch (error) {
-        errors.push(error);
-      }
-    }
+    const errors = collectCleanupErrors([releaseKey, releaseBlur]);
     if (errors.length) {
       throw new AggregateError(errors, "Tool cancellation cleanup failed");
     }

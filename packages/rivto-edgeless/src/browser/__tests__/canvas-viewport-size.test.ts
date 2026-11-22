@@ -2,6 +2,7 @@
 import { jest } from "@jest/globals";
 import { BrowserInputRoot } from "@chulane/rivto-root/browser";
 import { Canvas } from "../../core/canvas";
+import { canvasViewportAttachment } from "../canvas-viewport-attachment";
 import { CanvasViewport } from "../canvas-viewport";
 import { observeCanvasViewportSize } from "../canvas-viewport-size";
 
@@ -18,7 +19,7 @@ it("measures only the current Root and releases observers on replacement", () =>
   const canvas = new Canvas();
   const viewport = new CanvasViewport(canvas);
   const setViewport = jest.fn<(width: number, height: number) => void>();
-  const stop = observeCanvasViewportSize({ setViewport }, viewport);
+  const stop = observeCanvasViewportSize({ setViewport }, canvasViewportAttachment(viewport));
   const first = new BrowserInputRoot(element);
   let second: BrowserInputRoot | undefined;
   let detachSecond: (() => void) | undefined;
@@ -54,6 +55,32 @@ it("measures only the current Root and releases observers on replacement", () =>
   }
 });
 
+it("releases the size observer once even if the attachment unsubscribe fails", () => {
+  const unsubscribeFailure = new Error("attachment unsubscribe failed");
+  const unsubscribe = jest.fn(() => {
+    throw unsubscribeFailure;
+  });
+  const disconnect = jest.fn();
+  const attachment = {
+    coordinates: { isAttached: () => true },
+    rootRegion: {
+      readClientSize: () => ({ width: 120, height: 80 }),
+      observeSize: () => disconnect,
+    },
+  };
+  const setViewport = jest.fn();
+  const stop = observeCanvasViewportSize(
+    { setViewport },
+    { get: () => attachment, subscribe: () => unsubscribe },
+  );
+
+  expect(setViewport).toHaveBeenCalledWith(120, 80);
+  expect(stop).toThrow(unsubscribeFailure);
+  stop();
+  expect(unsubscribe).toHaveBeenCalledTimes(1);
+  expect(disconnect).toHaveBeenCalledTimes(1);
+});
+
 it("does not install a stale observer when initial measurement detaches the Root", () => {
   const previous = Object.getOwnPropertyDescriptor(window, "ResizeObserver");
   const Observer = jest.fn();
@@ -66,7 +93,7 @@ it("does not install a stale observer when initial measurement detaches the Root
   const viewport = new CanvasViewport(canvas);
   const root = new BrowserInputRoot(element);
   const setViewport = jest.fn(() => root.detach());
-  const stop = observeCanvasViewportSize({ setViewport }, viewport);
+  const stop = observeCanvasViewportSize({ setViewport }, canvasViewportAttachment(viewport));
   let detach: (() => void) | undefined;
   try {
     detach = viewport.attach(element, plane, root);
@@ -100,7 +127,7 @@ it("rolls back a failed size observer and accepts a later attachment", () => {
   const canvas = new Canvas();
   const viewport = new CanvasViewport(canvas);
   const root = new BrowserInputRoot(element);
-  const stop = observeCanvasViewportSize(canvas, viewport);
+  const stop = observeCanvasViewportSize(canvas, canvasViewportAttachment(viewport));
   let detach: (() => void) | undefined;
   try {
     expect(() => viewport.attach(element, plane, root)).toThrow("size observation failed");

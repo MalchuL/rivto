@@ -733,7 +733,7 @@ export interface RegionAncestorQuery {
 /** Browser-free access to an adjacent occurrence element in one document. */
 export interface AdjacentOccurrence {
   /** Opaque identity of the destination element, independent of its attachment. */
-  readonly identity: object;
+  readonly identity: RegionIdentity;
   /**
    * Checks whether source and destination still belong to the captured document.
    *
@@ -822,7 +822,7 @@ export interface InputTarget {
    * @returns Opaque identity, or undefined when no ancestor matches.
    * @throws If the browser rejects the selector.
    */
-  getNearestAncestorIdentity?(selector: string): object | undefined;
+  getNearestAncestorIdentity?(selector: string): RegionIdentity | undefined;
   /**
    * Compares the nearest matching target ancestor with an occurrence root.
    *
@@ -834,7 +834,7 @@ export interface InputTarget {
    * @returns True when the nearest match is the supplied active occurrence.
    * @throws If the browser rejects the selector or the root owner check fails.
    */
-  isNearestAncestorRoot?(selector: string, root: InputRoot): boolean;
+  isNearestAncestorRoot?(selector: string, root: BrowserListenerRoot): boolean;
   /**
    * Checks whether the original target is an element in the occurrence's browser realm.
    *
@@ -1252,6 +1252,9 @@ export interface InputRegion {
   getIdentity(): RegionIdentity | undefined;
   /**
    * Finds the first matching descendant while stopping at nested owner boundaries.
+   *
+   * Moving the descendant behind an excluded boundary invalidates its ownership
+   * while it remains there.
    *
    * @param selector - Selector for the desired region.
    * @param boundarySelector - Descendant boundaries that must not be traversed.

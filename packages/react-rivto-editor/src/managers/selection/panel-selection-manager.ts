@@ -4,6 +4,7 @@ import type {
   PendingSelectionCallback,
   StructuralPredecessorAction,
   ViewportSelectionAction,
+  ViewportRoot,
 } from "./types";
 import type { InputRoot, TextSelectionQuery } from "@chulane/rivto-root";
 import type { PanelInputRegistration } from "../../panels/types";
@@ -84,17 +85,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
   runWithViewportPreserved(
     blockIds: readonly string[],
     selection: Selection,
-    inputRoot: Pick<
-      InputRoot,
-      | "isAttached"
-      | "getElementIdentity"
-      | "readRegionViewportTop"
-      | "readRegionValues"
-      | "measureRegionViewportBounds"
-      | "captureDocumentScroll"
-      | "observeWindowWheel"
-      | "captureFrameClock"
-    >,
+    inputRoot: ViewportRoot & Pick<InputRoot, "isAttached">,
     inputRegistration: PanelInputRegistration,
     action: ViewportSelectionAction,
   ): boolean {

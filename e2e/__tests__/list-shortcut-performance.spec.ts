@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
@@ -89,30 +90,5 @@ for (const mode of ["block", "edgeless"] as const) {
  * @returns Synchronous delivery and two-frame durations in milliseconds.
  */
 async function measureSpace(page: Page) {
-  await page.evaluate(() => {
-    const state = window as unknown as { listTiming: unknown };
-    state.listTiming = null;
-    window.addEventListener(
-      "beforeinput",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "beforeinput",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.listTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await page.keyboard.type(" ");
-  await page.waitForFunction(() => (window as unknown as { listTiming: unknown }).listTiming);
-  return page.evaluate(() => (window as unknown as { listTiming: unknown }).listTiming);
+  return measureEventDelivery(page, "beforeinput", () => page.keyboard.type(" "));
 }

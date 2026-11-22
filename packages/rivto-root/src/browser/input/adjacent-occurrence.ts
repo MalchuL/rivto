@@ -1,11 +1,11 @@
-import type { AdjacentOccurrence } from "../../events/types";
+import type { AdjacentOccurrence, RegionIdentity } from "../../events/types";
 import type { TextSelectionPosition, TextSelectionQuery } from "../../text/types";
 import { inputElementIdentity } from "./input-element-identity";
 import type { InputRootOwnerCheck } from "./types";
 
 /** Borrowed access to a neighboring top-level occurrence in one document. */
 class BrowserAdjacentOccurrence implements AdjacentOccurrence {
-  readonly identity: object;
+  readonly identity: RegionIdentity;
   private readonly document: Document;
 
   /**

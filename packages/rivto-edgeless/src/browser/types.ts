@@ -121,6 +121,18 @@ export type CanvasInputScene = Pick<
   | "cancelTransform"
 >;
 
+/** Mounted occurrence operations used for pointer, camera, selection, and focus input. */
+export type CanvasControllerInputRoot = Pick<
+  InputRoot,
+  | "captureFrameClock"
+  | "getElementIdentity"
+  | "isAttached"
+  | "captureFocusedRegion"
+  | "focus"
+  | "captureRegionByIdentity"
+  | "createRectangleOverlay"
+>;
+
 /** Native viewport policies independent of React props or document schemas. */
 export interface CanvasInputOptions {
   /** Enables ordinary element selection and marquee; false delegates admission to the host. */

@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { ROOT_BLOCK_SELECTOR } from "../dom-markers";
@@ -60,31 +61,6 @@ for (const repeat of [0, 200]) {
  * @param y - Gap client Y coordinate in CSS pixels.
  * @returns Synchronous event and two-frame timing for the movement.
  */
-async function measureGapMovement(page: Page, x: number, y: number): Promise<unknown> {
-  await page.evaluate(() => {
-    const state = window as unknown as { gapTiming: unknown };
-    state.gapTiming = null;
-    window.addEventListener(
-      "pointermove",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "pointermove",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.gapTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await page.mouse.move(x, y);
-  await page.waitForFunction(() => (window as unknown as { gapTiming: unknown }).gapTiming);
-  return page.evaluate(() => (window as unknown as { gapTiming: unknown }).gapTiming);
+async function measureGapMovement(page: Page, x: number, y: number) {
+  return measureEventDelivery(page, "pointermove", () => page.mouse.move(x, y));
 }

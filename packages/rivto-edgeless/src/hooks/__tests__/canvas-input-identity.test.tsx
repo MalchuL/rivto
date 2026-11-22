@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { getBrowserElementIdentity } from "@chulane/rivto-root/browser";
 import { Canvas } from "../../core/canvas";
+import { canvasViewportAttachment } from "../../browser/canvas-viewport-attachment";
 import { CanvasViewport } from "../../browser/canvas-viewport";
 import { useCanvasInput } from "../use-canvas-input";
 import type { CanvasInputBinding } from "../types";
@@ -12,7 +13,8 @@ import type { CanvasInputBinding } from "../types";
  *
  * @param props - Scene, viewport event owner, and expected mounted identity.
  * @param props.canvas - Scene receiving camera changes.
- * @param props.viewport - Owner of the current input attachment.
+ * @param props.attachment - Read-only source of the current mounted occurrence.
+ * @param props.events - Input registrations borrowed from that occurrence.
  * @param props.rootIdentity - Identity expected by the input hook.
  * @returns No visible content.
  */
@@ -41,7 +43,8 @@ it("connects only the matching viewport and releases input when its attachment e
       renderer.render(
         <Input
           canvas={canvas}
-          viewport={viewport}
+          attachment={canvasViewportAttachment(viewport)}
+          events={viewport.events}
           rootIdentity={getBrowserElementIdentity(other)}
         />,
       ),
@@ -52,7 +55,8 @@ it("connects only the matching viewport and releases input when its attachment e
       renderer.render(
         <Input
           canvas={canvas}
-          viewport={viewport}
+          attachment={canvasViewportAttachment(viewport)}
+          events={viewport.events}
           rootIdentity={getBrowserElementIdentity(element)}
         />,
       ),

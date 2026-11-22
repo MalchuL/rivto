@@ -14,16 +14,12 @@ test("withdraws routing and deactivates the panel when selection cleanup fails",
   const root = new BrowserInputRoot(surface);
   const failure = new Error("selection cleanup failed");
   const deactivate = jestApi.fn();
-  const release = registry.registerPanel(
-    root,
-    core.getDocument(),
-    undefined,
-    undefined,
+  const release = registry.registerPanel(root, {
     deactivate,
-    () => {
+    cancelSelection: () => {
       throw failure;
     },
-  );
+  });
   const listeners = new BrowserRoutedEvents(
     () => registry.getInputRoots(),
     (group, identity, capture, event, control) => {
@@ -60,18 +56,14 @@ test("reports multiple cleanup failures after notifying every root subscriber", 
   const selectionFailure = new Error("selection failed");
   const notificationFailure = new Error("notification failed");
   const deactivationFailure = new Error("deactivation failed");
-  const release = registry.registerPanel(
-    root,
-    core.getDocument(),
-    undefined,
-    undefined,
-    () => {
+  const release = registry.registerPanel(root, {
+    deactivate: () => {
       throw deactivationFailure;
     },
-    () => {
+    cancelSelection: () => {
       throw selectionFailure;
     },
-  );
+  });
   const notify = jestApi.fn();
   const stopFailing = registry.subscribeRoots(() => {
     throw notificationFailure;
@@ -110,17 +102,12 @@ test("retains a replacement registered before selection cleanup throws", async (
   const root = new BrowserInputRoot(surface);
   const failure = new Error("selection cleanup failed");
   let releaseReplacement: (() => void) | undefined;
-  const release = registry.registerPanel(
-    root,
-    core.getDocument(),
-    undefined,
-    undefined,
-    undefined,
-    () => {
-      releaseReplacement = registry.registerPanel(root, core.getDocument());
+  const release = registry.registerPanel(root, {
+    cancelSelection: () => {
+      releaseReplacement = registry.registerPanel(root);
       throw failure;
     },
-  );
+  });
   const listeners = new BrowserRoutedEvents(
     () => registry.getInputRoots(),
     (group, identity, capture, event, control) => {
@@ -160,7 +147,7 @@ test("notifies later subscribers during failed registration and its rollback", a
   try {
     let caught: unknown;
     try {
-      registry.registerPanel(root, core.getDocument());
+      registry.registerPanel(root);
     } catch (error) {
       caught = error;
     }

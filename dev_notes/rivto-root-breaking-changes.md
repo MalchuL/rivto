@@ -1119,11 +1119,14 @@ closed, while retaining their drop-order, cleanup and undo assertions.
   Root and pass it to these APIs; their replacement, rollback, routing, cost,
   and focus assertions remain. A new test covers detached registration and active
   mode during removal and same-element replacement. The mounting boundary still
-  receives the HTML element.
+  receives the HTML element. Direct callers now pass `registerPanel(root, options?)`.
+  The registry previously required a document model that it never read. Mounted panel
+  roots and options supply all routing and teardown state.
 - Extension setup and panel consumers now borrow `ReactEditorExtensionApi`, which
   excludes runtime destruction and panel registration. `PanelAPI.document` and
-  clipboard algorithms borrow `DocumentEditorOperations`, which excludes document
-  editor destruction. The host retains the full editor for lifecycle ownership.
+  clipboard algorithms borrow editor operations that exclude document
+  editor destruction. Each clipboard strategy now receives only its block commands and
+  selection lookup. The host retains the full editor for lifecycle ownership.
   Four fixture annotations in `react-editor.test.ts` were updated to the borrowed
   extension type; their assertions are unchanged. The lifecycle browser fixture
   installs its destruction failure on the host-owned editor rather than from
@@ -2639,8 +2642,8 @@ this boundary; no behavioral assertions were changed.
 
 `InputEvents` and `InputEventFactory` accept an optional Root type parameter.
 Its minimum contract, `InputEventsRoot`, requires only observer creation and an
-attachment check. Existing callers retain `InputRoot` as the default; callers
-with a narrower occurrence can specify their own contract. `PageInputRoot` now
+attachment check. This minimum contract is now the default. Callers whose
+event factory needs additional Root operations specify their occurrence type. `PageInputRoot` now
 requires the operations used by Page attachment, rendering, selection, and its
 input consumers rather than every operation on `InputRoot`. A provider that
 already implements `InputRoot` remains suitable for Page.

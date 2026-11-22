@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Page } from "@playwright/test";
 
 for (const repeat of [0, 200]) {
@@ -27,34 +28,5 @@ for (const repeat of [0, 200]) {
  * @returns Synchronous delivery and two-frame durations in milliseconds.
  */
 async function measureUp(page: Page) {
-  await page.evaluate(() => {
-    const state = window as unknown as { adjacentCaretTiming: unknown };
-    state.adjacentCaretTiming = null;
-    window.addEventListener(
-      "keydown",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "keydown",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.adjacentCaretTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await page.keyboard.press("ArrowUp");
-  await page.waitForFunction(
-    () => (window as unknown as { adjacentCaretTiming: unknown }).adjacentCaretTiming,
-  );
-  return page.evaluate(
-    () => (window as unknown as { adjacentCaretTiming: unknown }).adjacentCaretTiming,
-  );
+  return measureEventDelivery(page, "keydown", () => page.keyboard.press("ArrowUp"));
 }

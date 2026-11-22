@@ -7,6 +7,7 @@ import type {
   BlockDropGeometry,
   BlockDropGeometryReader,
   BlockDropPoint,
+  BlockDropAncestor,
   BlockDropAncestorPredicate,
 } from "./types";
 
@@ -114,7 +115,10 @@ export class BlockDropMeasurements implements BlockDropGeometryReader {
    * @returns True while the registered region remains inside the candidate.
    * @throws The internal unavailable signal or Root ownership-check failures.
    */
-  containsIdentity(region: InputRegion, identity: RegionIdentity): boolean {
+  containsIdentity(
+    region: Pick<BlockDropAncestor, "getIdentity" | "containsRegion">,
+    identity: RegionIdentity,
+  ): boolean {
     const child = this.root.captureRegionByIdentity(identity, this.isAttached);
     if (!region.getIdentity() || !this.isCurrent()) {
       throw DROP_MEASUREMENT_UNAVAILABLE;

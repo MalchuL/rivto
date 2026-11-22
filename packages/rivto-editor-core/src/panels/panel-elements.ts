@@ -8,6 +8,32 @@ import type {
 import type { PanelDestination } from "./types";
 import type { PanelElementsAPI } from "./types";
 
+/** Element operations used to read, observe and edit the bounded subtree. */
+type PanelElementCommands = Pick<
+  ElementManagerApi,
+  | "getElement"
+  | "getElementNode"
+  | "getParentId"
+  | "hasElement"
+  | "insertElement"
+  | "moveElements"
+  | "removeElementAndPromoteChildren"
+  | "removeElements"
+  | "subscribe"
+  | "subscribeElement"
+  | "subscribeElementNode"
+  | "subscribeStructure"
+  | "updateElements"
+>;
+
+/** Hierarchy reads used to enumerate the panel's root elements and their descendants. */
+interface PanelElementSource {
+  readonly elements: Pick<
+    DocumentModel["elements"],
+    "getRootIds" | "getElements" | "getElementNodes"
+  >;
+}
+
 /** Applies element operations to one element subtree while reusing the editor's processing pipeline. */
 export class PanelElements implements PanelElementsAPI {
   /**
@@ -21,8 +47,8 @@ export class PanelElements implements PanelElementsAPI {
    * @param rootElementId - Fixed container ID, or null for the complete document tree.
    */
   constructor(
-    private readonly elements: ElementManagerApi,
-    private readonly document: DocumentModel,
+    private readonly elements: PanelElementCommands,
+    private readonly document: PanelElementSource,
     readonly rootElementId: string | null,
   ) {}
 

@@ -6,6 +6,7 @@ import type {
   EditableBlockDirection,
   StructuralPredecessorAction,
   ViewportSelectionAction,
+  ViewportRoot,
 } from "./types";
 
 /** Selection commands and DOM synchronization for one EditorPanel.
@@ -30,17 +31,7 @@ export interface PanelSelectionApi {
   runWithViewportPreserved(
     blockIds: readonly string[],
     selection: Selection,
-    inputRoot: Pick<
-      InputRoot,
-      | "isAttached"
-      | "getElementIdentity"
-      | "readRegionViewportTop"
-      | "readRegionValues"
-      | "measureRegionViewportBounds"
-      | "captureDocumentScroll"
-      | "observeWindowWheel"
-      | "captureFrameClock"
-    >,
+    inputRoot: ViewportRoot & Pick<InputRoot, "isAttached">,
     inputRegistration: PanelInputRegistration,
     action: ViewportSelectionAction,
   ): boolean;

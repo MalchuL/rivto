@@ -16,9 +16,10 @@ import {
 } from "./block-drop-layout-geometry";
 import type { BlockEditorBlocks } from "../../adapter/types";
 import type { BlockEditorResourceOwner } from "../extensions/block-editor-resource-owner";
-import type { InputDocument, InputRegion, RegionIdentity } from "@chulane/rivto-root";
+import type { InputDocument, RegionIdentity } from "@chulane/rivto-root";
 import { BlockDropMeasurements, DROP_MEASUREMENT_UNAVAILABLE } from "./block-drop-measurements";
 import type {
+  BlockDropAncestor,
   BlockDropLayoutRegistration,
   BlockDropAttachment,
   BlockDropPoint,
@@ -576,8 +577,8 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * when no enabled owned child layout is registered in this shell.
    */
   private readLayout(
-    element: InputRegion,
-    measurements: BlockDropGeometryReader,
+    element: Pick<BlockDropAncestor, "getIdentity" | "readAttribute" | "containsRegion">,
+    measurements: Pick<BlockDropGeometryReader, "containsIdentity">,
   ): BlockDropLayoutRegistration | undefined {
     const identity = element.getIdentity();
     if (!identity) {
@@ -628,7 +629,7 @@ export class BlockDropTargets implements BlockDropTargetsApi {
   private resolveEntries(
     entries: Set<BlockDropTargetEntry>,
     point: BlockDropPoint,
-    measurements: BlockDropGeometryReader,
+    measurements: Pick<BlockDropGeometryReader, "read" | "isCurrent" | "isBackground">,
   ): BlockDropGeometryTarget | undefined {
     let selected: BlockDropGeometryTarget | undefined;
     let priority = -Infinity;

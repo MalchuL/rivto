@@ -126,13 +126,19 @@ export interface BlockDropGeometry {
   readonly scaleY: number;
 }
 
+/** Read-only Root operations used while resolving a registered drop ancestor. */
+export type BlockDropAncestor = Pick<
+  InputRegion,
+  "getIdentity" | "readAttribute" | "matches" | "containsRegion"
+>;
+
 /**
  * Tests one ancestor while locating registered drop geometry.
  *
  * @param region - Current ancestor's identity and attributes.
  * @returns True to stop the walk, or false to continue toward the root.
  */
-export type BlockDropAncestorPredicate = (region: InputRegion) => boolean;
+export type BlockDropAncestorPredicate = (region: BlockDropAncestor) => boolean;
 
 /** Query-local access to geometry for mounted drop registrations. */
 export interface BlockDropGeometryReader {
@@ -167,7 +173,10 @@ export interface BlockDropGeometryReader {
    * @returns True when the registered region remains inside the candidate.
    * @throws When either region or the attachment becomes unavailable.
    */
-  containsIdentity(region: InputRegion, identity: RegionIdentity): boolean;
+  containsIdentity(
+    region: Pick<BlockDropAncestor, "getIdentity" | "containsRegion">,
+    identity: RegionIdentity,
+  ): boolean;
   /**
    * Reads an attribute from an anchor in the current Page attachment.
    *

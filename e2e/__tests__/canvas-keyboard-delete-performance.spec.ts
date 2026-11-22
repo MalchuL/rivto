@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 for (const repeat of [0, 200]) {
@@ -65,35 +66,6 @@ async function cardChromePoint(card: Locator): Promise<{ x: number; y: number }>
  * @param page - Warm demo with a selected card.
  * @returns Synchronous delivery and two-frame timings in milliseconds.
  */
-async function measureDelete(page: Page): Promise<unknown> {
-  await page.evaluate(() => {
-    const state = window as unknown as { canvasDeleteTiming: unknown };
-    state.canvasDeleteTiming = null;
-    window.addEventListener(
-      "keydown",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "keydown",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.canvasDeleteTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await page.keyboard.press("Delete");
-  await page.waitForFunction(
-    () => (window as unknown as { canvasDeleteTiming: unknown }).canvasDeleteTiming,
-  );
-  return page.evaluate(
-    () => (window as unknown as { canvasDeleteTiming: unknown }).canvasDeleteTiming,
-  );
+async function measureDelete(page: Page) {
+  return measureEventDelivery(page, "keydown", () => page.keyboard.press("Delete"));
 }

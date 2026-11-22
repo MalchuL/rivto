@@ -1,5 +1,5 @@
 import { EventDispatcher } from "../event-dispatcher";
-import type { BrowserInputMap, InputRoot } from "../types";
+import type { BrowserInputMap, InputObserver } from "../types";
 import type {
   InputEventAttachment,
   InputEventContext,
@@ -15,7 +15,7 @@ import type {
 } from "./types";
 
 /** Owns grouped occurrence input delivery and its observer attachment. */
-export class InputEvents<EventValue, Root extends InputEventsRoot = InputRoot> {
+export class InputEvents<EventValue, Root extends InputEventsRoot = InputEventsRoot> {
   private readonly groups = new Map<string, InputEventGroup>();
   private deliveries = new WeakMap<object, InputEventDelivery>();
   private attachment?: InputEventAttachment<Root>;
@@ -63,7 +63,7 @@ export class InputEvents<EventValue, Root extends InputEventsRoot = InputRoot> {
     const state: MutableInputRegistrationState = { active: true };
     const invoke = (input: unknown) => {
       // This group receives only the context created for its own input delivery.
-      const context = input as InputEventContext<EventValue, Root>;
+      const context = input as InputEventContext<EventValue>;
       if (
         !state.active ||
         this.attachment !== context.attachment ||
@@ -112,7 +112,7 @@ export class InputEvents<EventValue, Root extends InputEventsRoot = InputRoot> {
       throw new Error("Input listeners already attached");
     }
     this.attaching = true;
-    let observer: ReturnType<InputRoot["createInputObserver"]>;
+    let observer: InputObserver | undefined;
     try {
       observer = inputRoot.createInputObserver();
     } finally {
@@ -249,7 +249,7 @@ export class InputEvents<EventValue, Root extends InputEventsRoot = InputRoot> {
     ) {
       return;
     }
-    const context: InputEventContext<EventValue, Root> = { event, attachment };
+    const context: InputEventContext<EventValue> = { event, attachment };
     delivery.snapshot.observe(group.key, context);
     if (delivery.claimed) {
       return;

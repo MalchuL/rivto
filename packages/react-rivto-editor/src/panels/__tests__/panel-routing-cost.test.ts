@@ -13,7 +13,7 @@ it.each([2, 40])("bounds ancestor lookups when routing among %i panels", async (
     root.dataset.rivtoPanel = "";
     document.body.append(root);
     const mountedRoot = new BrowserInputRoot(root);
-    registry.registerPanel(mountedRoot, core.getDocument());
+    registry.registerPanel(mountedRoot);
     return { element: root, mountedRoot };
   });
   const button = document.createElement("button");

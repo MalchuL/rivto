@@ -13,17 +13,11 @@ it("restores the previous root capability when replacement notification fails", 
   let failedRegistration: PanelInputRegistration | undefined;
   try {
     let previousRegistration: PanelInputRegistration | undefined;
-    const release = registry.registerPanel(
-      mountedRoot,
-      core.getDocument(),
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      (registration) => {
+    const release = registry.registerPanel(mountedRoot, {
+      receiveInput: (registration) => {
         previousRegistration = registration;
       },
-    );
+    });
     const previous = mountedRoot;
     registry.subscribeRoots(() => {
       if (failedRegistration?.isCurrent()) {
@@ -32,17 +26,11 @@ it("restores the previous root capability when replacement notification fails", 
       }
     });
     expect(() =>
-      registry.registerPanel(
-        mountedRoot,
-        core.getDocument(),
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        (registration) => {
+      registry.registerPanel(mountedRoot, {
+        receiveInput: (registration) => {
           failedRegistration = registration;
         },
-      ),
+      }),
     ).toThrow(failure);
     expect(registry.getInputRoots().has(previous)).toBe(true);
     expect(previousRegistration?.isCurrent()).toBe(true);
@@ -69,17 +57,11 @@ it("invalidates a failed first registration and retains rollback failures", asyn
   try {
     let caught: unknown;
     try {
-      registry.registerPanel(
-        mountedRoot,
-        core.getDocument(),
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        (registration) => {
+      registry.registerPanel(mountedRoot, {
+        receiveInput: (registration) => {
           failedRegistration = registration;
         },
-      );
+      });
     } catch (error) {
       caught = error;
     }

@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
@@ -57,33 +58,6 @@ for (const mode of ["block", "edgeless"] as const) {
  * @param page - Warm editor with a caret at the end of the source block.
  * @returns Synchronous delivery and two-frame durations in milliseconds.
  */
-async function measureSplit(page: Page): Promise<unknown> {
-  await page.evaluate(() => {
-    const state = window as unknown as { blockSplitTiming: unknown };
-    state.blockSplitTiming = null;
-    window.addEventListener(
-      "keydown",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "keydown",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.blockSplitTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await page.keyboard.press("Enter");
-  await page.waitForFunction(
-    () => (window as unknown as { blockSplitTiming: unknown }).blockSplitTiming,
-  );
-  return page.evaluate(() => (window as unknown as { blockSplitTiming: unknown }).blockSplitTiming);
+async function measureSplit(page: Page) {
+  return measureEventDelivery(page, "keydown", () => page.keyboard.press("Enter"));
 }

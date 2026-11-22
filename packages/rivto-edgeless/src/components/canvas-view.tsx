@@ -55,7 +55,8 @@ export function CanvasView({
     canvas,
     rootIdentity: root ? getBrowserElementIdentity(root) : undefined,
     interactions,
-    viewport,
+    attachment: canvasViewportAttachment(viewport),
+    events: viewport.events,
     allowCamera,
     panEnabled: () => Boolean(tool?.pansViewport || panEnabled?.()),
     onPanState,
@@ -118,7 +119,10 @@ function useViewportSize(
     },
     [viewportRef],
   );
-  useLayoutEffect(() => observeCanvasViewportSize(canvas, viewport), [canvas, viewport]);
+  useLayoutEffect(
+    () => observeCanvasViewportSize(canvas, canvasViewportAttachment(viewport)),
+    [canvas, viewport],
+  );
   useLayoutEffect(() => {
     if (!root) {
       return;

@@ -33,11 +33,13 @@ it.each(["deactivation", "selection clearing"])(
       elements[2].dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
     };
     const releases = roots.map((root, index) =>
-      registry.registerPanel(root, core.getDocument(), undefined, undefined, () => {
-        if (index === 0 && stage === "deactivation" && activateNested) {
-          activateNested = false;
-          activateNestedPanel();
-        }
+      registry.registerPanel(root, {
+        deactivate: () => {
+          if (index === 0 && stage === "deactivation" && activateNested) {
+            activateNested = false;
+            activateNestedPanel();
+          }
+        },
       }),
     );
     const delivered: object[] = [];
@@ -83,11 +85,13 @@ it("does not deliver an old input to a replacement registration", async () => {
   let replace = false;
   let releaseReplacement: (() => void) | undefined;
   const releases = roots.map((root, index) =>
-    registry.registerPanel(root, core.getDocument(), undefined, undefined, () => {
-      if (index === 0 && replace) {
-        replace = false;
-        releaseReplacement = registry.registerPanel(roots[1], core.getDocument());
-      }
+    registry.registerPanel(root, {
+      deactivate: () => {
+        if (index === 0 && replace) {
+          replace = false;
+          releaseReplacement = registry.registerPanel(roots[1]);
+        }
+      },
     }),
   );
   const delivered: object[] = [];

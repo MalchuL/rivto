@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Page } from "@playwright/test";
 
 for (const repeat of [0, 200]) {
@@ -32,35 +33,6 @@ for (const repeat of [0, 200]) {
  * @param page - Warm demo with one copied block selected.
  * @returns Synchronous paste delivery and two-frame durations in milliseconds.
  */
-async function measurePaste(page: Page): Promise<unknown> {
-  await page.evaluate(() => {
-    const state = window as unknown as { structuralPasteTiming: unknown };
-    state.structuralPasteTiming = null;
-    window.addEventListener(
-      "paste",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "paste",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.structuralPasteTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await page.keyboard.press("Control+v");
-  await page.waitForFunction(
-    () => (window as unknown as { structuralPasteTiming: unknown }).structuralPasteTiming,
-  );
-  return page.evaluate(
-    () => (window as unknown as { structuralPasteTiming: unknown }).structuralPasteTiming,
-  );
+async function measurePaste(page: Page) {
+  return measureEventDelivery(page, "paste", () => page.keyboard.press("Control+v"));
 }

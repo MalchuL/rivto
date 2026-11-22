@@ -1,5 +1,5 @@
 import { YjsDoc } from "@chulane/crdt-doc";
-import * as Y from "yjs";
+import { isCRDTArray, isCRDTMap } from "../utils";
 import { DocumentModelImpl } from "../document-model";
 
 it.each([10, 200])(
@@ -11,12 +11,14 @@ it.each([10, 200])(
       for (let index = 0; index < count; index += 1) {
         model.blocks.insertBlock({ id: `root-${index}`, type: "paragraph" });
       }
-      const roots = doc.doc.getArray<string>("rivto.editor.roots");
-      const read = jest.spyOn(roots, "get");
-      const snapshot = jest.spyOn(roots, "toArray");
+      const roots = doc.getArray<string>("rivto.editor.roots");
+      // Count backing-store reads across all wrappers of this shared array.
+      const sharedRoots = doc.doc.getArray("rivto.editor.roots");
+      const read = jest.spyOn(sharedRoots, "get");
+      const snapshot = jest.spyOn(sharedRoots, "toArray");
       doc.transact(() => {
         roots.delete(0, 1);
-        roots.push(["root-0"]);
+        roots.push("root-0");
         read.mockClear();
         snapshot.mockClear();
         const ids = Array.from({ length: count }, (_, index) => `root-${index}`);
@@ -26,16 +28,16 @@ it.each([10, 200])(
         expect(snapshot).toHaveBeenCalledTimes(1);
         expect(model.blocks.getParentId("root-0")).toBeNull();
         expect(model.blocks.getParentId(`root-${count - 1}`)).toBeNull();
-        const parent = doc.doc.getMap("rivto.editor.blocks").get("root-1");
-        if (!(parent instanceof Y.Map)) {
+        const parent = doc.getMap("rivto.editor.blocks").get("root-1");
+        if (!isCRDTMap(parent)) {
           throw new Error("Expected a shared block map");
         }
         const children = parent.get("children");
-        if (!(children instanceof Y.Array)) {
+        if (!isCRDTArray(children)) {
           throw new Error("Expected a shared child array");
         }
         roots.delete(count - 1, 1);
-        children.push(["root-0"]);
+        children.push("root-0");
         expect(model.blocks.getParentIds(ids).get("root-0")).toBe("root-1");
         expect(model.blocks.getParentId("root-0")).toBe("root-1");
       });
@@ -57,9 +59,9 @@ it("preserves individual lookup behavior when duplicate placements exist", async
       children: [{ id: "child", type: "paragraph" }],
     });
     expect(model.blocks.getParentId("child")).toBe("parent");
-    const roots = doc.doc.getArray<string>("rivto.editor.roots");
+    const roots = doc.getArray<string>("rivto.editor.roots");
     doc.transact(() => {
-      roots.push(["child"]);
+      roots.push("child");
       const ids = [
         "child",
         "parent",
@@ -67,7 +69,7 @@ it("preserves individual lookup behavior when duplicate placements exist", async
       ];
       expect(model.blocks.getParentIds(ids).get("child")).toBe(model.blocks.getParentId("child"));
       roots.delete(0, 1);
-      roots.push(["parent"]);
+      roots.push("parent");
       expect(model.blocks.getParentIds(ids).get("child")).toBe(model.blocks.getParentId("child"));
     });
   } finally {
@@ -82,15 +84,15 @@ it("does not inspect an unrelated malformed branch when individual lookups would
     const ids = Array.from({ length: 10 }, (_, index) => `root-${index}`);
     ids.forEach((id) => model.blocks.insertBlock({ id, type: "paragraph" }));
     model.blocks.insertBlock({ id: "malformed", type: "paragraph" });
-    const blocks = doc.doc.getMap("rivto.editor.blocks");
+    const blocks = doc.getMap("rivto.editor.blocks");
     doc.transact(() => {
       const malformed = blocks.get("malformed");
-      if (!(malformed instanceof Y.Map)) {
+      if (!isCRDTMap(malformed)) {
         throw new Error("Expected a shared block map");
       }
       malformed.set("children", "invalid");
       expect([...model.blocks.getParentIds(ids)]).toEqual(ids.map((id) => [id, null]));
-      malformed.set("children", new Y.Array());
+      malformed.set("children", doc.createDetachedArray());
     });
   } finally {
     await doc.destroy();

@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Page } from "@playwright/test";
 
 for (const repeat of [0, 200]) {
@@ -34,35 +35,6 @@ for (const repeat of [0, 200]) {
  * @param y - Destination viewport Y coordinate in CSS pixels.
  * @returns Synchronous and two-frame timings in milliseconds.
  */
-async function measureMove(page: Page, x: number, y: number): Promise<unknown> {
-  await page.evaluate(() => {
-    const state = window as unknown as { reactToolMoveTiming: unknown };
-    state.reactToolMoveTiming = null;
-    window.addEventListener(
-      "pointermove",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "pointermove",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.reactToolMoveTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await page.mouse.move(x, y);
-  await page.waitForFunction(
-    () => (window as unknown as { reactToolMoveTiming: unknown }).reactToolMoveTiming,
-  );
-  return page.evaluate(
-    () => (window as unknown as { reactToolMoveTiming: unknown }).reactToolMoveTiming,
-  );
+async function measureMove(page: Page, x: number, y: number) {
+  return measureEventDelivery(page, "pointermove", () => page.mouse.move(x, y));
 }

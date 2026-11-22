@@ -12,7 +12,7 @@ import type {
   ParsedShortcut,
 } from "./types";
 
-/** Owns semantic keyboard bindings while EventManager owns native transport. */
+/** Owns semantic keyboard bindings and releases the subscription supplied by the host transport. */
 export class KeyboardRuntime<
   E extends KeyboardInput,
   D extends KeyboardDefinition<E>,
@@ -21,10 +21,10 @@ export class KeyboardRuntime<
   private readonly registrations: KeyboardRegistration<E, D>[] = [];
   private readonly registrationIds = new Set<string>();
   private readonly registrationDisposers = new Map<string, () => void>();
-  private readonly transportDisposers: Array<() => void>;
+  private readonly disconnectTransport: () => void;
   private keymap: KeymapOverrides;
   private snapshot: readonly S[] = [];
-  private value = 0;
+  private inventoryRevision = 0;
   private readonly listeners = new Set<() => void>();
   private destroyed = false;
 
@@ -32,18 +32,18 @@ export class KeyboardRuntime<
    * Creates keyboard transport before extensions register DOM or keyboard behavior.
    *
    * @param transport - Host-owned event delivery and eligibility policy.
+   * @param owner - Borrowed extension scope that retains registration cleanup and guards destruction.
    * @param keymap - Initial semantic binding overrides.
-   * @param extensions - Internal registration ownership and destruction guard.
    */
   constructor(
     private readonly transport: KeyboardTransport<E, D, S>,
-    private readonly extensions: KeyboardResourceOwner,
+    private readonly owner: KeyboardResourceOwner,
     keymap: KeymapOverrides = {},
   ) {
     this.keymap = this.cloneKeymap(keymap);
     this.validateKeymap(this.keymap);
     this.publish();
-    this.transportDisposers = [transport.connect((event) => this.dispatch(event))];
+    this.disconnectTransport = transport.connect((event) => this.dispatch(event));
   }
 
   /**
@@ -113,7 +113,7 @@ export class KeyboardRuntime<
    * @returns Current revision number.
    */
   get revision(): number {
-    return this.value;
+    return this.inventoryRevision;
   }
 
   /**
@@ -184,9 +184,9 @@ export class KeyboardRuntime<
     }
     this.destroyed = true;
     const errors: unknown[] = [];
-    for (const dispose of [...this.registrationDisposers.values()]
-      .reverse()
-      .concat([...this.transportDisposers].reverse())) {
+    const disposers = [...this.registrationDisposers.values()].reverse();
+    disposers.push(this.disconnectTransport);
+    for (const dispose of disposers) {
       try {
         dispose();
       } catch (error) {
@@ -234,7 +234,7 @@ export class KeyboardRuntime<
   private retainRegistration(id: string, registration: KeyboardRegistration<E, D>): () => void {
     this.registrationIds.add(id);
     this.registrations.push(registration);
-    const revision = this.value;
+    const revision = this.inventoryRevision;
     let active = true;
     let dispose: () => void = () => undefined;
     /**
@@ -250,7 +250,7 @@ export class KeyboardRuntime<
       }
     };
     try {
-      dispose = this.extensions.registerCleanup(release);
+      dispose = this.owner.registerCleanup(release);
     } catch (error) {
       if (active) {
         active = false;
@@ -295,7 +295,7 @@ export class KeyboardRuntime<
     revision: number,
   ): never {
     this.removeRegistration(id, registration, dispose, false);
-    if (!this.destroyed && this.value !== revision) {
+    if (!this.destroyed && this.inventoryRevision !== revision) {
       try {
         this.publish();
       } catch (cleanupError) {
@@ -394,7 +394,7 @@ export class KeyboardRuntime<
           phase: definition.phase ?? "keydown",
           target: definition.target ?? this.transport.defaultTarget,
           priority: definition.priority ?? 0,
-          conflicts: [] as string[],
+          conflicts: [],
         },
         definition,
       );
@@ -427,7 +427,7 @@ export class KeyboardRuntime<
         .filter((other) => other.id !== snapshot.id && this.sameConflictBucket(snapshot, other))
         .map((other) => other.id),
     }));
-    this.value += 1;
+    this.inventoryRevision += 1;
     for (const listener of [...this.listeners]) {
       listener();
     }
@@ -508,7 +508,7 @@ export class KeyboardRuntime<
     if (this.destroyed) {
       throw new Error("Keyboard runtime is destroyed");
     }
-    this.extensions.assertActive();
+    this.owner.assertActive();
     // The owner check may synchronously destroy this runtime.
     if (this.destroyed) {
       throw new Error("Keyboard runtime is destroyed");

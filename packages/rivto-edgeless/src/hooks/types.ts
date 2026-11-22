@@ -1,11 +1,12 @@
 import type {
+  CanvasControllerInputRoot,
   CanvasInputOptions,
   CanvasInputScene,
   CanvasPointerNormalizer,
 } from "../browser/types";
 import type { CanvasTool } from "../core/tools/canvas-tool";
 import type { CanvasEvents } from "../browser/canvas-events";
-import type { CanvasViewport } from "../browser/canvas-viewport";
+import type { CanvasSnapshot } from "../utils/store";
 import type { RegionIdentity } from "@chulane/rivto-root";
 
 /** Gesture dependencies borrowed by the React pointer adapter. */
@@ -40,5 +41,9 @@ export interface CanvasInputBinding extends CanvasInputOptions {
   readonly canvas: CanvasInputScene;
   /** Identity of the currently mounted viewport, absent before mounting. */
   readonly rootIdentity: RegionIdentity | undefined;
-  readonly viewport: Pick<CanvasViewport, "events">;
+  readonly events: Pick<CanvasEvents, "register">;
+  readonly attachment: CanvasSnapshot<{
+    readonly rootIdentity: RegionIdentity;
+    readonly inputRoot: CanvasControllerInputRoot;
+  } | null>;
 }

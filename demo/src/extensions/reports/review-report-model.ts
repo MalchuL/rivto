@@ -51,6 +51,18 @@ export interface ReviewElementProps extends Record<string, unknown> {
   savedAt: string | null;
 }
 
+/** Document reads used to capture a Review element and its referenced block cards. */
+interface ElementReviewSource {
+  readonly blocks: Pick<DocumentEditorOperations["blocks"], "getRootIds" | "getBlock">;
+  readonly elements: Pick<DocumentEditorOperations["elements"], "getElementNodes">;
+}
+
+/** A Review block also needs its placement in the live document hierarchy. */
+interface BlockReviewSource extends ElementReviewSource {
+  readonly blocks: ElementReviewSource["blocks"] &
+    Pick<DocumentEditorOperations["blocks"], "hasBlock" | "getParentId" | "getBlockNode">;
+}
+
 /** Placement details stored in the JSON report rather than its native snapshot. */
 interface ReviewBlockPlacement {
   previousReportSiblingId: string | null;
@@ -226,17 +238,21 @@ function copyElementForReport(element: EditorElementNode): EditorElementNode {
  *
  * @param editor - Live editor whose managers supply current state.
  * @param reviewId - Review block acting as the capture anchor.
- * @param blocksAbove - Maximum preceding root count.
- * @param blocksBelow - Maximum following root count.
- * @param includeReportBlock - Whether the copied forest retains the source Review block.
+ * @param options - Capture window configured on the Review item.
+ * @param options.blocksAbove - Maximum preceding root count.
+ * @param options.blocksBelow - Maximum following root count.
+ * @param options.includeReportBlock - Whether the copied forest retains the source Review block.
  * @returns Detached snapshot plus report placement from the same live read.
+ * @throws If the anchor or a captured root is missing.
  */
 export function captureBlockReview(
-  editor: DocumentEditorOperations,
+  editor: BlockReviewSource,
   reviewId: string,
-  blocksAbove: number,
-  blocksBelow: number,
-  includeReportBlock = false,
+  {
+    blocksAbove,
+    blocksBelow,
+    includeReportBlock = false,
+  }: Pick<ReviewBlockProps, "blocksAbove" | "blocksBelow"> & { includeReportBlock?: boolean },
 ): { snapshot: EditorSnapshot } & ReviewBlockPlacement {
   if (!editor.blocks.hasBlock(reviewId)) {
     throw new Error(`Review block ${reviewId} is not in the document`);
@@ -288,7 +304,7 @@ export function captureBlockReview(
     return [copy];
   });
   return {
-    snapshot: createReviewSnapshot(editor, blocks, elements),
+    snapshot: createReviewSnapshot(blocks, elements),
     previousReportSiblingId: siblingIndex > 0 ? siblingIds[siblingIndex - 1]! : null,
     nextReportSiblingId:
       siblingIndex >= 0 && siblingIndex + 1 < siblingIds.length
@@ -307,15 +323,16 @@ export function captureBlockReview(
  *
  * @param editor - Live editor whose managers supply current state.
  * @param reviewId - Review element acting as the capture anchor.
- * @param elementsAbove - Maximum preceding element count.
- * @param elementsBelow - Maximum following element count.
+ * @param options - Capture window configured on the Review item.
+ * @param options.elementsAbove - Maximum preceding element count.
+ * @param options.elementsBelow - Maximum following element count.
  * @returns Detached loadable schema-v9 snapshot.
+ * @throws If the anchor or a referenced root is missing.
  */
 export function captureElementReviewSnapshot(
-  editor: DocumentEditorOperations,
+  editor: ElementReviewSource,
   reviewId: string,
-  elementsAbove: number,
-  elementsBelow: number,
+  { elementsAbove, elementsBelow }: Pick<ReviewElementProps, "elementsAbove" | "elementsBelow">,
 ): EditorSnapshot {
   const ordered = [...editor.elements.getElementNodes()].sort(
     (left, right) => left.zIndex - right.zIndex || left.id.localeCompare(right.id),
@@ -393,12 +410,17 @@ export function captureElementReviewSnapshot(
       }
       return copy;
     });
-  return createReviewSnapshot(editor, blocks, elements);
+  return createReviewSnapshot(blocks, elements);
 }
 
-/** Builds complete canvas roots for the captured subset, promoting children whose parents were omitted. */
+/**
+ * Builds complete canvas roots for the captured subset, promoting children whose parents were omitted.
+ *
+ * @param blocks - Detached block forest included in the report.
+ * @param elements - Detached elements in capture order.
+ * @returns A portable snapshot with child references restricted to the captured elements.
+ */
 function createReviewSnapshot(
-  editor: DocumentEditorOperations,
   blocks: EditorBlock[],
   elements: EditorElementNode[],
 ): EditorSnapshot {

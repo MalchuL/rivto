@@ -9,7 +9,7 @@ it("dispatches and releases input with only the observer and attachment capabili
     createInputObserver: () => browserRoot.createInputObserver(),
     isAttached: () => browserRoot.isAttached(),
   };
-  const events = new InputEvents<InputEventsRoot, InputEventsRoot>(
+  const events = new InputEvents<InputEventsRoot>(
     { assertActive: () => {}, registerCleanup: (release) => release },
     (_target, _input, occurrence) => occurrence,
   );

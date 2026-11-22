@@ -1,6 +1,7 @@
 import type {
   BrowserInputMap,
   BrowserInputTarget,
+  BrowserListenerRoot,
   EventDelivery,
   EventResult,
   InputObserver,
@@ -61,7 +62,7 @@ export type InputEventsRoot = Pick<InputRoot, "createInputObserver" | "isAttache
  * @returns Context shared by handlers in this listener group.
  * @throws Propagates consumer context creation failures.
  */
-export type InputEventFactory<EventValue, Root extends InputEventsRoot = InputRoot> = (
+export type InputEventFactory<EventValue, Root extends InputEventsRoot = InputEventsRoot> = (
   target: BrowserInputTarget,
   input: BrowserInputMap[keyof BrowserInputMap],
   root: Root,
@@ -80,9 +81,9 @@ export interface InputEventGroup {
   readonly target: BrowserInputTarget;
   readonly capture: boolean;
   /** Attachment owning the installed group listener. */
-  attachment?: InputEventAttachment;
+  attachment?: object;
   /** Attachment currently installing this group, when registration is reentrant. */
-  connecting?: InputEventAttachment;
+  connecting?: object;
   /** Releases the installed listener group. */
   detach?: () => void;
 }
@@ -103,9 +104,9 @@ export interface InputEventDelivery {
 }
 
 /** Consumer context retained with the exact attachment during one delivery. */
-export interface InputEventContext<EventValue, Root extends InputEventsRoot = InputEventsRoot> {
+export interface InputEventContext<EventValue> {
   readonly event: EventValue;
-  readonly attachment: InputEventAttachment<Root>;
+  readonly attachment: { readonly root: BrowserListenerRoot };
 }
 
 /**

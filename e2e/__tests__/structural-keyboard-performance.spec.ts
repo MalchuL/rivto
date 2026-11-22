@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
@@ -93,32 +94,5 @@ for (const mode of ["block", "edgeless"] as const) {
  * @returns Synchronous delivery and two-frame durations in milliseconds.
  */
 async function measureDown(page: Page) {
-  await page.evaluate(() => {
-    const state = window as unknown as { structuralTiming: unknown };
-    state.structuralTiming = null;
-    window.addEventListener(
-      "keydown",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "keydown",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.structuralTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await page.keyboard.press("ArrowDown");
-  await page.waitForFunction(
-    () => (window as unknown as { structuralTiming: unknown }).structuralTiming,
-  );
-  return page.evaluate(() => (window as unknown as { structuralTiming: unknown }).structuralTiming);
+  return measureEventDelivery(page, "keydown", () => page.keyboard.press("ArrowDown"));
 }

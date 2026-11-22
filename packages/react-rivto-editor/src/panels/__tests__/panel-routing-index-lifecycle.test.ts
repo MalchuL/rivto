@@ -14,17 +14,11 @@ it("keeps the previous routing index after a failed panel replacement", async ()
   root.append(button);
   document.body.append(root);
   let previousRegistration: PanelInputRegistration | undefined;
-  const release = registry.registerPanel(
-    mountedRoot,
-    core.getDocument(),
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    (registration) => {
+  const release = registry.registerPanel(mountedRoot, {
+    receiveInput: (registration) => {
       previousRegistration = registration;
     },
-  );
+  });
   const previous = mountedRoot;
   const failure = new Error("replacement failed");
   const stop = registry.subscribeRoots(() => {
@@ -47,7 +41,7 @@ it("keeps the previous routing index after a failed panel replacement", async ()
     [{ type: "click", target: "document", capture: false, passive: false }],
   );
   try {
-    expect(() => registry.registerPanel(mountedRoot, core.getDocument())).toThrow(failure);
+    expect(() => registry.registerPanel(mountedRoot)).toThrow(failure);
     listeners.reconcile();
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(received).toBe(previous);

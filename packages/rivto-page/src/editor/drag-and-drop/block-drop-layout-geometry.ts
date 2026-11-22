@@ -20,26 +20,49 @@ import type {
   BlockDropGeometryReader,
 } from "./types";
 
+/** Mounted items, pointer and cached item measurements shared by one layout-gap lookup. */
+interface BlockDropLayoutQuery {
+  readonly layout: BlockDropLayoutRegistration;
+  readonly items: readonly BlockDropTargetRegistration[];
+  readonly point: BlockDropPoint;
+  readonly rtl: boolean;
+  /**
+   * Measures one mounted item and reuses its geometry for this pointer query.
+   *
+   * @param item - Mounted registration in this layout.
+   * @returns Its geometry in viewport coordinates.
+   * @throws Propagates measurement failures from the current attachment.
+   */
+  read(item: BlockDropTargetRegistration): BlockDropGeometry;
+}
+
+/** Two mounted anchors and the physical interval between their facing edges. */
+interface BlockDropPair {
+  readonly previous: BlockDropTargetRegistration;
+  readonly next: BlockDropTargetRegistration;
+  readonly horizontal: boolean;
+  readonly bounds: BlockDropBounds;
+}
+
 /**
  * Finds the first mounted placement starting after a coordinate in monotone flow.
  *
- * @param items - Registered visible anchors in visual flow order.
+ * @param query - Mounted anchors, cached geometry, and inline flow direction.
+ * @param query.items - Registered visible anchors in visual flow order.
+ * @param query.read - Query-local measurement accessor, never retained between events.
+ * @param query.rtl - Whether inline coordinates run in decreasing viewport order.
  * @param coordinate - Viewport coordinate along the declared axis.
- * @param read - Query-local measurement accessor, never retained between events.
  * @param axis - Physical coordinate used for this search.
  * @param from - Inclusive start of a wrapping row, default zero.
  * @param to - Exclusive end, default all mounted anchors.
- * @param rtl - Whether inline coordinates run in decreasing viewport order.
  * @returns Insertion index after anchors whose starting coordinate is at/before the point.
  */
 function upperBound(
-  items: readonly BlockDropTargetRegistration[],
+  { items, read, rtl }: Pick<BlockDropLayoutQuery, "items" | "read" | "rtl">,
   coordinate: number,
-  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
   axis: "x" | "y",
   from = 0,
   to = items.length,
-  rtl = false,
 ): number {
   while (from < to) {
     const middle = (from + to) >>> 1;
@@ -100,8 +123,9 @@ export function resolveLayoutGap(
   if (!measurements.isCurrent()) {
     return undefined;
   }
+  const query: BlockDropLayoutQuery = { layout, items, point, read, rtl };
   // Free endpoint space shares the endpoint's line, including explicit root areas.
-  const outer = resolveListEndGap(layout, items, point, read, measurements, rtl);
+  const outer = resolveListEndGap(query, measurements);
   if (!measurements.isCurrent()) {
     return undefined;
   }
@@ -112,21 +136,21 @@ export function resolveLayoutGap(
     return;
   }
   // Real neighbor seams precede inferred gutter continuation.
-  const pair = resolveGapPairs(layout, items, point, read, measurements, rtl, edge);
+  const pair = resolveGapPairs(query, measurements, edge);
   if (!measurements.isCurrent()) {
     return undefined;
   }
   if (pair || edge) {
     return pair;
   }
-  const gutter = resolveLayoutGutter(layout, items, point, read, measurements, rtl);
+  const gutter = resolveLayoutGutter(query, measurements);
   if (!measurements.isCurrent()) {
     return undefined;
   }
   if (!gutter) {
     return;
   }
-  return resolveGapPairs(layout, items, point, read, measurements, rtl, gutter) ?? gutter;
+  return resolveGapPairs(query, measurements, gutter) ?? gutter;
 }
 
 /**
@@ -317,28 +341,26 @@ function isLocalOwnerGap(
  * The same lookup can normalize an inferred edge to its declared shared boundary.
  * Query-local measurements are reused across both passes; no global scan is added.
  *
- * @param layout - Registered layout and feedback policy.
- * @param items - Mounted canonical anchors in flow order.
- * @param point - Native viewport pointer.
- * @param read - Shared cached geometry reader.
+ * @param query - Geometry and flow inputs borrowed for this synchronous lookup.
+ * @param query.layout - Registered layout and feedback policy.
+ * @param query.items - Mounted canonical anchors in flow order.
+ * @param query.point - Native viewport pointer.
+ * @param query.read - Shared cached geometry reader.
+ * @param query.rtl - Whether inline order runs right to left.
  * @param measurements - Root-backed bounds and background measurements.
- * @param rtl - Whether inline order runs right to left.
  * @param edge - Optional edge to normalize against its own canonical neighbor.
  * @returns Matching physical/shared gap, or undefined for an unrelated boundary.
  */
 function resolveGapPairs(
-  layout: BlockDropLayoutRegistration,
-  items: readonly BlockDropTargetRegistration[],
-  point: BlockDropPoint,
-  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  query: BlockDropLayoutQuery,
   measurements: Pick<
     BlockDropGeometryReader,
     "readBounds" | "isBackground" | "containsHit" | "readAncestorAttribute" | "contains"
   >,
-  rtl: boolean,
   edge?: BlockDropGeometryTarget,
 ): BlockDropGeometryTarget | undefined {
-  const pairs = layoutPairIndices(items, layout.axis, point, read, rtl, edge?.region);
+  const { layout, items, point } = query;
+  const pairs = layoutPairIndices(query, edge?.region);
   for (const pair of pairs) {
     const previous = items[pair - 1]!;
     const next = items[pair]!;
@@ -350,7 +372,7 @@ function resolveGapPairs(
     ) {
       continue;
     }
-    const target = resolvePair(layout, previous, next, point, read, measurements, rtl, edge);
+    const target = resolvePair(query, previous, next, measurements, edge);
     if (target) {
       return target;
     }
@@ -360,33 +382,34 @@ function resolveGapPairs(
 /**
  * Finds adjacent candidate indices within the pointer's aligned flow row.
  *
- * @param items - Committed mounted anchors in visual order.
- * @param axis - Declared layout flow.
- * @param point - Current viewport pointer.
- * @param read - Query-local geometry accessor.
- * @param rtl - Whether inline flow decreases in viewport coordinates.
+ * @param query - Geometry and flow inputs borrowed for this synchronous lookup.
+ * @param query.items - Committed mounted anchors in visual order.
+ * @param query.layout - Declared layout flow.
+ * @param query.point - Current viewport pointer.
+ * @param query.read - Query-local geometry accessor.
+ * @param query.rtl - Whether inline flow decreases in viewport coordinates.
  * @param edge - Existing edge restricting the search to its one neighbor.
  * @returns Local pair indices, including adjacent row transitions for wrapping layouts.
  */
 function layoutPairIndices(
-  items: readonly BlockDropTargetRegistration[],
-  axis: BlockDropLayoutRegistration["axis"],
-  point: BlockDropPoint,
-  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
-  rtl: boolean,
+  query: BlockDropLayoutQuery,
   edge?: BlockDropGeometryTarget["region"],
 ): number[] {
+  const {
+    layout: { axis },
+    items,
+    point,
+    rtl,
+  } = query;
   const horizontal = axis !== "vertical";
-  const [start, end] = layoutRowRange(items, axis, point, read);
+  const [start, end] = layoutRowRange(query, point.y);
   const inlinePoint = rtl ? -point.x : point.x;
   let index = upperBound(
-    items,
+    query,
     horizontal ? inlinePoint : point.y,
-    read,
     horizontal ? "x" : "y",
     start,
     end,
-    rtl,
   );
   if (edge?.kind === "edge") {
     const sideAxis = horizontal ? "inline" : "block";
@@ -408,26 +431,25 @@ function layoutPairIndices(
 /**
  * Resolves a real gap into the nearer anchor's canonical boundary and physical feedback.
  *
- * @param layout - Gap owner; virtual roots require consecutive display indices.
+ * @param query - Geometry and flow inputs borrowed for this synchronous lookup.
+ * @param query.layout - Gap owner; virtual roots require consecutive display indices.
+ * @param query.point - Native viewport position.
+ * @param query.read - Shared query-local geometry reader.
+ * @param query.rtl - Direction of horizontal flow.
  * @param previous - Visible preceding anchor, not necessarily a canonical sibling.
  * @param next - Visible following anchor, retaining its own canonical neighbors.
- * @param point - Native viewport position.
- * @param read - Shared query-local geometry reader.
  * @param measurements - Root-backed bounds for the layout host.
- * @param rtl - Direction of horizontal flow.
  * @param edge - Already selected local edge; only its matching pair can normalize feedback.
  * @returns Target on the chosen side, or undefined for overlap, missing edges or virtual holes.
  */
 function resolvePair(
-  layout: BlockDropLayoutRegistration,
+  query: Pick<BlockDropLayoutQuery, "layout" | "point" | "read" | "rtl">,
   previous: BlockDropTargetRegistration,
   next: BlockDropTargetRegistration,
-  point: BlockDropPoint,
-  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
   measurements: Pick<BlockDropGeometryReader, "readBounds" | "readAncestorAttribute" | "contains">,
-  rtl: boolean,
   edge?: BlockDropGeometryTarget,
 ): BlockDropGeometryTarget | undefined {
+  const { layout, point, read, rtl } = query;
   if (layout.virtual && !hasConsecutiveIndices(previous.identity, next.identity, measurements)) {
     return;
   }
@@ -449,20 +471,17 @@ function resolvePair(
     return;
   }
   const coordinate = horizontal ? point.x : point.y;
-  const preceding =
-    horizontal && rtl ? coordinate >= (low + high) / 2 : coordinate <= (low + high) / 2;
+  const midpoint = (low + high) / 2;
+  const preceding = horizontal && rtl ? coordinate >= midpoint : coordinate <= midpoint;
   const entry = preceding ? previous : next;
   const side = `${horizontal ? "inline" : "block"}-${preceding ? "end" : "start"}`;
   const target = edge ?? edgeTarget(entry, side, read, point);
   if (!target) {
     return;
   }
-  const merged = mergedTarget(layout, previous, next, point, read, (low + high) / 2, horizontal);
-  if (
-    edge &&
-    (!merged ||
-      !isPairEdge(edge, previous, next, horizontal, rect, merged.destination, measurements))
-  ) {
+  const pair = { previous, next, horizontal, bounds: rect };
+  const merged = resolveMergedPairTarget(query, pair, midpoint);
+  if (edge && (!merged || !isPairEdge(edge, pair, merged.destination, measurements))) {
     return;
   }
   return {
@@ -477,24 +496,24 @@ function resolvePair(
  * The preceding trailing declaration supplies depth bands across both edges and
  * the physical gap, so changing only Y cannot switch between sibling and inside.
  *
- * @param layout - Owner of the explicit feedback mode and flow axis.
- * @param previous - Mounted preceding anchor.
- * @param next - Mounted following anchor.
- * @param point - Pointer selecting any declared outline depth bands.
- * @param read - Query-local measurements shared with the gap search.
- * @param middle - Viewport midpoint of the physical interval.
- * @param horizontal - Whether this pair shares inline edges; wrapped row transitions use block edges.
+ * @param query - Geometry and flow inputs borrowed for this synchronous lookup.
+ * @param query.layout - Owner of the explicit feedback mode and flow axis.
+ * @param query.point - Pointer selecting any declared outline depth bands.
+ * @param query.read - Query-local measurements shared with the gap search.
+ * @param pair - Facing mounted anchors and their measured gap.
+ * @param pair.previous - Mounted preceding anchor.
+ * @param pair.next - Mounted following anchor.
+ * @param pair.horizontal - Whether this pair shares inline edges; wrapped row transitions use block edges.
+ * @param midpoint - Viewport midpoint of the physical interval.
  * @returns Shared target and line, or undefined for separate mode or distinct canonical boundaries.
  */
-function mergedTarget(
-  layout: BlockDropLayoutRegistration,
-  previous: BlockDropTargetRegistration,
-  next: BlockDropTargetRegistration,
-  point: BlockDropPoint,
-  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
-  middle: number,
-  horizontal: boolean,
+function resolveMergedPairTarget(
+  query: Pick<BlockDropLayoutQuery, "layout" | "point" | "read">,
+  pair: Pick<BlockDropPair, "previous" | "next" | "horizontal">,
+  midpoint: number,
 ) {
+  const { layout, point, read } = query;
+  const { previous, next, horizontal } = pair;
   if (layout.boundaries === "separate") {
     return;
   }
@@ -514,10 +533,10 @@ function mergedTarget(
   }
   const indicator =
     axis === "block"
-      ? { ...target.indicator, top: middle - 1 }
+      ? { ...target.indicator, top: midpoint - 1 }
       : {
           ...target.indicator,
-          left: middle - 1,
+          left: midpoint - 1,
           top: Math.min(read(previous).rect.top, read(next).rect.top),
           height:
             Math.max(read(previous).rect.bottom, read(next).rect.bottom) -
@@ -712,34 +731,32 @@ function containsPairEdge(
  * leaving farther end space to its separately declared background destination.
  * No padding mode, CSS measurement policy or synthetic anchor is required.
  *
- * @param layout - Existing linear list host with registered anchors and continuation policy.
- * @param items - Committed anchors in display order, already known to be nonempty.
- * @param point - Actual viewport pointer; native hit rounding does not change it.
- * @param read - Query-local geometry accessor shared with ordinary sibling gaps.
+ * @param query - Geometry and flow inputs borrowed for this synchronous lookup.
+ * @param query.layout - Existing linear list host with registered anchors and continuation policy.
+ * @param query.items - Committed anchors in display order, already known to be nonempty.
+ * @param query.point - Actual viewport pointer; native hit rounding does not change it.
+ * @param query.read - Query-local geometry accessor shared with ordinary sibling gaps.
+ * @param query.rtl - Whether the containing layout's logical inline order runs right to left.
  * @param measurements - Root-backed bounds and background measurements.
- * @param rtl - Whether the containing layout's logical inline order runs right to left.
  * @returns Endpoint insertion, or undefined outside free space or at virtual holes.
  */
 function resolveListEndGap(
-  layout: BlockDropLayoutRegistration,
-  items: readonly BlockDropTargetRegistration[],
-  point: BlockDropPoint,
-  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  query: BlockDropLayoutQuery,
   measurements: Pick<
     BlockDropGeometryReader,
     "readBounds" | "isBackground" | "containsHit" | "readAncestorAttribute"
   >,
-  rtl: boolean,
 ): BlockDropGeometryTarget | undefined {
+  const { layout, point, read } = query;
   if (layout.axis === "grid") {
     return;
   }
   if (!containsDropPoint(measurements.readBounds(layout.identity), point)) {
     return;
   }
-  const endpoint = listEndpoint(layout, items, point, read, measurements, rtl);
+  const endpoint = listEndpoint(query, measurements);
   if (!endpoint) {
-    return resolveEndpointInset(layout, items, point, read, measurements);
+    return resolveEndpointInset(query, measurements);
   }
   if ((layout.gutterSize ?? "row") !== "row") {
     return;
@@ -798,23 +815,21 @@ function isNearEndpointEdge(
  * indices must identify the actual first/last display position; holes never
  * become free endpoint space merely because their neighbors are unmounted.
  *
- * @param layout - Linear flow and virtual-index policy of the registered list.
- * @param items - Nonempty mounted anchors in committed logical order.
- * @param point - Pointer in viewport coordinates.
- * @param read - Query-local cached geometry reader.
+ * @param query - Geometry and flow inputs borrowed for this synchronous lookup.
+ * @param query.layout - Linear flow and virtual-index policy of the registered list.
+ * @param query.items - Nonempty mounted anchors in committed logical order.
+ * @param query.point - Pointer in viewport coordinates.
+ * @param query.read - Query-local cached geometry reader.
+ * @param query.rtl - Whether inline flow runs right to left.
  * @param measurements - Root-backed bounds and background measurements.
- * @param rtl - Whether inline flow runs right to left.
  * @returns The endpoint and its declared logical side, or undefined inside the
  * list interval or beyond an incomplete virtual endpoint.
  */
 function listEndpoint(
-  layout: BlockDropLayoutRegistration,
-  items: readonly BlockDropTargetRegistration[],
-  point: BlockDropPoint,
-  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  query: BlockDropLayoutQuery,
   measurements: Pick<BlockDropGeometryReader, "readAncestorAttribute">,
-  rtl: boolean,
 ): readonly [BlockDropTargetRegistration, BlockDropEdgeRegion["side"]] | undefined {
+  const { layout, items, point, read, rtl } = query;
   const first = items[0]!;
   const last = items[items.length - 1]!;
   const a = read(first).rect;
@@ -853,20 +868,19 @@ function listEndpoint(
  * Only the first and last mounted anchors are measured, including virtual lists;
  * no unmounted interval or synthetic endpoint is introduced.
  *
- * @param layout - Owning linear list whose native background was hit.
- * @param items - Nonempty ordered mounted anchors.
- * @param point - Exact viewport pointer, independent of native rounding.
- * @param read - Query-local cached geometry reader.
+ * @param query - Geometry and flow inputs borrowed for this synchronous lookup.
+ * @param query.layout - Owning linear list whose native background was hit.
+ * @param query.items - Nonempty ordered mounted anchors.
+ * @param query.point - Exact viewport pointer, independent of native rounding.
+ * @param query.read - Query-local cached geometry reader.
  * @param measurements - Root-backed background ownership for this query.
  * @returns The declared endpoint edge, or undefined outside its strip or on occupied content.
  */
 function resolveEndpointInset(
-  layout: BlockDropLayoutRegistration,
-  items: readonly BlockDropTargetRegistration[],
-  point: BlockDropPoint,
-  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  query: Pick<BlockDropLayoutQuery, "layout" | "items" | "point" | "read">,
   measurements: Pick<BlockDropGeometryReader, "isBackground">,
 ): BlockDropGeometryTarget | undefined {
+  const { layout, items, point, read } = query;
   if (!measurements.isBackground(layout.identity, point)) {
     return;
   }
@@ -901,23 +915,21 @@ function resolveEndpointInset(
  * cover exposed top/bottom edges, including below short tiles, within the extent.
  * Physical seams keep priority; farther background retains its own declaration.
  *
- * @param layout - Registered list bounding the row gutters in its declared flow.
- * @param items - Committed mounted anchors in display order.
- * @param point - Actual viewport pointer, also used for outline depth selection.
- * @param read - Query-local geometry shared with sibling-gap resolution.
+ * @param query - Geometry and flow inputs borrowed for this synchronous lookup.
+ * @param query.layout - Registered list bounding the row gutters in its declared flow.
+ * @param query.items - Committed mounted anchors in display order.
+ * @param query.point - Actual viewport pointer, also used for outline depth selection.
+ * @param query.read - Query-local geometry shared with sibling-gap resolution.
+ * @param query.rtl - Whether horizontal item order decreases in viewport X.
  * @param measurements - Root-backed bounds and background measurements.
- * @param rtl - Whether horizontal item order decreases in viewport X.
  * @returns Existing edge target, or undefined outside a row or for a missing/disabled edge.
  * @throws If a declared edge size or numeric gutter extent is negative or nonfinite.
  */
 function resolveLayoutGutter(
-  layout: BlockDropLayoutRegistration,
-  items: readonly BlockDropTargetRegistration[],
-  point: BlockDropPoint,
-  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  query: BlockDropLayoutQuery,
   measurements: Pick<BlockDropGeometryReader, "readBounds" | "isBackground">,
-  rtl: boolean,
 ): BlockDropGeometryTarget | undefined {
+  const { layout, point, read, rtl } = query;
   const size = layout.gutterSize ?? "row";
   if (size === 0) {
     return;
@@ -932,9 +944,9 @@ function resolveLayoutGutter(
     return;
   }
   if (size !== "row") {
-    return sizedGutterTarget(layout, items, point, read, rtl, size);
+    return sizedGutterTarget(query, size);
   }
-  const entry = layoutGutterItem(layout.axis, items, point, read, rtl);
+  const entry = layoutGutterItem(query);
   const geometry = entry ? read(entry) : undefined;
   if (!entry || !geometry) {
     return;
@@ -957,25 +969,23 @@ function resolveLayoutGutter(
  * Virtual holes retain their old restriction: only cross-axis continuation is inferred;
  * their real endpoint and consecutive-neighbor gaps remain owned by existing declarations.
  *
- * @param layout - Current flow and virtual-hole policy.
- * @param items - Mounted canonical anchors in flow order.
- * @param point - Native viewport pointer on unoccupied host background.
- * @param read - Query-local cached geometry reader.
- * @param rtl - Whether inline flow runs right to left.
+ * @param query - Geometry and flow inputs borrowed for this synchronous lookup.
+ * @param query.layout - Current flow and virtual-hole policy.
+ * @param query.items - Mounted canonical anchors in flow order.
+ * @param query.point - Native viewport pointer on unoccupied host background.
+ * @param query.read - Query-local cached geometry reader.
+ * @param query.rtl - Whether inline flow runs right to left.
  * @param size - Finite positive expansion in local CSS pixels.
  * @returns Closest eligible local edge, or undefined beyond the extent or without an edge.
  */
 function sizedGutterTarget(
-  layout: BlockDropLayoutRegistration,
-  items: readonly BlockDropTargetRegistration[],
-  point: BlockDropPoint,
-  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
-  rtl: boolean,
+  query: BlockDropLayoutQuery,
   size: number,
 ): BlockDropGeometryTarget | undefined {
+  const { layout, items, point, read, rtl } = query;
   let selected: BlockDropGeometryTarget | undefined;
   let distance = Infinity;
-  for (const index of gutterCandidates(items, layout.axis, point, read, rtl)) {
+  for (const index of gutterCandidates(query)) {
     const entry = items[index]!;
     const geometry = read(entry);
     const { rect } = geometry;
@@ -1009,34 +1019,36 @@ function sizedGutterTarget(
  * space above/below a tile does not require measuring the whole layout. Ties retain
  * canonical candidate order; omitted/unmounted anchors are never reconstructed.
  *
- * @param items - Mounted anchors in aligned row-major or linear order.
- * @param axis - Declared flow axis.
- * @param point - Native viewport pointer.
- * @param read - Query-local cached geometry reader.
- * @param rtl - Whether inline order decreases in viewport X.
+ * @param query - Geometry and flow inputs borrowed for this synchronous lookup.
+ * @param query.items - Mounted anchors in aligned row-major or linear order.
+ * @param query.layout - Declared flow axis.
+ * @param query.point - Native viewport pointer.
+ * @param query.read - Query-local cached geometry reader.
+ * @param query.rtl - Whether inline order decreases in viewport X.
  * @returns Up to two anchors per neighboring row, or two for a linear list.
  */
-function gutterCandidates(
-  items: readonly BlockDropTargetRegistration[],
-  axis: BlockDropLayoutRegistration["axis"],
-  point: BlockDropPoint,
-  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
-  rtl: boolean,
-): number[] {
+function gutterCandidates(query: BlockDropLayoutQuery): number[] {
+  const {
+    layout: { axis },
+    items,
+    point,
+    read,
+    rtl,
+  } = query;
   const ranges: Array<readonly [number, number]> = [];
   if (axis === "grid") {
-    const end = upperBound(items, point.y, read, "y");
+    const end = upperBound(query, point.y, "y");
     if (end > 0) {
-      const current = layoutRowRange(items, axis, point, read);
+      const current = layoutRowRange(query, point.y);
       if (current[0] > 0) {
         const y = read(items[current[0] - 1]!).rect.top;
-        ranges.push(layoutRowRange(items, axis, { ...point, y }, read));
+        ranges.push(layoutRowRange(query, y));
       }
       ranges.push(current);
     }
     if (end < items.length) {
       const y = read(items[end]!).rect.top;
-      ranges.push(layoutRowRange(items, axis, { ...point, y }, read));
+      ranges.push(layoutRowRange(query, y));
     }
   } else {
     ranges.push([0, items.length]);
@@ -1046,7 +1058,7 @@ function gutterCandidates(
   const inlinePoint = rtl ? -point.x : point.x;
   const coordinate = horizontal ? inlinePoint : point.y;
   for (const [start, end] of ranges) {
-    const index = upperBound(items, coordinate, read, horizontal ? "x" : "y", start, end, rtl);
+    const index = upperBound(query, coordinate, horizontal ? "x" : "y", start, end);
     for (const candidate of [index - 1, index]) {
       if (candidate >= start && candidate < end) {
         candidates.push(candidate);
@@ -1130,23 +1142,22 @@ function gutterTarget(
  * borrowing feedback for an unrelated sibling destination.
  *
  * @param edge - Selected anchor and original declaration.
- * @param previous - Mounted preceding sibling registration.
- * @param next - Mounted following sibling registration.
- * @param horizontal - Whether the pair uses inline rather than block edges.
- * @param bounds - Physical pair interval; a nonpositive cross axis cannot normalize feedback.
+ * @param pair - Facing mounted anchors and their measured gap.
+ * @param pair.previous - Mounted preceding sibling registration.
+ * @param pair.next - Mounted following sibling registration.
+ * @param pair.horizontal - Whether the pair uses inline rather than block edges.
+ * @param pair.bounds - Physical pair interval; a nonpositive cross axis cannot normalize feedback.
  * @param destination - Merged pair's pointer-selected destination, compared without changing the winner.
  * @param measurements - Attachment-bound containment check for descendant edges.
  * @returns True for that pair's current declaration on the corresponding side.
  */
 function isPairEdge(
   edge: Pick<BlockDropGeometryTarget, "identity" | "region" | "destination">,
-  previous: BlockDropTargetRegistration,
-  next: BlockDropTargetRegistration,
-  horizontal: boolean,
-  bounds: BlockDropBounds,
+  pair: BlockDropPair,
   destination: BlockDropDestination,
   measurements: Pick<BlockDropGeometryReader, "contains">,
 ): boolean {
+  const { previous, next, horizontal, bounds } = pair;
   if ((horizontal ? bounds.height : bounds.width) <= 0) {
     return false;
   }
@@ -1170,22 +1181,24 @@ function isPairEdge(
  * Wrapping rows expose gutters only outside their first and last tiles. Space
  * between tiles remains a canonical seam, and space under a short tile stays background.
  *
- * @param axis - Declared flow axis of the owning layout.
- * @param items - Committed anchors in visual order.
- * @param point - Current viewport pointer.
- * @param read - Query-local cached geometry reader.
- * @param rtl - Whether inline order runs right to left.
+ * @param query - Geometry and flow inputs borrowed for this synchronous lookup.
+ * @param query.layout - Declared flow axis of the owning layout.
+ * @param query.items - Committed anchors in visual order.
+ * @param query.point - Current viewport pointer.
+ * @param query.read - Query-local cached geometry reader.
+ * @param query.rtl - Whether inline order runs right to left.
  * @returns One candidate, or undefined before all items or inside a grid row's span.
  */
-function layoutGutterItem(
-  axis: BlockDropLayoutRegistration["axis"],
-  items: readonly BlockDropTargetRegistration[],
-  point: BlockDropPoint,
-  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
-  rtl: boolean,
-): BlockDropTargetRegistration | undefined {
+function layoutGutterItem(query: BlockDropLayoutQuery): BlockDropTargetRegistration | undefined {
+  const {
+    layout: { axis },
+    items,
+    point,
+    read,
+    rtl,
+  } = query;
   if (axis === "grid") {
-    const [start, end] = layoutRowRange(items, axis, point, read);
+    const [start, end] = layoutRowRange(query, point.y);
     if (start === end) {
       return;
     }
@@ -1204,9 +1217,7 @@ function layoutGutterItem(
   if (horizontal && rtl) {
     coordinate = -coordinate;
   }
-  return items[
-    upperBound(items, coordinate, read, horizontal ? "x" : "y", 0, items.length, rtl) - 1
-  ];
+  return items[upperBound(query, coordinate, horizontal ? "x" : "y") - 1];
 }
 
 /**
@@ -1215,25 +1226,29 @@ function layoutGutterItem(
  * Linear lists retain their complete committed range. Grid items must be in
  * row-major order with aligned row starts, as required by physical gap lookup.
  *
- * @param items - Committed mounted anchors in visual order.
- * @param axis - Declared linear or grid flow.
- * @param point - Pointer selecting the wrapping row by viewport Y.
- * @param read - Query-local cached geometry reader.
+ * @param query - Geometry and flow inputs borrowed for this synchronous lookup.
+ * @param query.items - Committed mounted anchors in visual order.
+ * @param query.layout - Declared linear or grid flow.
+ * @param query.read - Query-local cached geometry reader.
+ * @param y - Viewport Y coordinate selecting the wrapping row.
  * @returns Half-open row indices, or an empty range before the first grid row.
  */
 function layoutRowRange(
-  items: readonly BlockDropTargetRegistration[],
-  axis: BlockDropLayoutRegistration["axis"],
-  point: BlockDropPoint,
-  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  query: Pick<BlockDropLayoutQuery, "items" | "layout" | "read" | "rtl">,
+  y: number,
 ): readonly [number, number] {
+  const {
+    layout: { axis },
+    items,
+    read,
+  } = query;
   if (axis !== "grid") {
     return [0, items.length];
   }
-  const end = upperBound(items, point.y, read, "y");
+  const end = upperBound(query, y, "y");
   if (!end) {
     return [0, 0];
   }
   const top = read(items[end - 1]!).rect.top;
-  return [upperBound(items, top - 0.01, read, "y"), end];
+  return [upperBound(query, top - 0.01, "y"), end];
 }

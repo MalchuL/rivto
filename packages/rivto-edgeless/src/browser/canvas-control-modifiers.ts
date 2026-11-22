@@ -1,3 +1,4 @@
+import { collectCleanupErrors } from "../utils/release-resources";
 import type { KeyInput } from "@chulane/rivto-root";
 import type { CanvasEvents } from "./canvas-events";
 import type { CanvasModifierObserver } from "./types";
@@ -57,14 +58,7 @@ export function subscribeCanvasControlModifiers(
  * @throws AggregateError containing any cleanup failures.
  */
 function releaseObservers(releases: Array<() => void>): void {
-  const errors: unknown[] = [];
-  for (const release of releases.splice(0).reverse()) {
-    try {
-      release();
-    } catch (error) {
-      errors.push(error);
-    }
-  }
+  const errors = collectCleanupErrors(releases.splice(0).reverse());
   if (errors.length) {
     throw new AggregateError(errors, "Control modifier cleanup failed");
   }

@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Page } from "@playwright/test";
 
 for (const mode of ["block", "edgeless"] as const) {
@@ -80,34 +81,5 @@ for (const mode of ["block", "edgeless"] as const) {
  * @returns Synchronous delivery and two-frame durations in milliseconds.
  */
 async function measureCommand(page: Page, command: ReturnType<Page["locator"]>) {
-  await page.evaluate(() => {
-    const state = window as unknown as { slashCommandTiming: unknown };
-    state.slashCommandTiming = null;
-    window.addEventListener(
-      "click",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "click",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.slashCommandTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await command.click();
-  await page.waitForFunction(
-    () => (window as unknown as { slashCommandTiming: unknown }).slashCommandTiming,
-  );
-  return page.evaluate(
-    () => (window as unknown as { slashCommandTiming: unknown }).slashCommandTiming,
-  );
+  return measureEventDelivery(page, "click", () => command.click());
 }

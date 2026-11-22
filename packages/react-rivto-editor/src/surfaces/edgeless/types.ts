@@ -59,7 +59,7 @@ export interface EdgelessSurfaceOptions {
 
 /** Document policy borrowed by the canvas card-creation registration. */
 export interface EdgelessCardCreationProps {
-  readonly controller: EdgelessSurfaceController;
+  readonly controller: Pick<EdgelessSurfaceController, "createBlockAt">;
 }
 
 /** Pointer decoration receiving the current viewport's input. */
@@ -88,8 +88,8 @@ export interface EdgelessSpotlightAttachment {
 
 /** Live camera and snapping values presented by the viewport toolbar. */
 export interface ZoomControlProps {
-  readonly canvas: CanvasApi;
-  readonly snapping: EdgelessSnappingStore;
+  readonly canvas: Pick<CanvasApi, "zoomAt">;
+  readonly snapping: Pick<EdgelessSnappingStore, "set">;
   readonly snap: ReturnType<EdgelessSnappingStore["getSnapshot"]>;
   readonly zoom: number;
 }

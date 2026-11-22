@@ -1,9 +1,9 @@
+import type { TextSelectionPosition, TextSelectionQuery } from "../../text/types";
 import type {
-  TextNavigationMount,
-  TextSelectionPosition,
-  TextSelectionQuery,
-} from "../../text/types";
-import type { BrowserCaretCandidate, BrowserTextSelectionPoint } from "./types";
+  BrowserCaretCandidate,
+  BrowserTextNavigation,
+  BrowserTextSelectionPoint,
+} from "./types";
 
 /**
  * Resolves the immediately adjacent editable owner within a local boundary.
@@ -11,25 +11,21 @@ import type { BrowserCaretCandidate, BrowserTextSelectionPoint } from "./types";
  * A contentless owner stops movement. Only an occurrence-wide boundary may ask
  * the host to mount an offscreen neighbor; a nested scope stays bounded.
  *
- * @param root - Mounted browser occurrence.
- * @param query - Selectors identifying content, owners, and boundaries.
+ * @param navigation - Mounted occurrence, owner and content selectors, offscreen mounting request,
+ * and live check for the originating attachment.
  * @param ownerId - Current rendered owner identity.
  * @param direction - Previous or next rendered owner.
  * @param scopeSelector - Selector identifying an optional local boundary.
- * @param mountAdjacent - Requests mounting of neighboring content.
- * @param isCurrent - Checks the originating attachment.
  * @returns Neighbor identity and edge offset, or undefined when unavailable.
  * @throws Propagates selector and host mounting failures.
  */
 export function adjacentBrowserTextPosition(
-  root: HTMLElement,
-  query: TextSelectionQuery,
+  navigation: BrowserTextNavigation,
   ownerId: string,
   direction: "left" | "right",
   scopeSelector: string,
-  mountAdjacent: TextNavigationMount,
-  isCurrent: () => boolean,
 ): TextSelectionPosition | undefined {
+  const { root, query, isCurrent } = navigation;
   if (!isCurrent()) {
     return undefined;
   }
@@ -39,16 +35,7 @@ export function adjacentBrowserTextPosition(
   }
   const candidate = owner.closest(scopeSelector);
   const scope = candidate && root.contains(candidate) ? candidate : root;
-  const content = adjacentContent(
-    root,
-    query,
-    ownerId,
-    direction === "left" ? -1 : 1,
-    mountAdjacent,
-    scope,
-    true,
-    isCurrent,
-  );
+  const content = adjacentContent(navigation, ownerId, direction, scope);
   const adjacentId = content?.closest(query.ownerSelector)?.getAttribute(query.ownerAttribute);
   if (!content || !adjacentId || !isCurrent()) {
     return undefined;
@@ -67,23 +54,19 @@ export function adjacentBrowserTextPosition(
  * The host may mount one adjacent owner only when movement leaves the current
  * owner at the rendered edge. Focus and model selection are not changed here.
  *
- * @param root - Mounted browser occurrence.
- * @param query - Selectors identifying content, owners, and boundaries.
+ * @param navigation - Mounted occurrence, owner and content selectors, offscreen mounting request,
+ * and live check for the originating attachment.
  * @param position - Current owner identity and UTF-16 caret offset.
  * @param direction - Previous or next visual line.
- * @param mountAdjacent - Requests mounting of neighboring content.
- * @param isCurrent - Checks the originating attachment.
  * @returns Nearest visual-line position, or undefined when unavailable.
  * @throws Propagates browser measurement and host mounting failures.
  */
 export function verticalBrowserTextPosition(
-  root: HTMLElement,
-  query: TextSelectionQuery,
+  navigation: BrowserTextNavigation,
   position: TextSelectionPosition,
   direction: "up" | "down",
-  mountAdjacent: TextNavigationMount,
-  isCurrent: () => boolean,
 ): TextSelectionPosition | undefined {
+  const { root, query, isCurrent } = navigation;
   if (!isCurrent()) {
     return undefined;
   }
@@ -107,16 +90,7 @@ export function verticalBrowserTextPosition(
       ? { ownerId: position.ownerId, offset: closestOnLine(next, current.left).offset }
       : undefined;
   }
-  const adjacent = adjacentContent(
-    root,
-    query,
-    position.ownerId,
-    direction === "up" ? -1 : 1,
-    mountAdjacent,
-    root,
-    false,
-    isCurrent,
-  );
+  const adjacent = adjacentContent(navigation, position.ownerId, direction, root);
   const adjacentId = adjacent?.closest(query.ownerSelector)?.getAttribute(query.ownerAttribute);
   if (!adjacent || !adjacentId || !isCurrent()) {
     return undefined;
@@ -178,27 +152,23 @@ function ownedContent(
  * share an ID. Vertical movement spans the occurrence and skips contentless
  * owners; horizontal movement can stop immediately and retain a local scope.
  *
- * @param root - Mounted occurrence that owns candidates.
- * @param query - Content, owner, and boundary selectors.
+ * @param navigation - Mounted occurrence and selectors used to find owned candidates, with the
+ * host's offscreen mounting request and its originating attachment check.
  * @param ownerId - Current rendered owner identity.
- * @param step - Negative for previous, positive for next.
- * @param mountAdjacent - Requests mounting of an offscreen neighbor.
+ * @param direction - Movement toward the previous or next owner. Horizontal movement
+ * stops at the immediately adjacent shell even when it has no editable content.
  * @param scope - Whole occurrence or a nested navigation boundary.
- * @param immediate - Whether a contentless neighbor stops the walk.
- * @param isCurrent - Checks the originating attachment.
  * @returns Adjacent content host, or undefined at an edge or after remount.
  * @throws Propagates host mounting and selector failures.
  */
 function adjacentContent(
-  root: HTMLElement,
-  query: TextSelectionQuery,
+  navigation: BrowserTextNavigation,
   ownerId: string,
-  step: -1 | 1,
-  mountAdjacent: TextNavigationMount,
+  direction: "left" | "right" | "up" | "down",
   scope: Element,
-  immediate: boolean,
-  isCurrent: () => boolean,
 ): HTMLElement | undefined {
+  const { root, query, mountAdjacent, isCurrent } = navigation;
+  const step = direction === "left" || direction === "up" ? -1 : 1;
   const owners = () =>
     [...scope.querySelectorAll<HTMLElement>(query.ownerSelector)].filter(
       (owner) => root.contains(owner) && owner.closest(query.boundarySelector) === root,
@@ -228,7 +198,7 @@ function adjacentContent(
     if (content && owner.getAttribute(query.ownerAttribute)) {
       return content;
     }
-    if (immediate) {
+    if (direction === "left" || direction === "right") {
       return undefined;
     }
   }

@@ -110,6 +110,40 @@ function indexParents(blocks: Block[], parents = new Map<string, string>()): Map
 }
 
 /**
+ * Selects blocks whose ancestors are outside the selection.
+ *
+ * A selected ancestor already contains its selected descendants. Keeping the original
+ * order and references lets paste find a sibling anchor without cloning any subtrees.
+ *
+ * @param document - Detached document roots used to look up parent identities.
+ * @param blocks - Selected blocks in resolved document order.
+ * @returns The selected roots in the supplied order and all selected IDs for pruning partial-text copies.
+ * Both collections are empty for an empty selection.
+ */
+export function resolveClipboardRoots(
+  document: Block[],
+  blocks: Block[],
+): { roots: Block[]; selectedIds: ReadonlySet<string> } {
+  // Membership checks are used both while pruning descendants and while
+  // walking ancestors, so keep the resolved selection in a shared lookup.
+  const selectedIds = new Set(blocks.map(({ id }) => id));
+  const parents = indexParents(document);
+  const roots = blocks.filter((block) => {
+    // A selected ancestor will clone this block in its own subtree, so only
+    // blocks without a selected ancestor should become clipboard roots.
+    let parent = parents.get(block.id);
+    while (parent) {
+      if (selectedIds.has(parent)) {
+        return false;
+      }
+      parent = parents.get(parent);
+    }
+    return true;
+  });
+  return { roots, selectedIds };
+}
+
+/**
  * Produces the minimum set of copied roots for a resolved selection.
  *
  * The resolved selection may contain both a block and one or more of its
@@ -131,34 +165,26 @@ function indexParents(blocks: Block[], parents = new Map<string, string>()): Map
 export function cloneSelectedTopLevelSubtrees(
   document: Block[],
   range: ResolvedSelection,
-  wholeBlocks = true,
+  wholeBlocks: boolean,
 ): Block[] {
-  // Membership checks are used both while pruning descendants and while
-  // walking ancestors, so keep the resolved selection in a shared lookup.
-  const selectedIds = new Set(range.blocks.map((block) => block.id));
-  const parents = indexParents(document);
+  const { roots, selectedIds } = resolveClipboardRoots(document, range.blocks);
 
-  // Text ranges may cross nested blocks. Rebuild only the selected branches so
-  // each retained child stays attached to its selected parent.
-  const cloneSelection = (block: Block): Block => ({
-    ...structuredClone(block),
-    children: block.children.filter((child) => selectedIds.has(child.id)).map(cloneSelection),
-  });
+  /**
+   * Copies selected descendants without reading excluded descendants' payloads.
+   *
+   * Text ranges may cross nested blocks. Rebuild only the selected branches so
+   * each retained child stays attached to its selected parent.
+   *
+   * @param block - Selected root or direct selected child to copy with detached fields.
+   * @returns A detached block restricted to the selected branch.
+   */
+  const cloneSelection = (block: Block): Block => {
+    const { children, ...fields } = block;
+    return {
+      ...structuredClone(fields),
+      children: children.filter((child) => selectedIds.has(child.id)).map(cloneSelection),
+    };
+  };
 
-  return range.blocks
-    .filter((block) => {
-      // A selected ancestor will clone this block in its own subtree, so only
-      // blocks without a selected ancestor should become clipboard roots.
-      let parent = parents.get(block.id);
-      let isTopLevel = true;
-      while (parent) {
-        if (selectedIds.has(parent)) {
-          isTopLevel = false;
-          break;
-        }
-        parent = parents.get(parent);
-      }
-      return isTopLevel;
-    })
-    .map(wholeBlocks ? (block) => structuredClone(block) : cloneSelection);
+  return roots.map(wholeBlocks ? (block) => structuredClone(block) : cloneSelection);
 }

@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Page } from "@playwright/test";
 
 for (const mode of ["block", "edgeless"] as const) {
@@ -45,35 +46,6 @@ for (const mode of ["block", "edgeless"] as const) {
  * @param page - Warm editor with one structurally selected block.
  * @returns Synchronous delivery and two-frame durations in milliseconds.
  */
-async function measureDelete(page: Page): Promise<unknown> {
-  await page.evaluate(() => {
-    const state = window as unknown as { structuralDeleteTiming: unknown };
-    state.structuralDeleteTiming = null;
-    window.addEventListener(
-      "keydown",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "keydown",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.structuralDeleteTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await page.keyboard.press("Delete");
-  await page.waitForFunction(
-    () => (window as unknown as { structuralDeleteTiming: unknown }).structuralDeleteTiming,
-  );
-  return page.evaluate(
-    () => (window as unknown as { structuralDeleteTiming: unknown }).structuralDeleteTiming,
-  );
+async function measureDelete(page: Page) {
+  return measureEventDelivery(page, "keydown", () => page.keyboard.press("Delete"));
 }

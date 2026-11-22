@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Page } from "@playwright/test";
 
 for (const repeat of [0, 200]) {
@@ -39,35 +40,6 @@ for (const repeat of [0, 200]) {
  * @param page - Warm demo with the property editor focused and previewing a change.
  * @returns Synchronous delivery and two-frame durations in milliseconds.
  */
-async function measureEscape(page: Page): Promise<unknown> {
-  await page.evaluate(() => {
-    const state = window as unknown as { propertyEscapeTiming: unknown };
-    state.propertyEscapeTiming = null;
-    window.addEventListener(
-      "keydown",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "keydown",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.propertyEscapeTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await page.keyboard.press("Escape");
-  await page.waitForFunction(
-    () => (window as unknown as { propertyEscapeTiming: unknown }).propertyEscapeTiming,
-  );
-  return page.evaluate(
-    () => (window as unknown as { propertyEscapeTiming: unknown }).propertyEscapeTiming,
-  );
+async function measureEscape(page: Page) {
+  return measureEventDelivery(page, "keydown", () => page.keyboard.press("Escape"));
 }

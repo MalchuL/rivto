@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 for (const repeat of [0, 200]) {
@@ -75,33 +76,6 @@ async function cardLeft(card: Locator): Promise<number> {
  * @param page - Warm demo with a selected card.
  * @returns Synchronous delivery and two-frame timings in milliseconds.
  */
-async function measureMove(page: Page): Promise<unknown> {
-  await page.evaluate(() => {
-    const state = window as unknown as { canvasMoveTiming: unknown };
-    state.canvasMoveTiming = null;
-    window.addEventListener(
-      "keydown",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "keydown",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.canvasMoveTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await page.keyboard.press("ArrowRight");
-  await page.waitForFunction(
-    () => (window as unknown as { canvasMoveTiming: unknown }).canvasMoveTiming,
-  );
-  return page.evaluate(() => (window as unknown as { canvasMoveTiming: unknown }).canvasMoveTiming);
+async function measureMove(page: Page) {
+  return measureEventDelivery(page, "keydown", () => page.keyboard.press("ArrowRight"));
 }

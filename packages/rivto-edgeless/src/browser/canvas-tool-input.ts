@@ -1,3 +1,4 @@
+import { collectCleanupErrors } from "../utils/release-resources";
 import type { PointerInput } from "@chulane/rivto-root";
 import type { CanvasEvents } from "./canvas-events";
 import type { CanvasToolGesture } from "./canvas-tool-gesture";
@@ -96,34 +97,16 @@ export function subscribeCanvasToolInput(
       }),
     );
   } catch (error) {
-    const failures = releaseToolInput(releases);
+    const failures = collectCleanupErrors(releases);
     if (failures.length) {
       throw new AggregateError([error, ...failures], "Tool input setup failed");
     }
     throw error;
   }
   return () => {
-    const failures = releaseToolInput(releases);
+    const failures = collectCleanupErrors(releases);
     if (failures.length) {
       throw new AggregateError(failures, "Tool input cleanup failed");
     }
   };
-}
-
-/**
- * Attempts every input registration cleanup.
- *
- * @param releases - Registration disposers owned by this subscription.
- * @returns Failures in cleanup order.
- */
-function releaseToolInput(releases: readonly (() => void)[]): unknown[] {
-  const errors: unknown[] = [];
-  for (const release of releases) {
-    try {
-      release();
-    } catch (error) {
-      errors.push(error);
-    }
-  }
-  return errors;
 }

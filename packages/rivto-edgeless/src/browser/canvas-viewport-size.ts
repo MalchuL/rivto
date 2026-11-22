@@ -1,8 +1,14 @@
 import type { InputRegion } from "@chulane/rivto-root";
 import type { CanvasApi } from "../core/canvas";
-import { canvasViewportAttachment } from "./canvas-viewport-attachment";
-import type { CanvasViewport } from "./canvas-viewport";
+import { releaseResources } from "../utils/release-resources";
+import type { CanvasSnapshot } from "../utils/store";
 import type { CanvasViewportLayers } from "./types";
+
+/** Attachment identity, connection status and size operations borrowed by the size observer. */
+type CanvasSizeAttachment = {
+  readonly coordinates: Pick<CanvasViewportLayers["coordinates"], "isAttached">;
+  readonly rootRegion: Pick<InputRegion, "readClientSize" | "observeSize">;
+};
 
 /**
  * Observes the mounted viewport through its exact occurrence's Root.
@@ -11,20 +17,19 @@ import type { CanvasViewportLayers } from "./types";
  * measurement and observer setup may synchronously replace the attachment.
  *
  * @param canvas - Scene receiving viewport dimensions in CSS pixels.
- * @param viewport - Owner publishing the current mounted occurrence.
+ * @param attachments - Read-only subscription to the current mounted occurrence.
  * @returns Idempotent cleanup for the subscription and current size observer.
  * @throws Propagates observation, measurement, and cleanup failures.
  */
 export function observeCanvasViewportSize(
   canvas: Pick<CanvasApi, "setViewport">,
-  viewport: CanvasViewport,
+  attachments: CanvasSnapshot<CanvasSizeAttachment | null>,
 ): () => void {
-  return new CanvasViewportSizeObservation(canvas, viewport).start();
+  return new CanvasViewportSizeObservation(canvas, attachments).start();
 }
 
 /** Owns the size observer associated with a viewport's current attachment. */
 class CanvasViewportSizeObservation {
-  private readonly attachments;
   private active = true;
   private revision = 0;
   private releaseSize: (() => void) | undefined;
@@ -33,14 +38,12 @@ class CanvasViewportSizeObservation {
    * Borrows the scene and viewport attachment store without owning either.
    *
    * @param canvas - Scene receiving measured dimensions.
-   * @param viewport - Owner publishing mounted occurrence changes.
+   * @param attachments - Read-only subscription publishing mounted occurrence changes.
    */
   constructor(
     private readonly canvas: Pick<CanvasApi, "setViewport">,
-    viewport: CanvasViewport,
-  ) {
-    this.attachments = canvasViewportAttachment(viewport);
-  }
+    private readonly attachments: CanvasSnapshot<CanvasSizeAttachment | null>,
+  ) {}
 
   /**
    * Subscribes to attachment changes and measures the current occurrence.
@@ -96,7 +99,7 @@ class CanvasViewportSizeObservation {
    * @returns True only while the same active attachment remains published.
    * @throws Propagates attachment ownership failures.
    */
-  private isCurrent(layers: Pick<CanvasViewportLayers, "coordinates">, revision: number): boolean {
+  private isCurrent(layers: CanvasSizeAttachment, revision: number): boolean {
     return (
       this.active &&
       this.revision === revision &&
@@ -148,8 +151,8 @@ class CanvasViewportSizeObservation {
    * Withdraws the observation before releasing its subscription and browser observer.
    *
    * @param unsubscribe - Releases the viewport attachment subscription.
-   * @returns This observation cannot publish further dimensions.
-   * @throws Propagates size observer cleanup failures.
+   * @returns This observation cannot publish further dimensions, and both cleanups have run.
+   * @throws Either cleanup failure, or an AggregateError containing both failures in release order.
    */
   private dispose(unsubscribe: () => void): void {
     if (!this.active) {
@@ -159,7 +162,6 @@ class CanvasViewportSizeObservation {
     this.revision += 1;
     const release = this.releaseSize;
     this.releaseSize = undefined;
-    unsubscribe();
-    release?.();
+    releaseResources(release ? [unsubscribe, release] : [unsubscribe]);
   }
 }

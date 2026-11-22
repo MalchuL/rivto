@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Page } from "@playwright/test";
 
 for (const mode of ["block", "edgeless"] as const) {
@@ -64,32 +65,5 @@ for (const mode of ["block", "edgeless"] as const) {
  * @returns Synchronous input delivery and two-frame durations in milliseconds.
  */
 async function measureInput(page: Page) {
-  await page.evaluate(() => {
-    const state = window as unknown as { slashInputTiming: unknown };
-    state.slashInputTiming = null;
-    window.addEventListener(
-      "input",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "input",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.slashInputTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await page.keyboard.type("/");
-  await page.waitForFunction(
-    () => (window as unknown as { slashInputTiming: unknown }).slashInputTiming,
-  );
-  return page.evaluate(() => (window as unknown as { slashInputTiming: unknown }).slashInputTiming);
+  return measureEventDelivery(page, "input", () => page.keyboard.type("/"));
 }

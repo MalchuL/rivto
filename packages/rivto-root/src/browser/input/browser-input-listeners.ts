@@ -1,4 +1,8 @@
-import type { BrowserInputDefinition, BrowserInputMap, InputRoot } from "../../events/types";
+import type {
+  BrowserInputDefinition,
+  BrowserInputMap,
+  BrowserListenerRoot,
+} from "../../events/types";
 import type {
   BrowserInputAttachment,
   BrowserInputBoundary,
@@ -120,11 +124,11 @@ export class BrowserInputListeners {
    * @throws If this listener is already attached, a Root is detached or unsupported,
    * or browser listener setup fails; AggregateError retains a rollback failure.
    */
-  attach(root: HTMLElement | Pick<InputRoot, "isAttached">): () => void {
+  attach(root: HTMLElement | BrowserListenerRoot): () => void {
     if (this.attachment) {
       throw new Error("Browser input requires an unattached root");
     }
-    let occurrence: Pick<InputRoot, "isAttached"> | undefined;
+    let occurrence: BrowserListenerRoot | undefined;
     let element: HTMLElement | undefined;
     if ("isAttached" in root) {
       occurrence = root;

@@ -1,3 +1,4 @@
+import type { ViewportRoot } from "../selection/types";
 import type { EditorEvent } from "../events/editor-event";
 import type { DOMEventScope, EditorEventHandler } from "../events/types";
 import type { KeyboardEditorEvent } from "./keyboard-editor-event";
@@ -11,21 +12,8 @@ import type {
 import type { InputRoot, KeyboardKeyInput, KeyboardTarget } from "@chulane/rivto-root";
 
 /** Occurrence operations borrowed by keyboard action handlers. */
-export type KeyboardEventInputRoot = Pick<
-  InputRoot,
-  | "isAttached"
-  | "focus"
-  | "clearSelection"
-  | "readAttribute"
-  | "isFocused"
-  | "getElementIdentity"
-  | "readRegionViewportTop"
-  | "readRegionValues"
-  | "measureRegionViewportBounds"
-  | "captureDocumentScroll"
-  | "observeWindowWheel"
-  | "captureFrameClock"
->;
+export type KeyboardEventInputRoot = ViewportRoot &
+  Pick<InputRoot, "isAttached" | "focus" | "clearSelection" | "readAttribute" | "isFocused">;
 
 /** One exact + separated shortcut such as Primary+Shift+Z. */
 export type KeyboardShortcut = string;

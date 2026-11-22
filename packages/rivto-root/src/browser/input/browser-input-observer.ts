@@ -2,7 +2,7 @@ import type {
   BrowserInputMap,
   InputObserver,
   InputObserverDefinition,
-  InputRoot,
+  BrowserListenerRoot,
 } from "../../events/types";
 import { BrowserInputListeners } from "./browser-input-listeners";
 
@@ -19,7 +19,7 @@ export class BrowserInputObserver implements InputObserver {
    * @param root - Attached browser Root bounding all delivered input.
    * @throws If the Root is detached or native attachment fails.
    */
-  constructor(root: Pick<InputRoot, "isAttached">) {
+  constructor(root: BrowserListenerRoot) {
     this.detach = this.listeners.attach(root);
   }
 
@@ -57,7 +57,7 @@ export class BrowserInputObserver implements InputObserver {
   }
 
   /**
-   * Releases every group and detaches the borrowed browser Root.
+   * Releases every group and detaches this observer's listeners from the borrowed browser Root.
    *
    * @returns All retained registrations and the attachment have been offered cleanup.
    * @throws Cleanup failures, aggregated when multiple releases fail.

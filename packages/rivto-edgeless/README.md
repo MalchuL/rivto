@@ -244,9 +244,9 @@ Keep each registration disposer with the extension that installed it. Handlers r
 normalized data and target/default-prevention capabilities, not native events or
 HTML elements. Target and cancellation capabilities apply during the current delivery.
 
-`useCanvasViewport()` exposes read-only layers and `events.register` to React
-extensions, without exposing attachment. For example, a component inside
-`CanvasEditorProvider` can register an effect-owned wheel override:
+`useCanvasViewport()` gives React extensions the scene, coordinate conversion,
+world origin, and the `events.register` and `events.observe` operations. A
+component inside `CanvasEditorProvider` can register an effect-owned wheel override:
 
 ```tsx
 const viewport = useCanvasViewport();
@@ -268,10 +268,11 @@ skips later registered callbacks in that group; it does not automatically preven
 native defaults or propagation. Root handlers exclude nested attached canvas
 roots. Window/document handlers must check whether they own the active gesture.
 
-Imperative hosts construct `new CanvasInputController(canvas, root,
-viewport.events, options)` after creating their viewport. `connect()` installs the
-built-in camera/selection registrations and returns their cleanup; it does not own
-viewport attachment. Custom registrations and built-ins use the same dispatcher.
+Imperative hosts pass their mounted `inputRoot` to
+`viewport.attach(rootElement, planeElement, inputRoot)` and construct
+`new CanvasInputController(canvas, viewport.events, inputRoot, options)`.
+`connect()` installs the built-in camera and selection registrations and returns
+their cleanup. The host owns the viewport attachment and the input Root. Custom registrations and built-ins use the same dispatcher.
 
 ## React editor registration
 

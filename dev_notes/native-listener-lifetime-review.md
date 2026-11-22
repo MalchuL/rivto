@@ -2,28 +2,30 @@
 
 ## Current implementation
 
-`@chulane/rivto-root` now owns the common single-root native listener lifecycle
-used by Page input, Page focus observation, and Canvas. Its generic event
-dispatcher is also used by Page, Canvas, and the React host. Canvas registrations now use normalized input and capabilities. The Page and
-React registration APIs, and the low-level browser listener entry, still expose
-native events and DOM objects; the planned normalization migration is not complete. It retains registrations
-across remounts, rolls back partial attachment, disables stale callbacks and
-attempts every removal. Page and Canvas keep their different input context,
-priorities, claims, nested-root rules and attachment owners. Canvas still rejects
-roots without a window; Page retains its document fallback.
+Page's `BlockEditorEvents` uses `InputEvents` from `@chulane/rivto-root` to
+retain registrations across remounts, reject stale deliveries, and roll back
+partial attachment. Page's `BlockFocusObserver` borrows the mounted occurrence
+separately to observe normalized focus input. Canvas uses Root's `BrowserEvents`
+for its viewport and owns the viewport attachment, its geometry, and its teardown.
+[Page input](../packages/rivto-page/src/editor/events/block-editor-events.ts),
+[Page focus](../packages/rivto-page/src/editor/events/block-focus-observer.ts),
+[Canvas events](../packages/rivto-edgeless/src/browser/canvas-events.ts).
 
-`CanvasViewport` withdraws its ownership and layers even when listener teardown
-fails, and preserves attachment/cleanup failures. Host multi-panel event routing
-continues to use `DOMEventListeners` independently.
+The React host creates `BrowserRoutedEvents` for delivery across its mounted
+panels. Root owns the native listener groups and their dispatch. The host's panel
+registry chooses the receiving occurrence and tracks activation. Page, Canvas,
+and React handlers receive normalized input and borrow the operations their
+occurrence provides. [Host event manager](../packages/react-rivto-editor/src/managers/events/event-manager.ts),
+[routed browser events](../packages/rivto-root/src/browser/events/browser-routed-events.ts).
 
-The remaining sections capture the **historical comparison before extraction**.
-Their decision and Canvas failure-path findings describe the old implementation,
-not the current behavior. They explain why this extraction was evaluated in two
-real consumers before considering the host.
+## Historical review
 
-Reviewed against the pre-extraction code on 2026-10-26, after the host dispatch, context
-and failure-cleanup changes. This completes the three-way comparison proposed by
-Candidate 3 of the architecture review; it does not introduce a shared package.
+The remaining sections record the pre-extraction review on 2026-10-26. The
+decision and Canvas failure-path findings apply to that revision. They explain
+why the team evaluated the extraction in two real consumers before considering
+the host. The review followed the host dispatch, context and failure-cleanup
+changes and completed the three-way comparison proposed by Candidate 3 of the
+architecture review.
 
 ## Decision
 
@@ -93,15 +95,15 @@ registrations. It should not be combined with a new cross-package interface.
 
 Inspected creation, registration, attachment, delivery and cleanup in:
 
-- [Host native listeners](../packages/react-rivto-editor/src/managers/events/dom-event-listeners.ts),
-  [event manager](../packages/react-rivto-editor/src/managers/events/event-manager.ts),
-  and [host ownership](./host-event-ownership.md).
-- [Page native listeners](../packages/rivto-page/src/editor/events/block-input-listeners.ts),
-  [dispatcher](../packages/rivto-page/src/editor/events/block-input-dispatcher.ts),
-  [event owner](../packages/rivto-page/src/editor/events/block-editor-events.ts),
-  and [controller](../packages/rivto-page/src/editor/block-editor-controller.ts).
-- [Canvas events](../packages/rivto-edgeless/src/browser/canvas-events.ts) and
-  [viewport](../packages/rivto-edgeless/src/browser/canvas-viewport.ts).
+- [Host native listeners](https://github.com/MalchuL/rivto/blob/50db9e92d5eb1332156a9d950e1b66240842143d/packages/react-rivto-editor/src/managers/events/dom-event-listeners.ts),
+  [event manager](https://github.com/MalchuL/rivto/blob/50db9e92d5eb1332156a9d950e1b66240842143d/packages/react-rivto-editor/src/managers/events/event-manager.ts),
+  and [host ownership](https://github.com/MalchuL/rivto/blob/50db9e92d5eb1332156a9d950e1b66240842143d/dev_notes/host-event-ownership.md).
+- [Page native listeners](https://github.com/MalchuL/rivto/blob/50db9e92d5eb1332156a9d950e1b66240842143d/packages/rivto-page/src/editor/events/block-input-listeners.ts),
+  [dispatcher](https://github.com/MalchuL/rivto/blob/50db9e92d5eb1332156a9d950e1b66240842143d/packages/rivto-page/src/editor/events/block-input-dispatcher.ts),
+  [event owner](https://github.com/MalchuL/rivto/blob/50db9e92d5eb1332156a9d950e1b66240842143d/packages/rivto-page/src/editor/events/block-editor-events.ts),
+  and [controller](https://github.com/MalchuL/rivto/blob/50db9e92d5eb1332156a9d950e1b66240842143d/packages/rivto-page/src/editor/block-editor-controller.ts).
+- [Canvas events](https://github.com/MalchuL/rivto/blob/50db9e92d5eb1332156a9d950e1b66240842143d/packages/rivto-edgeless/src/browser/canvas-events.ts) and
+  [viewport](https://github.com/MalchuL/rivto/blob/50db9e92d5eb1332156a9d950e1b66240842143d/packages/rivto-edgeless/src/browser/canvas-viewport.ts).
 
 Existing focused Page event tests cover ordering, observers, cross-phase claims,
 attachment rollback, continued cleanup after errors and remounts. Existing Canvas

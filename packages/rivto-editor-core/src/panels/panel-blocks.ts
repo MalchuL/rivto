@@ -1,4 +1,4 @@
-import type { DocumentEditorOperations } from "../editor/types";
+import type { BlockManagerApi } from "../managers/types";
 import type { BlockDestination } from "@chulane/document-model";
 import type {
   BlockPrepareErrorHandler,
@@ -10,6 +10,42 @@ import type {
 import type { PanelBlocksAPI, PanelDestination } from "./types";
 
 const EMPTY_IDS: readonly string[] = [];
+
+/** Document block commands used to enforce the panel boundary. */
+interface PanelBlockSource {
+  readonly blocks: Pick<
+    BlockManagerApi,
+    | "clearBlock"
+    | "deleteListProps"
+    | "deleteListPropsBatch"
+    | "getBlock"
+    | "getBlockNode"
+    | "getChildIds"
+    | "getInsertionDestinationAfter"
+    | "getOrderedIds"
+    | "getParentId"
+    | "getRootIds"
+    | "hasBlock"
+    | "importForest"
+    | "indentBlocks"
+    | "insertBlock"
+    | "mergeBlocks"
+    | "moveBlocks"
+    | "outdentBlocks"
+    | "prepareInput"
+    | "removeBlocks"
+    | "revision"
+    | "setBlockPluginData"
+    | "setBlockProp"
+    | "setBlockType"
+    | "subscribeBlock"
+    | "subscribeBlockNode"
+    | "subscribeRootIds"
+    | "subscribeStructure"
+    | "updateBlock"
+    | "updateBlocks"
+  >;
+}
 
 /**
  * Block operations bound to one panel; actual writes retain the document's
@@ -31,7 +67,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param includeRoot - Whether the boundary block itself is displayed and protected; ignored for a null boundary.
    */
   constructor(
-    private readonly document: DocumentEditorOperations,
+    private readonly document: PanelBlockSource,
     readonly rootBlockId: string | null,
     readonly includeRoot: boolean,
   ) {}

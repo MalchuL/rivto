@@ -596,13 +596,15 @@ export class BrowserInputRoot implements BrowserInputRootApi, FocusBoundaryInput
     isCurrent: () => boolean,
   ): TextSelectionPosition | undefined {
     return adjacentBrowserTextPosition(
-      this.#element,
-      query,
+      {
+        root: this.#element,
+        query,
+        mountAdjacent,
+        isCurrent: () => this.isAttached() && isCurrent(),
+      },
       ownerId,
       direction,
       scopeSelector,
-      mountAdjacent,
-      () => this.isAttached() && isCurrent(),
     );
   }
 
@@ -666,12 +668,14 @@ export class BrowserInputRoot implements BrowserInputRootApi, FocusBoundaryInput
     isCurrent: () => boolean,
   ): TextSelectionPosition | undefined {
     return verticalBrowserTextPosition(
-      this.#element,
-      query,
+      {
+        root: this.#element,
+        query,
+        mountAdjacent,
+        isCurrent: () => this.isAttached() && isCurrent(),
+      },
       position,
       direction,
-      mountAdjacent,
-      () => this.isAttached() && isCurrent(),
     );
   }
 

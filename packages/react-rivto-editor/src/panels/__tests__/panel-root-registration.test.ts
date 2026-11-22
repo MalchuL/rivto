@@ -13,9 +13,7 @@ it("rejects a detached occurrence before notifying registration listeners", asyn
     notifications += 1;
   });
   try {
-    expect(() => registry.registerPanel(root, core.getDocument())).toThrow(
-      "Cannot register a detached input root",
-    );
+    expect(() => registry.registerPanel(root)).toThrow("Cannot register a detached input root");
     expect(notifications).toBe(0);
     expect(registry.getInputRoots().size).toBe(0);
   } finally {
@@ -33,7 +31,7 @@ it("keeps the active surface mode during synchronous registration removal", asyn
   surface.tabIndex = 0;
   document.body.append(surface);
   const root = new BrowserInputRoot(surface);
-  const release = registry.registerPanel(root, core.getDocument());
+  const release = registry.registerPanel(root);
   const listeners = new BrowserRoutedEvents(
     () => registry.getInputRoots(),
     (group, identity, capture, event, control) => {
@@ -73,7 +71,7 @@ it("retains the replacement occurrence when the active surface is registered aga
   document.body.append(surface);
   const original = new BrowserInputRoot(surface);
   const replacement = new BrowserInputRoot(surface);
-  const releaseOriginal = registry.registerPanel(original, core.getDocument());
+  const releaseOriginal = registry.registerPanel(original);
   const listeners = new BrowserRoutedEvents(
     () => registry.getInputRoots(),
     (group, identity, capture, event, control) => {
@@ -86,7 +84,7 @@ it("retains the replacement occurrence when the active surface is registered aga
   try {
     listeners.reconcile();
     surface.focus();
-    releaseReplacement = registry.registerPanel(replacement, core.getDocument());
+    releaseReplacement = registry.registerPanel(replacement);
     original.detach();
     const unsubscribe = registry.subscribeRoots(() => {
       modeDuringRemoval = registry.getSurfaceType();

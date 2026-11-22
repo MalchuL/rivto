@@ -540,19 +540,17 @@ export class ReactPanel<
     // Route events to this occurrence and retain cleanup for root replacement, deactivation, or unmount.
     let stagedRegistration: PanelInputRegistration | undefined;
     try {
-      this.unregisterRoot = this.editor.panels.registerPanel(
-        this.mountedRoot,
-        this.snapshot.document,
-        this.corePanel.rootBlockId,
-        this.snapshot.api,
-        this.deactivate,
+      this.unregisterRoot = this.editor.panels.registerPanel(this.mountedRoot, {
+        rootBlockId: this.corePanel.rootBlockId,
+        api: this.snapshot.api,
+        deactivate: this.deactivate,
         // Cancels pending caret work for this occurrence, including runtime shutdown and root removal.
-        () => this.selectionManager.destroy(),
-        (inputRegistration) => {
+        cancelSelection: () => this.selectionManager.destroy(),
+        receiveInput: (inputRegistration) => {
           stagedRegistration = inputRegistration;
           this.inputRegistration = inputRegistration;
         },
-      );
+      });
     } catch (error) {
       if (this.inputRegistration === stagedRegistration) {
         this.inputRegistration = undefined;

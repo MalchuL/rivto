@@ -187,13 +187,7 @@ function ReviewBlock({
         throw new Error("Review block no longer exists");
       }
       const liveProps = reviewBlockPropsSchema.parse(live.props);
-      const capture = captureBlockReview(
-        panel.document,
-        blockId,
-        liveProps.blocksAbove,
-        liveProps.blocksBelow,
-        liveProps.includeReportBlock,
-      );
+      const capture = captureBlockReview(panel.document, blockId, liveProps);
       const savedAt = new Date().toISOString();
       await saveReport({
         kind: "block",
@@ -280,12 +274,7 @@ function ReviewElement({
         throw new Error("Review element no longer exists");
       }
       const liveProps = reviewElementPropsSchema.parse(live.props);
-      const snapshot = captureElementReviewSnapshot(
-        panel.document,
-        element.id,
-        liveProps.elementsAbove,
-        liveProps.elementsBelow,
-      );
+      const snapshot = captureElementReviewSnapshot(panel.document, element.id, liveProps);
       const savedAt = new Date().toISOString();
       await saveReport({
         kind: "element",

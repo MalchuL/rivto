@@ -2,7 +2,7 @@ import { RegionIdentity } from "../../events/types";
 
 /** Opaque identities for comparing browser elements without exposing them. */
 const identities = new WeakMap<Element, RegionIdentity>();
-const elements = new WeakMap<object, WeakRef<Element>>();
+const elements = new WeakMap<RegionIdentity, WeakRef<Element>>();
 
 /**
  * Returns a stable opaque identity for one browser element.
@@ -29,6 +29,6 @@ export function inputElementIdentity(element: Element): RegionIdentity {
  * @param identity - Identity previously issued for a browser element.
  * @returns The element while it is retained elsewhere, or undefined after collection or for an unknown identity.
  */
-export function inputElementForIdentity(identity: object): Element | undefined {
+export function inputElementForIdentity(identity: RegionIdentity): Element | undefined {
   return elements.get(identity)?.deref();
 }

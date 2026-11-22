@@ -73,3 +73,22 @@ it("discards an attribute when its region loses ownership during the read", () =
     read.mockRestore();
   }
 });
+
+it("stops reading and mutating a found descendant moved behind an excluded boundary", () => {
+  const scope = document.createElement("div");
+  scope.setAttribute("data-block", "");
+  scope.innerHTML =
+    '<div data-block><span data-row="nested"></span></div><section><span data-row="first"></span></section><span data-row="later"></span>';
+  const parent = createBrowserInputRegion(scope, scope, () => true);
+  const selector = "[data-row]";
+  const boundary = "[data-block]";
+  const row = parent.findOwnedRegion(selector, boundary);
+  expect(row?.readAttribute("data-row")).toBe("first");
+
+  const first = scope.querySelector('[data-row="first"]')!;
+  scope.firstElementChild!.append(first);
+  expect(row?.getIdentity()).toBeUndefined();
+  row?.toggleAttribute("data-feedback", true);
+  expect(first.hasAttribute("data-feedback")).toBe(false);
+  expect(parent.findOwnedRegion(selector, boundary)?.readAttribute("data-row")).toBe("later");
+});

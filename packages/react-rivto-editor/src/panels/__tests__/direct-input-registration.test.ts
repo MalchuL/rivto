@@ -67,21 +67,15 @@ it("invalidates a staged capability if its recipient rejects registration", asyn
   const failure = new Error("recipient failed");
   let staged: PanelInputRegistration | undefined;
   try {
-    const release = registry.registerPanel(mountedRoot, core.getDocument());
+    const release = registry.registerPanel(mountedRoot);
     const previous = mountedRoot;
     expect(() =>
-      registry.registerPanel(
-        mountedRoot,
-        core.getDocument(),
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        (registration) => {
+      registry.registerPanel(mountedRoot, {
+        receiveInput: (registration) => {
           staged = registration;
           throw failure;
         },
-      ),
+      }),
     ).toThrow(failure);
     expect(staged?.isCurrent()).toBe(false);
     expect(registry.getInputRoots().has(previous)).toBe(true);

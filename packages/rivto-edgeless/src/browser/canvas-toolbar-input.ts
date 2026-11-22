@@ -1,3 +1,4 @@
+import { collectCleanupErrors } from "../utils/release-resources";
 import { BrowserInputRoot, getBrowserElementIdentity } from "@chulane/rivto-root/browser";
 import type { InputRegion, InputRoot } from "@chulane/rivto-root";
 import type { CanvasToolbarLayout } from "../types/toolbar";
@@ -122,15 +123,8 @@ function observeToolbarInput(
  * @throws AggregateError when one or more cleanup operations fail.
  */
 function releaseToolbarInput(releases: Array<() => void>, ownedRoot?: BrowserInputRoot): void {
-  const errors: unknown[] = [];
   const cleanup = [...releases.splice(0), ...(ownedRoot ? [() => ownedRoot.detach()] : [])];
-  for (const release of cleanup) {
-    try {
-      release();
-    } catch (error) {
-      errors.push(error);
-    }
-  }
+  const errors = collectCleanupErrors(cleanup);
   if (errors.length) {
     throw new AggregateError(errors, "Toolbar input cleanup failed");
   }

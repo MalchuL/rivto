@@ -1,4 +1,8 @@
-import type { BrowserInputMap, BrowserListenerGroup, InputRoot } from "../../events/types";
+import type {
+  BrowserInputMap,
+  BrowserListenerGroup,
+  BrowserListenerRoot,
+} from "../../events/types";
 
 /** One attached native listener and its group options. */
 export interface BrowserListenerConnection extends BrowserListenerGroup {
@@ -56,7 +60,7 @@ export interface NativeInputAttachment {
 /** One normalized listener attachment and its optional borrowed occurrence. */
 export interface BrowserInputAttachment {
   readonly element: HTMLElement;
-  readonly occurrence?: Pick<InputRoot, "isAttached">;
+  readonly occurrence?: BrowserListenerRoot;
 }
 
 /** Browser element-like target that supports ancestor matching. */

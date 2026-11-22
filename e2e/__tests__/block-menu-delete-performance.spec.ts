@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 for (const repeat of [0, 200]) {
@@ -39,33 +40,6 @@ for (const repeat of [0, 200]) {
  * @returns Synchronous click and two-frame durations in milliseconds.
  * @throws If browser input or timing observation fails.
  */
-async function measureClick(page: Page, action: Locator): Promise<unknown> {
-  await page.evaluate(() => {
-    const state = window as unknown as { menuDeleteTiming: unknown };
-    state.menuDeleteTiming = null;
-    window.addEventListener(
-      "click",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "click",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.menuDeleteTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await action.click();
-  await page.waitForFunction(
-    () => (window as unknown as { menuDeleteTiming: unknown }).menuDeleteTiming,
-  );
-  return page.evaluate(() => (window as unknown as { menuDeleteTiming: unknown }).menuDeleteTiming);
+async function measureClick(page: Page, action: Locator) {
+  return measureEventDelivery(page, "click", () => action.click());
 }

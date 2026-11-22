@@ -54,17 +54,11 @@ it("invalidates a replaced registration without letting its disposer release the
   try {
     const registrations: PanelInputRegistration[] = [];
     const register = () =>
-      registry.registerPanel(
-        mountedRoot,
-        core.getDocument(),
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        (registration) => {
+      registry.registerPanel(mountedRoot, {
+        receiveInput: (registration) => {
           registrations.push(registration);
         },
-      );
+      });
     const releaseFirst = register();
     const releaseSecond = register();
     const [first, second] = registrations;

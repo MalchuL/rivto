@@ -73,7 +73,7 @@ test("invalidates a failed staged registration and restores the earlier registra
   document.body.append(surface);
   const root = new BrowserInputRoot(surface);
   const registrations: PanelInputRegistration[] = [];
-  const release = registry.registerPanel(root, core.getDocument());
+  const release = registry.registerPanel(root);
   const listeners = new BrowserRoutedEvents(
     () => registry.getInputRoots(),
     (group, identity, capture, event, control) => {
@@ -99,7 +99,7 @@ test("invalidates a failed staged registration and restores the earlier registra
         throw failure;
       }
     });
-    expect(() => registry.registerPanel(root, core.getDocument())).toThrow(failure);
+    expect(() => registry.registerPanel(root)).toThrow(failure);
     expect(registrations).toHaveLength(2);
     expect(registrations[1]).not.toBe(original);
     expect(registrations[1]!.isCurrent()).toBe(false);

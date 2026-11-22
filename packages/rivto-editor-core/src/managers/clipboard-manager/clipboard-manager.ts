@@ -20,12 +20,27 @@ import {
   BlockPasteStrategy,
   PreserveNewlinesPasteStrategy,
   TextPasteStrategy,
+  type TextPasteEditor,
+  type BlockPasteEditor,
   type PasteContext,
   type PastePlacement,
 } from "./strategies";
 import { PasteStrategyRegistry } from "./strategies";
-import type { DocumentEditorOperations } from "../../editor/types";
-import type { ClipboardManagerApi } from "../types";
+import type { DocumentModel } from "@chulane/document-model";
+import type { ClipboardManagerApi, SelectionManagerApi, HistoryManagerApi } from "../types";
+
+/** Copy, cut and paste borrow document identity, selection, history and block operations. */
+interface ClipboardEditor {
+  /**
+   * Reads the identity of the document supplying copied blocks.
+   *
+   * @returns The document identity record supplying the ID written into a portable bundle.
+   */
+  getDocument(): Pick<DocumentModel, "id">;
+  readonly blocks: TextPasteEditor["blocks"] & BlockPasteEditor["blocks"];
+  readonly selection: Pick<SelectionManagerApi, "get" | "resolveBlockSelection" | "delete" | "set">;
+  readonly history: Pick<HistoryManagerApi, "batchUpdates">;
+}
 
 /** Framework-neutral clipboard operations over blocks with per-block offsets. */
 export class ClipboardManager implements ClipboardManagerApi {
@@ -34,9 +49,10 @@ export class ClipboardManager implements ClipboardManagerApi {
 
   /**
    * Creates the clipboard owner and registers core paste strategies.
-   * @param editor - Owning editor providing block and selection operations.
+   *
+   * @param editor - Borrowed document identity, block commands, selection and history batch.
    */
-  constructor(private readonly editor: DocumentEditorOperations) {
+  constructor(private readonly editor: ClipboardEditor) {
     this.pasteStrategies.register(
       PRESERVE_NEWLINES_PASTE_STRATEGY_ID,
       new PreserveNewlinesPasteStrategy(editor),

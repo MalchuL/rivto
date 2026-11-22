@@ -6,17 +6,18 @@ import type { BlockDestination } from "@chulane/document-model";
  * object. Each strategy decides whether it applies via {@link PasteStrategy.matches}
  * and owns insertion for that case. Ranges come from {@link PasteContext.selection}.
  */
-import type { DocumentEditorOperations } from "../../../editor/types";
 import {
   createCaretSelection,
   createStructuralSelection,
   isCaretSelection,
 } from "../../selection-manager";
-import type { EditorPosition } from "../../selection-manager";
 import type { EditorBlockInput, EditorBlockNode } from "../../../editor/model";
 
-import { cloneSelectedTopLevelSubtrees } from "../utils";
+import { resolveClipboardRoots } from "../utils";
 import type {
+  BlockPasteEditor,
+  PlainTextPasteEditor,
+  TextPasteEditor,
   PasteContext,
   PastePlacement,
   PasteResult,
@@ -36,9 +37,10 @@ import {
 export class TextPasteStrategy implements PasteStrategy {
   /**
    * Creates the text strategy.
-   * @param editor - Editor providing block and selection operations.
+   *
+   * @param editor - Borrowed block commands and live selection lookup for this strategy.
    */
-  constructor(private readonly editor: DocumentEditorOperations) {}
+  constructor(private readonly editor: TextPasteEditor) {}
 
   /**
    * Accepts split plain text or a mergeable partial bundle.
@@ -70,10 +72,7 @@ export class TextPasteStrategy implements PasteStrategy {
     ) {
       return this.pasteBundle(context, range);
     }
-    const caret = this.pastePlainText(context, placement, range);
-    return caret
-      ? { proposedSelection: createCaretSelection(caret.blockId, caret.offset) }
-      : undefined;
+    return pastePlainText(this.editor, context, placement, true, () => range);
   }
 
   /**
@@ -89,19 +88,19 @@ export class TextPasteStrategy implements PasteStrategy {
     const suffixBlock = target.blocks.at(-1)!;
     const prefix = destination.content.slice(0, target.startOffset);
     const suffix = suffixBlock.content.slice(target.endOffset);
-    const [first, ...rest] = bundle.blocks;
+    const rest = bundle.blocks.slice(1);
     const idMap = new Map<string, string>([[source.id, destination.id]]);
     let caret = { blockId: destination.id, offset: prefix.length + source.content.length };
     this.editor.blocks.updateBlock(destination.id, {
       content: prefix + source.content + (rest.length ? "" : suffix),
     });
     target.blocks.slice(1).forEach((block) => this.editor.blocks.removeBlock(block.id));
-    const children = importClipboardBlocks(this.editor, context, first?.children ?? [], {
+    const children = importClipboardBlocks(this.editor.blocks, context, source.children ?? [], {
       parentId: destination.id,
     });
     children.idMap.forEach((id, sourceId) => idMap.set(sourceId, id));
     const imported = importClipboardBlocks(
-      this.editor,
+      this.editor.blocks,
       context,
       rest.map((block, index) => ({
         ...block,
@@ -118,44 +117,16 @@ export class TextPasteStrategy implements PasteStrategy {
       blockIdMap: idMap,
     };
   }
-
-  /**
-   * Inserts plain text, splitting newlines into sibling blocks.
-   * @param context - Shared clipboard payload.
-   * @param placement - Sibling anchor without a text range.
-   * @param range - Replacement range derived from selection.
-   * @returns Resulting caret, or undefined for empty input.
-   */
-  private pastePlainText(
-    context: PasteContext,
-    placement: PastePlacement,
-    range: TextPasteTarget | undefined,
-  ): EditorPosition | undefined {
-    if (!context.text) {
-      return undefined;
-    }
-    if (!context.defaultBlockType) {
-      throw new Error("clipboard.paste requires defaultBlockType for plain-text paste");
-    }
-    return insertPlainText(
-      this.editor,
-      context.text,
-      context.defaultBlockType,
-      true,
-      range,
-      textAfterId(context, placement, range),
-      placement.parentId,
-    );
-  }
 }
 
 /** Inserts plain text as a single block, keeping newline characters. */
 export class PreserveNewlinesPasteStrategy implements PasteStrategy {
   /**
    * Creates the preserve-newlines text strategy.
-   * @param editor - Editor providing block and selection operations.
+   *
+   * @param editor - Borrowed block commands and live selection lookup for this strategy.
    */
-  constructor(private readonly editor: DocumentEditorOperations) {}
+  constructor(private readonly editor: PlainTextPasteEditor) {}
 
   /**
    * Accepts plain text when the host asked to keep newlines in one block.
@@ -174,25 +145,9 @@ export class PreserveNewlinesPasteStrategy implements PasteStrategy {
    * @returns Resulting caret, or undefined for empty input.
    */
   paste(context: PasteContext, placement: PastePlacement): PasteResult | undefined {
-    if (!context.text) {
-      return undefined;
-    }
-    if (!context.defaultBlockType) {
-      throw new Error("clipboard.paste requires defaultBlockType for plain-text paste");
-    }
-    const range = textRangeFromSelection(this.editor, context.selection);
-    const caret = insertPlainText(
-      this.editor,
-      context.text,
-      context.defaultBlockType,
-      false,
-      range,
-      textAfterId(context, placement, range),
-      placement.parentId,
+    return pastePlainText(this.editor, context, placement, false, () =>
+      textRangeFromSelection(this.editor, context.selection),
     );
-    return caret
-      ? { proposedSelection: createCaretSelection(caret.blockId, caret.offset) }
-      : undefined;
   }
 }
 
@@ -201,12 +156,12 @@ export class BlockPasteStrategy implements PasteStrategy {
   /**
    * Creates the block strategy.
    *
-   * @param editor - Editor providing block and selection operations.
+   * @param editor - Borrowed block commands and live selection lookup for this strategy.
    * @param isEmptyBlock - Host policy receiving a current flat block snapshot and returning
    * whether it is an empty writing block. Omission disables empty-block replacement.
    */
   constructor(
-    private readonly editor: DocumentEditorOperations,
+    private readonly editor: BlockPasteEditor,
     private readonly isEmptyBlock?: (block: EditorBlockNode) => boolean,
   ) {}
 
@@ -247,7 +202,7 @@ export class BlockPasteStrategy implements PasteStrategy {
       resolved.parentId !== undefined && !resolved.afterId
         ? { parentId: resolved.parentId, beforeId: resolved.beforeChildId }
         : this.editor.blocks.getInsertionDestinationAfter(resolved.afterId);
-    const imported = importClipboardBlocks(this.editor, context, bundle.blocks, destination);
+    const imported = importClipboardBlocks(this.editor.blocks, context, bundle.blocks, destination);
     const insertedIds = imported.roots.map(({ id }) => id);
     const active = context.selection;
     const target = resolved.afterId ? this.editor.blocks.getBlockNode(resolved.afterId) : undefined;
@@ -286,7 +241,7 @@ export class BlockPasteStrategy implements PasteStrategy {
     const range = this.editor.selection.resolveBlockSelection(context.selection);
     const multiAfterId =
       range && range.blocks.length > 1
-        ? cloneSelectedTopLevelSubtrees(this.editor.blocks.getBlocks(), range).at(-1)?.id
+        ? resolveClipboardRoots(this.editor.blocks.getBlocks(), range.blocks).roots.at(-1)?.id
         : undefined;
     const active = context.selection;
     const afterId =
@@ -305,17 +260,64 @@ export class BlockPasteStrategy implements PasteStrategy {
   }
 }
 
-/** Imports a clipboard subset using destination IDs already allocated for its references. */
+/**
+ * Inserts plain text into a replacement range or at the host's sibling anchor.
+ *
+ * Empty input leaves the document unchanged. The splitting strategy reuses the
+ * range it inspected for a structured merge. The preserve-newlines strategy
+ * resolves its range only after confirming that the clipboard has usable text.
+ *
+ * @param editor - Borrowed block commands that write the replacement and any new lines.
+ * @param context - Clipboard text, the block type for new lines, and paste-time selection.
+ * @param placement - Parent or sibling anchor used when there is no replacement range.
+ * @param splitNewlines - Whether to insert subsequent lines as sibling blocks.
+ * @param getRange - Supplies the replacement range after text and block type checks.
+ * @returns Proposed caret at the end of the inserted text, or undefined for empty input.
+ * @throws If text is present without a default block type, or range lookup or insertion fails.
+ */
+function pastePlainText(
+  editor: Pick<PlainTextPasteEditor, "blocks">,
+  context: PasteContext,
+  placement: PastePlacement,
+  splitNewlines: boolean,
+  getRange: () => TextPasteTarget | undefined,
+): PasteResult | undefined {
+  if (!context.text) {
+    return undefined;
+  }
+  if (!context.defaultBlockType) {
+    throw new Error("clipboard.paste requires defaultBlockType for plain-text paste");
+  }
+  const range = getRange();
+  const caret = insertPlainText(
+    editor,
+    context.text,
+    context.defaultBlockType,
+    splitNewlines,
+    range,
+    textAfterId(context, placement, range),
+    placement.parentId,
+  );
+  return caret
+    ? { proposedSelection: createCaretSelection(caret.blockId, caret.offset) }
+    : undefined;
+}
+
+/**
+ * Imports a clipboard subset using destination IDs already allocated for its references.
+ *
+ * @param blockManager - Provides the forest import command.
+ * @param context - Supplies the preparation-error policy and allocated identities.
+ * @param blocks - Source roots to import, including their descendants.
+ * @param destination - Parent and sibling anchor, using the importer default when omitted.
+ * @returns Imported roots and the source-to-destination identity map.
+ * @throws Propagates block preparation and insertion failures.
+ */
 function importClipboardBlocks(
-  editor: DocumentEditorOperations,
+  blockManager: Pick<BlockPasteEditor["blocks"], "importForest">,
   context: PasteContext,
   blocks: readonly EditorBlockInput[],
   destination?: BlockDestination,
 ) {
-  return editor.blocks.importForest(
-    blocks,
-    destination,
-    context.onPrepareError,
-    context.blockIdMap,
-  );
+  return blockManager.importForest(blocks, destination, context.onPrepareError, context.blockIdMap);
 }

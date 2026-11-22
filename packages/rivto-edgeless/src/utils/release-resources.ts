@@ -9,6 +9,22 @@
  * @throws The cleanup failure, or AggregateError when several cleanups fail.
  */
 export function releaseResources(releases: readonly (() => void)[]): void {
+  const errors = collectCleanupErrors(releases);
+  if (errors.length === 1) {
+    throw errors[0];
+  }
+  if (errors.length > 1) {
+    throw new AggregateError(errors, "Canvas resource cleanup failed");
+  }
+}
+
+/**
+ * Runs every supplied cleanup in order, including those following a failure.
+ *
+ * @param releases - Disposers supplied in their required release order.
+ * @returns Failures in cleanup order.
+ */
+export function collectCleanupErrors(releases: readonly (() => void)[]): unknown[] {
   const errors: unknown[] = [];
   for (const release of releases) {
     try {
@@ -17,10 +33,5 @@ export function releaseResources(releases: readonly (() => void)[]): void {
       errors.push(error);
     }
   }
-  if (errors.length === 1) {
-    throw errors[0];
-  }
-  if (errors.length > 1) {
-    throw new AggregateError(errors, "Canvas resource cleanup failed");
-  }
+  return errors;
 }

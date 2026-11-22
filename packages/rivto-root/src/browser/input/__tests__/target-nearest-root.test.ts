@@ -1,3 +1,4 @@
+import type { BrowserListenerRoot } from "../../../events/types";
 import { BrowserInputListeners } from "../browser-input-listeners";
 import { BrowserInputRoot } from "../browser-input-root";
 
@@ -9,12 +10,13 @@ it("compares the nearest marked ancestor with opaque occurrence roots", () => {
   const button = inner.querySelector("button")!;
   const outerRoot = new BrowserInputRoot(outer);
   const innerRoot = new BrowserInputRoot(inner);
+  const occurrence: BrowserListenerRoot = innerRoot;
   const seen: Array<[boolean | undefined, boolean | undefined]> = [];
   const listeners = new BrowserInputListeners();
   listeners.register({ type: "click", target: "root", capture: false }, (input) => {
     seen.push([
       input.target?.isNearestAncestorRoot?.("[data-panel]", outerRoot),
-      input.target?.isNearestAncestorRoot?.("[data-panel]", innerRoot),
+      input.target?.isNearestAncestorRoot?.("[data-panel]", occurrence),
     ]);
   });
   const detach = listeners.attach(outer);

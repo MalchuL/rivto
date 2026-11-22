@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useId,
   useLayoutEffect,
@@ -10,6 +11,7 @@ import {
 import { createPortal, flushSync } from "react-dom";
 import Moveable from "react-moveable";
 import { CanvasControlEvents } from "../../browser/canvas-control-events";
+import type { CanvasModifierObserver } from "../../browser/types";
 import type { RefObject, Dispatch, SetStateAction } from "react";
 import type { CanvasApi } from "../../core/canvas";
 import { CanvasControlGeometry } from "../../browser/canvas-control-geometry";
@@ -119,15 +121,7 @@ function useTransformControls({
     [canvas],
   );
   useControlTargets(canvas, plane, adapter, moveable, measurements, measurementIds, setTargets);
-  useControlHandle(
-    adapter,
-    root,
-    plane,
-    moveable,
-    setTargets,
-    modifiers.setAlt,
-    modifiers.setShift,
-  );
+  useControlHandle(adapter, root, plane, moveable, setTargets, modifiers.setModifiers);
   useControlAccessibility(moveable, targets, selectedId, capabilities, adapter);
   const snapping = useControlSnapping(canvas, adapter, plane, moveable, groupAngle, modifiers);
   const events = new CanvasControlEvents(canvas, adapter, targets, moveable, geometry, groupAngle);
@@ -213,12 +207,16 @@ function useControlSnapping(
  * The mounted viewport owns input delivery; this hook releases its observations
  * when the viewport changes or the controls unmount.
  *
- * @returns Current snapping modifiers and setters for admitted native gestures.
+ * @returns Current snapping modifiers and their shared update callback for admitted native gestures.
  * @throws Propagates observation setup and cleanup failures.
  */
 function useControlModifiers() {
   const [alt, setAlt] = useState(false);
   const [shift, setShift] = useState(false);
+  const setModifiers = useCallback<CanvasModifierObserver>((alt, shift) => {
+    setAlt(alt);
+    setShift(shift);
+  }, []);
   const viewport = useCanvasViewport();
   const observerId = useId();
   useEffect(() => {
@@ -228,14 +226,11 @@ function useControlModifiers() {
     return subscribeCanvasControlModifiers(
       viewport.events,
       `canvas.controls.${observerId}`,
-      (alt, shift) => {
-        setAlt(alt);
-        setShift(shift);
-      },
+      setModifiers,
     );
-  }, [viewport, observerId]);
+  }, [viewport, observerId, setModifiers]);
 
-  return { alt, shift, setAlt, setShift };
+  return { alt, shift, setModifiers };
 }
 
 /**
@@ -283,8 +278,7 @@ function useControlAccessibility(
  * @param plane - World layer containing mounted participant hosts.
  * @param moveable - Live library controller.
  * @param setTargets - Paints concrete targets before synchronous measurement.
- * @param setAlt - Updates snapping bypass for the admitted input sample.
- * @param setShift - Updates aspect and angle constraints for the admitted input sample.
+ * @param setModifiers - Updates snapping bypass, aspect and angle constraints together for the admitted input sample.
  * @returns The adapter retains the imperative handle until effect cleanup.
  */
 function useControlHandle(
@@ -293,15 +287,14 @@ function useControlHandle(
   plane: HTMLElement,
   moveable: RefObject<Moveable | null>,
   setTargets: Dispatch<SetStateAction<HTMLElement[]>>,
-  setAlt: Dispatch<SetStateAction<boolean>>,
-  setShift: Dispatch<SetStateAction<boolean>>,
+  setModifiers: CanvasModifierObserver,
 ) {
   useLayoutEffect(() => {
     const input = new CanvasDragInput(root);
     let release: () => void;
     try {
       release = adapter.registerControls(
-        createControlHandle(input, plane, moveable, setTargets, setAlt, setShift),
+        createControlHandle(input, plane, moveable, setTargets, setModifiers),
       );
     } catch (error) {
       try {
@@ -327,7 +320,7 @@ function useControlHandle(
         throw new AggregateError(errors, "Control cleanup failed");
       }
     };
-  }, [adapter, root, plane]);
+  }, [adapter, root, plane, moveable, setTargets, setModifiers]);
 }
 
 /**
@@ -337,8 +330,7 @@ function useControlHandle(
  * @param plane - World layer containing mounted participant hosts.
  * @param moveable - Live transform library controller.
  * @param setTargets - Paints participants before measurement.
- * @param setAlt - Updates snapping bypass for the current input.
- * @param setShift - Updates aspect and angle constraints for the current input.
+ * @param setModifiers - Updates snapping bypass, aspect and angle constraints together for the current input.
  * @returns Control operations borrowing the input and controller for this attachment.
  */
 function createControlHandle(
@@ -346,8 +338,7 @@ function createControlHandle(
   plane: HTMLElement,
   moveable: RefObject<Moveable | null>,
   setTargets: Dispatch<SetStateAction<HTMLElement[]>>,
-  setAlt: Dispatch<SetStateAction<boolean>>,
-  setShift: Dispatch<SetStateAction<boolean>>,
+  setModifiers: CanvasModifierObserver,
 ): CanvasControlHandle {
   return {
     /**
@@ -368,10 +359,7 @@ function createControlHandle(
      */
     dragStart() {
       input.start(moveable, (alt, shift) => {
-        flushSync(() => {
-          setAlt(alt);
-          setShift(shift);
-        });
+        flushSync(() => setModifiers(alt, shift));
       });
     },
     /**

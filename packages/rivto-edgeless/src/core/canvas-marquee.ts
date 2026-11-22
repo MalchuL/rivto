@@ -1,3 +1,4 @@
+import { collectCleanupErrors } from "../utils/release-resources";
 import type { CanvasApi } from "./canvas";
 import type {
   CanvasMarqueeHit,
@@ -148,14 +149,7 @@ export class CanvasMarquee {
    * @throws AggregateError if overlay hiding or removal fails.
    */
   destroy(): void {
-    const errors: unknown[] = [];
-    for (const cleanup of [this.stop, () => this.rectangle.remove()]) {
-      try {
-        cleanup();
-      } catch (error) {
-        errors.push(error);
-      }
-    }
+    const errors = collectCleanupErrors([this.stop, () => this.rectangle.remove()]);
     if (errors.length) {
       throw new AggregateError(errors, "Marquee cleanup failed");
     }

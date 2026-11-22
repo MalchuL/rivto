@@ -1,3 +1,4 @@
+import { collectCleanupErrors } from "../utils/release-resources";
 import { canvasViewportForElement } from "./canvas-viewport-attachment";
 import type { RefObject } from "react";
 import type Moveable from "react-moveable";
@@ -61,17 +62,10 @@ export class CanvasDragInput {
    * @throws AggregateError if native listener removal fails.
    */
   destroy(): void {
-    const errors: unknown[] = [];
-    for (const remove of [
+    const errors = collectCleanupErrors([
       () => this.document.removeEventListener("mousedown", this.captureMouse, true),
       () => this.document.removeEventListener("touchstart", this.captureTouch, true),
-    ]) {
-      try {
-        remove();
-      } catch (error) {
-        errors.push(error);
-      }
-    }
+    ]);
     this.events.length = 0;
     for (const timer of this.pendingReleases) {
       this.document.defaultView?.clearTimeout(timer);

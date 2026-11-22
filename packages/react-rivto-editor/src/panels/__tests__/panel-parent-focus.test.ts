@@ -20,8 +20,8 @@ it("restores focus through the mounted Root when a nested panel unregisters", as
   const parentRoot = new BrowserInputRoot(parent);
   const childRoot = new BrowserInputRoot(child);
   const findParent = jestApi.spyOn(childRoot, "getParentIdentity");
-  const releaseParent = registry.registerPanel(parentRoot, core.getDocument());
-  const releaseChild = registry.registerPanel(childRoot, core.getDocument());
+  const releaseParent = registry.registerPanel(parentRoot);
+  const releaseChild = registry.registerPanel(childRoot);
   const listeners = new BrowserRoutedEvents(
     () => registry.getInputRoots(),
     (group, root, capture, identity, control) => {

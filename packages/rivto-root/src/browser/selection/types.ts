@@ -1,3 +1,5 @@
+import type { TextNavigationMount, TextSelectionQuery } from "../../text/types";
+
 /**
  * One saved caret endpoint.
  *
@@ -68,4 +70,20 @@ export interface BrowserCaretCandidate {
   readonly left: number;
   /** Vertical viewport coordinate in CSS pixels. */
   readonly top: number;
+}
+
+/** Mounted occurrence and host operations borrowed for one synchronous caret movement. */
+export interface BrowserTextNavigation {
+  /** Mount whose live descendants supply the rendered owners. */
+  readonly root: HTMLElement;
+  /** Selectors identifying content, owners and nested occurrence boundaries. */
+  readonly query: TextSelectionQuery;
+  /** Requests mounting of the previous or next owner when reaching the occurrence edge. */
+  readonly mountAdjacent: TextNavigationMount;
+  /**
+   * Checks the originating occurrence and caller attachment after a host operation.
+   *
+   * @returns Whether the current movement may use the captured mount.
+   */
+  readonly isCurrent: () => boolean;
 }

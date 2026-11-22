@@ -1,3 +1,4 @@
+import type { RegionIdentity } from "../../../events/types";
 import { BrowserInputListeners } from "../browser-input-listeners";
 import { BrowserInputRoot } from "../browser-input-root";
 
@@ -8,7 +9,7 @@ it("shares opaque element identities across captures without reviving detached r
   const first = new BrowserInputRoot(root);
   const replacement = new BrowserInputRoot(root);
   const listeners = new BrowserInputListeners();
-  let targetIdentity: object | undefined;
+  let targetIdentity: RegionIdentity | undefined;
   listeners.register({ type: "click", target: "root", capture: false }, (input) => {
     targetIdentity = input.target?.getNearestAncestorIdentity?.("[data-panel]");
   });

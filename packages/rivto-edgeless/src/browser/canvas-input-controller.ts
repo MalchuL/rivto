@@ -1,7 +1,6 @@
 import type {
   FrameClock,
   InputEvent,
-  InputRoot,
   InputRegion,
   RectangleOverlay,
   KeyInput,
@@ -11,6 +10,7 @@ import type {
 } from "@chulane/rivto-root";
 import type { CanvasEvents } from "./canvas-events";
 import type {
+  CanvasControllerInputRoot,
   CanvasInputOptions,
   CanvasInputScene,
   CanvasMarqueeGesture,
@@ -54,16 +54,7 @@ export class CanvasInputController {
   constructor(
     private readonly canvas: CanvasInputScene,
     private readonly events: Pick<CanvasEvents, "register">,
-    private readonly inputRoot: Pick<
-      InputRoot,
-      | "captureFrameClock"
-      | "getElementIdentity"
-      | "isAttached"
-      | "captureFocusedRegion"
-      | "focus"
-      | "captureRegionByIdentity"
-      | "createRectangleOverlay"
-    >,
+    private readonly inputRoot: CanvasControllerInputRoot,
     private options: CanvasInputOptions = {},
   ) {}
 

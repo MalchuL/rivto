@@ -3,9 +3,41 @@
  * and live text targets.
  */
 import type { Block } from "@chulane/document-model";
+import type { BlockManagerApi, SelectionManagerApi } from "../../types";
 import type { Selection } from "../../selection-manager";
 import type { BlockPastePlacement, ClipboardBundle } from "../clipboard-data";
 import type { BlockPrepareErrorHandler } from "../../block-manager/types";
+
+/** Live selection lookup shared by the built-in paste strategies. */
+export interface PasteSelectionReader {
+  readonly selection: Pick<SelectionManagerApi, "resolveBlockSelection">;
+}
+
+/** Borrowed commands for replacing text and inserting its lines as blocks. */
+export interface PlainTextPasteEditor extends PasteSelectionReader {
+  readonly blocks: Pick<
+    BlockManagerApi,
+    "getInsertionDestinationAfter" | "insertBlock" | "removeBlock" | "updateBlock"
+  >;
+}
+
+/** Text replacement can also import structured clipboard children and sibling roots. */
+export interface TextPasteEditor extends PlainTextPasteEditor {
+  readonly blocks: PlainTextPasteEditor["blocks"] & Pick<BlockManagerApi, "importForest">;
+}
+
+/** Commands for placing a structured forest and replacing an empty leaf. */
+export interface BlockPasteEditor extends PasteSelectionReader {
+  readonly blocks: Pick<
+    BlockManagerApi,
+    | "getBlockNode"
+    | "getBlocks"
+    | "getInsertionDestinationAfter"
+    | "getParentId"
+    | "importForest"
+    | "removeBlock"
+  >;
+}
 
 /** Shared clipboard payload supplied to every strategy. */
 export interface PasteContext {

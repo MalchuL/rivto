@@ -191,6 +191,9 @@ importers:
       '@chulane/rivto-react':
         specifier: workspace:*
         version: link:../packages/react-rivto-editor
+      '@chulane/rivto-root':
+        specifier: workspace:*
+        version: link:../packages/rivto-root
       react:
         specifier: ^19.2.0
         version: 19.2.7

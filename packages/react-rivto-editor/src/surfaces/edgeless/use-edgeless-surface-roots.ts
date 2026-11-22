@@ -19,8 +19,8 @@ import type { EdgelessRootPanel, EdgelessSurfaceRootBindings } from "./types";
  */
 export function useEdgelessSurfaceRoots(
   panel: EdgelessRootPanel,
-  controller: EdgelessSurfaceController,
-  spotlight: EdgelessGridSpotlight,
+  controller: Pick<EdgelessSurfaceController, "attachPanRoot">,
+  spotlight: Pick<EdgelessGridSpotlight, "attach">,
 ): EdgelessSurfaceRootBindings {
   const inputRoot = useSyncExternalStore(
     panel.subscribeAvailability,
@@ -72,7 +72,7 @@ function usePanRoot(
   panel: EdgelessRootPanel,
   rootIdentity: object | undefined,
   inputRoot: PanelInputRoot | undefined,
-  controller: EdgelessSurfaceController,
+  controller: Pick<EdgelessSurfaceController, "attachPanRoot">,
 ): void {
   useLayoutEffect(() => {
     if (
@@ -103,7 +103,7 @@ function useSpotlightRoot(
   rootIdentity: object | undefined,
   inputRoot: PanelInputRoot | undefined,
   overlayIdentity: RegionIdentity | undefined,
-  spotlight: EdgelessGridSpotlight,
+  spotlight: Pick<EdgelessGridSpotlight, "attach">,
 ): void {
   useLayoutEffect(() => {
     const identity = inputRoot?.getElementIdentity?.();

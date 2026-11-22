@@ -1,8 +1,7 @@
 import type { RegistrationOwner } from "../managers/extensions/types";
-import type { DocumentModel } from "@chulane/document-model";
 import type { EditorMode, SelectionManagerApi } from "@chulane/rivto";
 import type {
-  PanelInputReceiver,
+  PanelRegistrationOptions,
   PanelInputRegistration,
   PanelEventRoute,
   PanelPointerOwnership,
@@ -192,12 +191,12 @@ export class PanelRegistry {
   /**
    * Registers one document occurrence and connects shared delegated listeners to its root.
    * @param root - Attached occurrence displaying the full document or source subtree.
-   * @param document - Source model used for commands within this region.
-   * @param rootBlockId - Displayed source root bounding selection and navigation.
-   * @param api - Panel-bound API supplied to handlers; omitted only for a region that must not dispatch editing handlers.
-   * @param cancelSelection - Cancels pending DOM selection work before removing the root.
-   * @param receiveInput - Receives the routing lifetime before listeners are notified. It becomes current when installed.
-   * @param deactivate - Closes this panel's transient UI when it loses focus or is removed.
+   * @param options - Optional subtree, handler API, and lifecycle callbacks captured for this occurrence.
+   * @param options.rootBlockId - Displayed source root bounding selection and navigation.
+   * @param options.api - Panel-bound API supplied to handlers; omitted only for a region that must not dispatch editing handlers.
+   * @param options.cancelSelection - Cancels pending DOM selection work before removing the root.
+   * @param options.receiveInput - Receives the routing lifetime before listeners are notified. It becomes current when installed.
+   * @param options.deactivate - Closes this panel's transient UI when it loses focus or is removed.
    * @returns Idempotent cleanup that clears selection when a focused subtree is removed
    * and returns keyboard focus to an enclosing mounted surface, retaining source undo.
    * Full-document surface changes preserve selection when switching presentation modes.
@@ -207,12 +206,7 @@ export class PanelRegistry {
    */
   registerPanel(
     root: PanelRoutingRoot,
-    document: DocumentModel,
-    rootBlockId?: string,
-    api?: ReactPanelApi,
-    deactivate?: () => void,
-    cancelSelection?: () => void,
-    receiveInput?: PanelInputReceiver,
+    { rootBlockId, api, deactivate, cancelSelection, receiveInput }: PanelRegistrationOptions = {},
   ): () => void {
     this.extensions.assertActive();
     if (!root.isAttached()) {
@@ -234,7 +228,6 @@ export class PanelRegistry {
         this.panels.get(identity) === entry,
     };
     const entry: RegisteredPanel = {
-      document,
       rootBlockId,
       api,
       deactivate,

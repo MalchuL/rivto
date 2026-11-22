@@ -1,3 +1,4 @@
+import { measureEventDelivery } from "./measure-event-delivery";
 import { expect, test, type Page } from "@playwright/test";
 
 for (const repeat of [0, 200]) {
@@ -29,33 +30,6 @@ for (const repeat of [0, 200]) {
  * @returns Synchronous key delivery and two-frame durations in milliseconds.
  * @throws If browser input or timing observation fails.
  */
-async function measureEscape(page: Page): Promise<unknown> {
-  await page.evaluate(() => {
-    const state = window as unknown as { toolEscapeTiming: unknown };
-    state.toolEscapeTiming = null;
-    window.addEventListener(
-      "keydown",
-      () => {
-        const start = performance.now();
-        window.addEventListener(
-          "keydown",
-          () => {
-            const sync = performance.now() - start;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                state.toolEscapeTiming = { sync, frames: performance.now() - start };
-              }),
-            );
-          },
-          { once: true },
-        );
-      },
-      { capture: true, once: true },
-    );
-  });
-  await page.keyboard.press("Escape");
-  await page.waitForFunction(
-    () => (window as unknown as { toolEscapeTiming: unknown }).toolEscapeTiming,
-  );
-  return page.evaluate(() => (window as unknown as { toolEscapeTiming: unknown }).toolEscapeTiming);
+async function measureEscape(page: Page) {
+  return measureEventDelivery(page, "keydown", () => page.keyboard.press("Escape"));
 }

@@ -8,18 +8,18 @@ import type {
   CustomEventDefinition,
   CustomEventRegistration,
   EventResult,
-  InputRoot,
+  BrowserListenerRoot,
 } from "../../events/types";
 import { BrowserInputListeners } from "../input/browser-input-listeners";
 import { getBrowserInputRootElement } from "../input/browser-input-root-elements";
 
 /** Owns typed browser and custom registrations separately from the mounted DOM lifetime. */
 export class BrowserEvents<CustomEvents extends object = object> {
-  private static readonly attachedRoots = new WeakMap<HTMLElement, Pick<InputRoot, "isAttached">>();
+  private static readonly attachedRoots = new WeakMap<HTMLElement, BrowserListenerRoot>();
   private readonly groups = new Map<string, BrowserEventGroup>();
   private readonly dispatcher = new EventDispatcher<BrowserEventPayloads>();
   private readonly listeners = new BrowserInputListeners({ trackDispatch: true });
-  private root?: Pick<InputRoot, "isAttached">;
+  private root?: BrowserListenerRoot;
 
   /**
    * Registers input before or after occurrence attachment without changing document state.
@@ -149,7 +149,7 @@ export class BrowserEvents<CustomEvents extends object = object> {
    * no window, or native setup fails.
    * A failure during setup rollback is retained alongside the setup error.
    */
-  attach(root: Pick<InputRoot, "isAttached">): () => void {
+  attach(root: BrowserListenerRoot): () => void {
     const element = getBrowserInputRootElement(root);
     if (
       this.root ||
