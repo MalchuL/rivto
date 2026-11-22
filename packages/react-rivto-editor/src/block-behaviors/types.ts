@@ -89,17 +89,6 @@ export interface BlockBehavior extends BlockStructuralBehavior {
    */
   onSplit?(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome;
   /**
-   * Outdents a nested block when Backspace is pressed at offset zero.
-   *
-   * @param context - Nested block that owns the caret.
-   * @param target - Collapsed caret at offset zero.
-   * @returns Whether the behavior handled, refused, or deferred the outdent.
-   */
-  onOutdentAtStart?(
-    context: BlockBehaviorContext,
-    target: KeyboardSelectionTarget,
-  ): BlockBehaviorOutcome;
-  /**
    * Merges a root block backward into the previous editable sibling.
    *
    * @param context - Root block that owns the caret.
@@ -135,5 +124,4 @@ export interface BlockBehavior extends BlockStructuralBehavior {
 }
 
 /** Behavior methods the page dispatchers may fall back through. */
-export type BlockBehaviorAction =
-  "onSplit" | "onOutdentAtStart" | "onMergeBackward" | "onMergeForward" | "onResetEmpty";
+export type BlockBehaviorAction = "onSplit" | "onMergeBackward" | "onMergeForward" | "onResetEmpty";

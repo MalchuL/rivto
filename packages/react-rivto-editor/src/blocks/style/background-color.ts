@@ -1,7 +1,6 @@
 import type { BlockProcessor } from "@chulane/rivto";
-import { isBlockStyle } from "./block-style";
-
 import { DEFAULT_CONTAINER_BACKGROUND } from "./background-color-constants";
+import { isBlockStyle } from "./block-style";
 
 /**
  * Creates a block-owned processor that fills a container's missing background.
@@ -10,9 +9,13 @@ import { DEFAULT_CONTAINER_BACKGROUND } from "./background-color-constants";
  * A non-object style is left untouched because it cannot be merged safely.
  *
  * @param type - Native container type receiving the default.
+ * @param defaultColor - Color stored when none is specified. Defaults to DEFAULT_CONTAINER_BACKGROUND.
  * @returns Processor for creation and type conversion.
  */
-export function createContainerBackgroundProcessor(type: string): BlockProcessor {
+export function createContainerBackgroundProcessor(
+  type: string,
+  defaultColor = DEFAULT_CONTAINER_BACKGROUND,
+): BlockProcessor {
   return {
     id: `${type}.background`,
     priority: 0,
@@ -48,7 +51,7 @@ export function createContainerBackgroundProcessor(type: string): BlockProcessor
               !Array.isArray(style.background)
                 ? style.background
                 : {}),
-              color: DEFAULT_CONTAINER_BACKGROUND,
+              color: defaultColor,
             },
           },
         },

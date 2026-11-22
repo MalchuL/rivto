@@ -121,6 +121,9 @@ export interface BlockStructuralBehavior {
   /**
    * Overrides outdent of a requested block group.
    *
+   * Runs after the parent defers onChildOutdent. Keyboard and programmatic
+   * outdents share this hook, including Backspace on a nested start caret.
+   *
    * @param context - Leading block and scoped operations.
    * @param ids - Complete requested group.
    * @returns Handled, rejected, or unhandled to continue the chain.
