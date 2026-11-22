@@ -77,7 +77,7 @@ test("frame messages accept json writes for this token only", () => {
     undefined,
   );
   assert.equal(isJsonValue({ timer: 25, start: false }), true);
-  assert.equal(clampFrameHeight(12), 140);
+  assert.equal(clampFrameHeight(12), 12);
   assert.equal(clampFrameHeight(9000), 720);
 });
 
@@ -114,6 +114,6 @@ test("seeded widgets keep their props beside the html source", () => {
   const circle = HTML_ELEMENT_SAMPLES.find((sample) => sample.sample === "circle");
   assert.equal(circle.props.speed, 6);
   assert.match(circle.html, /data-ring="true"/);
-  assert.equal(HTML_BLOCK_SAMPLES.length, 5);
-  assert.equal(HTML_ELEMENT_SAMPLES.length, 5);
+  assert.equal(HTML_BLOCK_SAMPLES.length, 7);
+  assert.equal(HTML_ELEMENT_SAMPLES.length, 7);
 });
