@@ -92,19 +92,32 @@ test("threads only the focused page ancestry and follows its controls", async ({
 
   const leaf = child.locator(".rivto-block:not(:has(> .rivto-block-children))").first();
   await leaf.locator(":scope > .rivto-block-row [data-block-content]").click();
-  const leafDragX = await leaf
+  const leafAnchor = await leaf
     .locator(":scope > .rivto-block-row .block-handle")
-    .evaluate((control) => {
+    .evaluate(async (control) => {
+      // Focus can resize the row. Let ResizeObserver and the overlay's next frame run
+      // before recording the document-relative endpoint for the scroll comparison.
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
       const rect = control.getBoundingClientRect();
       const overlay = document
         .querySelector("[data-bullet-threading] path:not([d=''])")!
         .closest("svg")!
         .getBoundingClientRect();
-      return rect.x + rect.width / 2 - overlay.x;
+      return { x: rect.x + rect.width / 2 - overlay.x, y: rect.y + rect.height / 2 - overlay.y };
     });
   await expect
-    .poll(async () => Number((await path.getAttribute("d"))?.split(" H ").at(-1)))
-    .toBeCloseTo(leafDragX, 1);
+    .poll(() =>
+      path.evaluate((element: SVGPathElement) => {
+        const { x, y } = element.getPointAtLength(element.getTotalLength());
+        return { x, y };
+      }),
+    )
+    .toMatchObject({
+      x: expect.closeTo(leafAnchor.x, 1),
+      y: expect.closeTo(leafAnchor.y, 1),
+    });
 
   const pathBeforeScroll = await path.getAttribute("d");
   await page.evaluate(async () => {

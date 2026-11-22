@@ -20,7 +20,10 @@ import {
   DEFAULT_BLOCK_BACKGROUND_COLORS,
   DEFAULT_BLOCK_PALETTE_COLORS,
 } from "../../../blocks/style/background-color-constants";
-import { formatBlockBackground, parseBlockBackground } from "../../../blocks/style/background-color";
+import {
+  formatBlockBackground,
+  parseBlockBackground,
+} from "../../../blocks/style/background-color";
 import { isBlockStyle } from "../../../blocks/style/block-style";
 
 /**

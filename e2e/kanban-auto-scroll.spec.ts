@@ -27,7 +27,7 @@ async function loadBoard(page: Page, repeat: number, mode: "block" | "edgeless")
           type: "kanban-column",
           content: `Lane ${index}`,
           children:
-            index === 0 ? [{ id: "scroll-card", type: "paragraph", content: "Moving card" }] : [],
+            index === 1 ? [{ id: "scroll-card", type: "paragraph", content: "Moving card" }] : [],
         })),
       },
       { parentId: null, beforeId: editor.blocks.getRootIds()[0] },
@@ -50,6 +50,10 @@ for (const repeat of [0, 200]) {
       await loadBoard(page, repeat, mode);
       const board = page.locator('[data-block-id="scroll-board"] > .rivto-kanban-columns');
       const row = page.locator('[data-block-id="scroll-card"] > .rivto-block-row');
+      // Start partway across the board so a single reversal exercises both scroll limits.
+      await board.evaluate((element) => {
+        element.scrollLeft = 150;
+      });
       await row.hover();
       const handle = row.locator(".block-handle");
       await handle.hover();
@@ -61,6 +65,9 @@ for (const repeat of [0, 200]) {
       await page.mouse.down();
       await page.mouse.move(source.x + source.width / 2 + 8, source.y + source.height / 2);
       await expect(page.locator(".rivto-block-drag-preview")).toBeVisible();
+      expect(await board.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+      await page.mouse.move(bounds.x + 6, y, { steps: 5 });
+      await expect.poll(() => board.evaluate((element) => element.scrollLeft)).toBe(0);
       await page.mouse.move(bounds.x + bounds.width - 6, y, { steps: 5 });
       await expect.poll(() => board.evaluate((element) => element.scrollLeft)).toBeGreaterThan(150);
       // The held cursor must keep scrolling without additional pointermove events.
@@ -68,9 +75,6 @@ for (const repeat of [0, 200]) {
       await expect
         .poll(() => board.evaluate((element) => element.scrollLeft))
         .toBeGreaterThan(advanced + 100);
-      await page.mouse.move(bounds.x + 6, y, { steps: 5 });
-      await expect.poll(() => board.evaluate((element) => element.scrollLeft)).toBe(0);
-      await page.mouse.move(bounds.x + bounds.width - 6, y, { steps: 5 });
       await expect
         .poll(
           () =>
@@ -113,7 +117,7 @@ for (const repeat of [0, 200]) {
             ).__rivtoDemo.editor.blocks.getParentId("scroll-card"),
           ),
         )
-        .toBe("scroll-lane-0");
+        .toBe("scroll-lane-1");
     });
   }
 }
