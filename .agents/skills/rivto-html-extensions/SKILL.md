@@ -57,9 +57,9 @@ Edgeless preview iframes borderless and square. A radius on the iframe clips
 authored corners even when the iframe has no border. Avoid decorative wrappers
 that combine rounded corners with `overflow: hidden` around the preview.
 
-In edit mode, a thin square border can mark the source panel and CodeMirror
-fields. Keep their corners aligned with the line-number gutter and leave
-overflow scrolling on CodeMirror's scroller so long lines remain reachable.
+In edit mode, use the theme radius on the source panel and a smaller radius on
+CodeMirror fields. Round the scroller inside the field border so the gutter
+follows its corners and long lines remain reachable by scrolling.
 
 Let a Page block's content determine its iframe height. An authored
 `html, body { height: 100%; }` makes the measured content depend on the iframe

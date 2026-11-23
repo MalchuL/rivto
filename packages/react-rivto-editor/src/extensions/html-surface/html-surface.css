@@ -127,6 +127,7 @@
   gap: 12px;
   padding: 12px;
   border: 1px solid var(--rivto-input);
+  border-radius: var(--rivto-radius);
   background: var(--rivto-background);
 }
 
@@ -217,6 +218,7 @@
 
 .html-code-field .cm-editor {
   width: 100%;
+  border-radius: var(--radius-md);
   border: 1px solid var(--rivto-input);
   background: var(--rivto-background);
   font-family:
@@ -233,6 +235,7 @@
 }
 
 .html-code-field .cm-scroller {
+  border-radius: calc(var(--radius-md) - 1px);
   max-height: 220px;
   overflow: auto;
 }

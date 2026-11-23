@@ -372,8 +372,8 @@ test("long unsafe HTML lines scroll inside the inline and fullscreen code fields
       "0px",
     );
     await expect(actions.getByRole("button", { name: "Done" })).toHaveText("Done");
-    await expect(pane.locator(".html-source-editor")).toHaveCSS("border-radius", "0px");
-    await expect(pane.locator(".cm-editor").first()).toHaveCSS("border-radius", "0px");
+    await expect(pane.locator(".html-source-editor")).toHaveCSS("border-radius", "12px");
+    await expect(pane.locator(".cm-editor").first()).toHaveCSS("border-radius", "10px");
     const scroller = pane.locator(".cm-scroller").first();
     await expect
       .poll(() =>
