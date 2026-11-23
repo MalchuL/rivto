@@ -1,6 +1,6 @@
 /** Interactive HTML samples shared by the demo's block and canvas fixtures. */
 
-/** A task list with native drag and drop, keyboard controls and editable input. */
+/** A task list with pointer-driven reordering, keyboard controls and editable input. */
 export const PRIORITY_BOARD_HTML = `<style>
   * { box-sizing: border-box; }
   body { margin: 0; font: 14px ui-sans-serif, system-ui, sans-serif; color: var(--rivto-foreground, #151522); }
@@ -8,8 +8,11 @@ export const PRIORITY_BOARD_HTML = `<style>
   .heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
   h2 { margin: 0; font-size: 16px; } p { color: var(--rivto-muted-foreground, #555569); margin: 6px 0 12px; }
   .list { display: grid; gap: 6px; }
-  .item { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 8px; border-radius: 8px; background: var(--rivto-muted, #e9ebf2); transition: background 160ms; }
-  .item[draggable=true] { cursor: grab; } .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .item { position: relative; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 8px; border-radius: 8px; background: var(--rivto-muted, #e9ebf2); transition: background 160ms; cursor: grab; touch-action: none; user-select: none; }
+  .item:active { cursor: grabbing; }
+  .item[data-drop-edge]::after { content: ""; position: absolute; inset-inline: 0; height: 2px; border-radius: 1px; background: var(--rivto-primary, #5038b3); pointer-events: none; }
+  .item[data-drop-edge=before]::after { top: -4px; } .item[data-drop-edge=after]::after { bottom: -4px; }
+  .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   button, input { font: inherit; } button { cursor: pointer; border: 1px solid var(--rivto-border, #c5c8d5); background: var(--rivto-background, #fff); border-radius: 6px; padding: 4px 8px; }
   form { display: flex; gap: 6px; margin-top: 12px; } input { min-width: 0; flex: 1; border: 1px solid var(--rivto-input, #aaafc1); border-radius: 6px; padding: 6px 8px; }
   @media (prefers-reduced-motion: reduce) { .item { transition: none; } }
@@ -28,6 +31,8 @@ export const PRIORITY_BOARD_HTML = `<style>
   });
   rivto.ready().then(function (node) {
     var items = [];
+    var drag = null;
+    var destination = null;
     var rendered = false;
     var list = document.getElementById("list");
     var input = document.getElementById("task");
@@ -69,11 +74,14 @@ export const PRIORITY_BOARD_HTML = `<style>
      */
     function render() {
       rendered = true;
+      if (drag) {
+        endDrag();
+      }
       list.replaceChildren();
       document.getElementById("total").textContent = items.length + " tasks";
       items.forEach(function (item, index) {
         var row = document.createElement("div");
-        row.className = "item"; row.draggable = true; row.dataset.index = String(index);
+        row.className = "item"; row.dataset.index = String(index);
         var label = document.createElement("span"); label.className = "name"; label.textContent = item;
         row.appendChild(label);
         [-1, 1].forEach(function (direction) {
@@ -100,16 +108,79 @@ export const PRIORITY_BOARD_HTML = `<style>
       items = updated;
       render();
     }
-    list.addEventListener("dragstart", function (event) {
+    /**
+     * Moves the insertion marker only when the pointer crosses into another row.
+     *
+     * @param row - Hovered task, or null to hide the marker.
+     * @returns The marker indicates where the dragged task would land.
+     */
+    function mark(row) {
+      if (row === destination) {
+        return;
+      }
+      if (destination) {
+        delete destination.dataset.dropEdge;
+      }
+      destination = row;
+      if (row) {
+        row.dataset.dropEdge = Number(row.dataset.index) < Number(drag.row.dataset.index) ? "before" : "after";
+      }
+    }
+    /**
+     * Finds the task beneath a captured pointer, excluding the original row.
+     *
+     * @param event - Pointer event in the widget viewport.
+     * @returns The destination row, or null outside the other tasks.
+     */
+    function targetRow(event) {
+      var row = document.elementFromPoint(event.clientX, event.clientY)?.closest(".item");
+      return row && row.parentElement === list && row !== drag.row ? row : null;
+    }
+    /**
+     * Clears the preview and releases the widget's captured pointer.
+     *
+     * @returns The gesture has ended without writing the task list.
+     */
+    function endDrag() {
+      mark(null);
+      if (drag.row.hasPointerCapture(drag.id)) {
+        drag.row.releasePointerCapture(drag.id);
+      }
+      drag = null;
+    }
+    list.addEventListener("pointerdown", function (event) {
       var row = event.target.closest(".item");
-      if (row) event.dataTransfer.setData("text/plain", row.dataset.index);
+      if (drag || !row || !event.isPrimary || event.button !== 0 || event.target.closest("button")) {
+        return;
+      }
+      drag = { row: row, id: event.pointerId };
+      row.setPointerCapture(event.pointerId);
     });
-    list.addEventListener("dragover", function (event) { event.preventDefault(); });
-    list.addEventListener("drop", function (event) {
-      event.preventDefault();
-      var row = event.target.closest(".item");
-      var source = event.dataTransfer.getData("text/plain");
-      if (row && source !== "") move(Number(source), Number(row.dataset.index));
+    list.addEventListener("pointermove", function (event) {
+      if (drag && drag.id === event.pointerId) {
+        mark(targetRow(event));
+      }
+    });
+    list.addEventListener("pointerup", function (event) {
+      if (!drag || drag.id !== event.pointerId) {
+        return;
+      }
+      var row = targetRow(event);
+      var from = Number(drag.row.dataset.index);
+      endDrag();
+      if (row) {
+        move(from, Number(row.dataset.index));
+      }
+    });
+    list.addEventListener("lostpointercapture", function (event) {
+      if (drag && drag.id === event.pointerId) {
+        endDrag();
+      }
+    });
+    document.addEventListener("keydown", function (event) {
+      if (drag && event.key === "Escape") {
+        endDrag();
+      }
     });
     /**
      * Appends the nonempty input value to the persisted task list.

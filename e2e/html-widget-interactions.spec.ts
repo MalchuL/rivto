@@ -541,6 +541,24 @@ test("copying an HTML block preserves its source and widget data", async ({ page
     ]);
 });
 
+test("priority board previews a drag and lets Escape cancel it", async ({ page }) => {
+  await page.goto("/");
+  const board = page.locator('iframe[name="Priority board"]');
+  await board.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  const rows = board.contentFrame().locator(".item");
+  await expect(rows).toHaveCount(3);
+  await rows.first().hover({ position: { x: 12, y: 12 } });
+  const to = (await rows.last().boundingBox())!;
+  await page.mouse.down();
+  await page.mouse.move(to.x + 12, to.y + 12, { steps: 12 });
+  await expect(rows.last()).toHaveAttribute("data-drop-edge", "after");
+  await expect(rows.locator(".name")).toHaveText(["Plan", "Build", "Review"]);
+  await page.keyboard.press("Escape");
+  await expect(board.contentFrame().locator("[data-drop-edge]")).toHaveCount(0);
+  await page.mouse.up();
+  await expect(rows.locator(".name")).toHaveText(["Plan", "Build", "Review"]);
+});
+
 test("priority board reorders tasks, pastes a task, and undoes changes", async ({ page }) => {
   await page.goto("/");
   const id = await page.evaluate(() => {

@@ -164,6 +164,35 @@ the editable surface so Page recognizes the whole control. Check inherited
 `user-select` styles, especially in a canvas visual host, and preserve the source
 editor's focus, native selection, clipboard and local history.
 
+## Reorder items inside an HTML widget
+
+For an in-widget reorder, follow the [Priority board](../../../demo/src/extensions/html-surface/interactive-samples.ts).
+Use native HTML drag-and-drop when the interaction needs browser data transfer.
+For local sorting, delegate pointer events to the list and capture the primary
+pointer on the pressed row. Leave nested buttons and inputs available to their
+own handlers. Scope `touch-action` to the drag surface so the rest of the widget
+can still scroll.
+
+During capture, `event.target` continues to identify the captured element. Find
+the hovered row with the iframe document's `elementFromPoint(clientX, clientY)`
+and `closest`. Accept another row in the same list. Mark its actual insertion
+edge with `data-drop-edge="before"` or `"after"`. Draw the line in the gap with
+an absolutely positioned, theme-colored pseudo-element and `pointer-events: none`
+so it preserves row geometry and hit testing. Update the marker only when its
+row or edge changes. Keep the list DOM and document order stable during movement.
+
+On release, hit-test once more and commit a valid move with one `rivto.setProp`
+call so one undo restores the order. Clear the marker and capture on completion,
+Escape, pointer cancellation, lost capture, or row replacement. Releasing outside
+the list or cancelling leaves the order intact.
+
+Use the [widget interaction tests](../../../e2e/html-widget-interactions.spec.ts)
+to check the highlight while the button is held, cancellation, and the committed
+order after release. For latency, drag in the production demo at normal size and
+with `?repeat=200`. Measure pointer-down to the first movement event separately
+from release to the rendered order. Event delivery and visible feedback are
+distinct observations.
+
 ## Verify behavior
 
 Use real browser input in Chromium and Firefox, with Page and Edgeless wherever
