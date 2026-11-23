@@ -23,6 +23,7 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "../../../components/ui/button";
+import { ButtonGroup } from "../../../components/ui/button-group";
 import { Textarea } from "../../../components/ui/textarea";
 import { BlockModalDialog } from "../../../blocks/block-modal/block-modal";
 import { Badge } from "../../../components/ui/badge";
@@ -435,39 +436,43 @@ function HtmlEditorPane({
           <CodeXmlIcon size={16} aria-hidden="true" />
           HTML source
         </span>
-        <Button
-          {...editorControlProps}
-          type="button"
-          variant="outline"
-          size="icon-sm"
-          aria-expanded={expanded}
-          aria-label={expanded ? "Collapse HTML editor" : "Expand HTML editor"}
-          onClick={expanded ? onCollapse : onExpand}
-        >
-          {expanded ? <Minimize2Icon aria-hidden="true" /> : <Maximize2Icon aria-hidden="true" />}
-        </Button>
-        <Button
-          {...editorControlProps}
-          type="button"
-          variant="outline"
-          size="icon-sm"
-          aria-label="Close"
-          title="Close"
-          onClick={onCancel}
-        >
-          <XIcon aria-hidden="true" />
-        </Button>
-        <Button
-          {...editorControlProps}
-          type="button"
-          variant="default"
-          size="icon-sm"
-          aria-label="Done"
-          title="Done"
-          onClick={onSave}
-        >
-          <CheckIcon aria-hidden="true" />
-        </Button>
+        <ButtonGroup aria-label="HTML editor actions">
+          <Button
+            {...editorControlProps}
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            title={expanded ? "Collapse HTML editor" : "Expand HTML editor"}
+            aria-expanded={expanded}
+            aria-label={expanded ? "Collapse HTML editor" : "Expand HTML editor"}
+            onClick={expanded ? onCollapse : onExpand}
+          >
+            {expanded ? <Minimize2Icon aria-hidden="true" /> : <Maximize2Icon aria-hidden="true" />}
+          </Button>
+          <Button
+            {...editorControlProps}
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label="Close"
+            title="Close"
+            onClick={onCancel}
+          >
+            <XIcon aria-hidden="true" />
+          </Button>
+          <Button
+            {...editorControlProps}
+            type="button"
+            variant="default"
+            size="sm"
+            aria-label="Done"
+            title="Done"
+            onClick={onSave}
+          >
+            <CheckIcon aria-hidden="true" />
+            Done
+          </Button>
+        </ButtonGroup>
       </div>
       <Separator />
       {children}

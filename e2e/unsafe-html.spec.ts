@@ -365,6 +365,13 @@ test("long unsafe HTML lines scroll inside the inline and fullscreen code fields
   await host.getByRole("button", { name: "Edit Unsafe HTML" }).click();
   await host.getByRole("textbox", { name: "HTML source" }).fill("x".repeat(3000));
   for (const pane of [host, page.getByRole("dialog")]) {
+    const actions = pane.getByRole("group", { name: "HTML editor actions" });
+    await expect(actions.getByRole("button")).toHaveCount(3);
+    await expect(actions.getByRole("button", { name: "Close", exact: true })).toHaveCSS(
+      "border-radius",
+      "0px",
+    );
+    await expect(actions.getByRole("button", { name: "Done" })).toHaveText("Done");
     await expect(pane.locator(".html-source-editor")).toHaveCSS("border-radius", "0px");
     await expect(pane.locator(".cm-editor").first()).toHaveCSS("border-radius", "0px");
     const scroller = pane.locator(".cm-scroller").first();
