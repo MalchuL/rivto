@@ -10,6 +10,21 @@ import { EditorView } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { useEffect, useRef } from "react";
 
+/** Shares Rivto's gutter palette and code typography across mounted source and JSON fields. */
+const htmlCodeTheme = EditorView.theme({
+  ".cm-scroller": { fontFamily: "inherit", lineHeight: "inherit" },
+  ".cm-activeLine": { backgroundColor: "transparent" },
+  ".cm-gutters": {
+    backgroundColor: "var(--rivto-muted)",
+    color: "var(--rivto-muted-foreground)",
+    borderColor: "var(--rivto-border)",
+  },
+  ".cm-activeLineGutter": {
+    backgroundColor: "var(--rivto-subtle)",
+    color: "var(--rivto-subtle-foreground)",
+  },
+});
+
 /** Language highlighted inside one widget editor. */
 export type HtmlCodeLanguage = "html" | "json";
 
@@ -134,6 +149,7 @@ function codeExtensions(options: CodeViewOptions) {
   const language = options.language === "html" ? html() : json();
   const extensions = [
     basicSetup,
+    htmlCodeTheme,
     language,
     EditorView.contentAttributes.of({ "aria-label": options.label }),
     EditorView.updateListener.of((update) => {

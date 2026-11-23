@@ -99,9 +99,9 @@ Its scripts run in the same separate-origin sandbox as ordinary HTML. The block'
 edit UI includes **Allow this HTML to read and modify editor blocks**, disabled by
 default. Saving with that option enabled grants access only to that mounted
 occurrence and source. Changing the source or unmounting the occurrence revokes
-it; the decision is not persisted or controlled by widget props. A warning above
-the block appears when access is requested while disabled and remains visible
-while it is enabled.
+it; the decision is not persisted or controlled by widget props. The yellow edit button at the widget’s upper right expands
+to show the access warning after a denied request. While access is enabled,
+the button shows a compact green code icon and announces the enabled state to assistive technology.
 
 `rivto.panel` and `rivto.reactEditor` return `null` when disabled. When enabled,
 they expose asynchronous `blocks` methods: `getRootIds()`, `getParentId(id)`,

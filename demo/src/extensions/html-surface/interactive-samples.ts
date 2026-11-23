@@ -129,7 +129,7 @@ export const PRIORITY_BOARD_HTML = `<style>
 /** A compact mixer with a quiet looping melody and live volume control. */
 export const MIXER_HTML = `<style>
   * { box-sizing: border-box; }
-  html, body { height: 100%; } body { margin: 0; font: 14px ui-sans-serif, system-ui, sans-serif; color: var(--rivto-foreground, #151522); }
+  body { margin: 0; font: 14px ui-sans-serif, system-ui, sans-serif; color: var(--rivto-foreground, #151522); }
   .mixer { height: 100%; display: grid; align-content: center; gap: 12px; padding: 18px; background: var(--rivto-background, #fff); border: 1px solid var(--rivto-border, #c5c8d5); border-radius: 16px; }
   .top, .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   h2 { margin: 0; font-size: 16px; } .meter { width: 12px; height: 12px; border-radius: 50%; background: #71717a; }

@@ -1,15 +1,16 @@
 /** HTML block with explicitly enabled, sandboxed editor operations. */
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { EditorBlockNode } from "@chulane/rivto";
 import { useBlockNode } from "../../../hooks/blocks/use-block";
 import { useBlockSelectionAnchor } from "../../../hooks/blocks/use-block-selection-anchor";
 import { useReactPanel } from "../../../hooks/editor/use-react-panel";
+import { Checkbox } from "../../../components/ui/checkbox";
+import { Label } from "../../../components/ui/label";
 import { editorControlProps } from "../../../constants";
-import { Button } from "../../../components/ui/button";
 import { formatWidgetProps, readLabel, type HtmlDraft } from "../protocol/protocol";
 import { commitBlockDraft, useHtmlBlockView, useHtmlBlockCommand } from "./html-block";
 import { HtmlFrame } from "./html-frame";
-import { HtmlPasteTarget, HtmlSourceEditor } from "./html-chrome";
+import { HtmlPasteTarget, HtmlSlotEditButton, HtmlSourceEditor } from "./html-chrome";
 
 /** Stable document type for the opt-in HTML block. */
 export const UNSAFE_HTML_BLOCK_TYPE = "unsafe-html";
@@ -43,30 +44,12 @@ export function UnsafeHtmlBlock({ blockId }: UnsafeHtmlBlockProps) {
       data-html-surface="unsafe-block"
       data-html-label={state.label}
     >
-      {(state.enabled || state.denied) && (
-        <p className="html-unsafe-warning" role="alert">
-          {state.enabled
-            ? "Editor access is enabled for this HTML."
-            : "This HTML requested editor access. Enable it in edit mode to allow it."}
-        </p>
-      )}
       <UnsafeHtmlBody state={state} />
-      {!state.editing && (
-        <Button
-          {...editorControlProps}
-          type="button"
-          size="sm"
-          variant="outline"
-          className="html-unsafe-edit"
-          onClick={(event) => {
-            if (!event.defaultPrevented) {
-              state.openEditor();
-            }
-          }}
-        >
-          Edit Unsafe HTML
-        </Button>
-      )}
+      <HtmlSlotEditButton
+        editing={state.editing}
+        access={state.access}
+        onToggle={state.openEditor}
+      />
     </div>
   );
 }
@@ -92,6 +75,12 @@ function useUnsafeHtmlBlock(blockId: string) {
       setGrant(null);
     }
   }, [block?.content, grant]);
+  let access: "disabled" | "enabled" | "denied" = "disabled";
+  if (enabled) {
+    access = "enabled";
+  } else if (denied) {
+    access = "denied";
+  }
   return {
     block,
     node,
@@ -100,7 +89,7 @@ function useUnsafeHtmlBlock(blockId: string) {
     blockId,
     editing,
     enabled,
-    denied,
+    access,
     draftAccess,
     setDraftAccess,
     onCommand,
@@ -220,23 +209,23 @@ interface UnsafeHtmlEditorProps {
  * @returns The permission toggle and shared source editor.
  */
 function UnsafeHtmlEditor({ block, access, onAccess, onCancel, onSave }: UnsafeHtmlEditorProps) {
+  const permissionId = useId();
   return (
-    <>
-      <label className="html-unsafe-permission" {...editorControlProps}>
-        <input
-          type="checkbox"
+    <HtmlSourceEditor
+      source={block.content}
+      propsText={formatWidgetProps(block.props, [])}
+      listPropsText={JSON.stringify(block.listProps, null, 2)}
+      onCancel={onCancel}
+      onSave={onSave}
+    >
+      <div className="html-unsafe-permission" {...editorControlProps}>
+        <Checkbox
+          id={permissionId}
           checked={access}
-          onChange={(event) => onAccess(event.currentTarget.checked)}
+          onCheckedChange={(checked) => onAccess(checked === true)}
         />
-        Allow this HTML to read and modify editor blocks
-      </label>
-      <HtmlSourceEditor
-        source={block.content}
-        propsText={formatWidgetProps(block.props, [])}
-        listPropsText={JSON.stringify(block.listProps, null, 2)}
-        onCancel={onCancel}
-        onSave={onSave}
-      />
-    </>
+        <Label htmlFor={permissionId}>Allow this HTML to read and modify editor blocks</Label>
+      </div>
+    </HtmlSourceEditor>
   );
 }

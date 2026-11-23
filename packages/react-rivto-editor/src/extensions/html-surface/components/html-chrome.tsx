@@ -7,8 +7,16 @@
  * @module
  */
 import { editorControlProps } from "../../../constants";
-import { CheckIcon, CodeXmlIcon, Maximize2Icon, Minimize2Icon, XIcon } from "lucide-react";
 import {
+  CheckIcon,
+  CodeXmlIcon,
+  Maximize2Icon,
+  Minimize2Icon,
+  TriangleAlertIcon,
+  XIcon,
+} from "lucide-react";
+import {
+  useRef,
   useState,
   type ClipboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -16,7 +24,9 @@ import {
 } from "react";
 import { Button } from "../../../components/ui/button";
 import { Textarea } from "../../../components/ui/textarea";
-import { Dialog, DialogContent, DialogTitle } from "../../../components/ui/dialog";
+import { BlockModalDialog } from "../../../blocks/block-modal/block-modal";
+import { Badge } from "../../../components/ui/badge";
+import { Separator } from "../../../components/ui/separator";
 import { HtmlCodeField } from "./html-code";
 import { parseWidgetProps, type HtmlDraft } from "../protocol/protocol";
 
@@ -27,6 +37,8 @@ const HTML_EDIT_HINT =
 export interface HtmlSlotEditButtonProps {
   /** True while this widget's source editor is open. */
   readonly editing: boolean;
+  /** Unsafe block access state. Denied access displays the warning. Enabled access uses a green edit icon. */
+  readonly access?: "disabled" | "denied" | "enabled";
   /**
    * Toggles the source editor.
    *
@@ -43,29 +55,46 @@ export interface HtmlSlotEditButtonProps {
 }
 
 /**
- * Shows the embedding-style edit control in the owner's right slot.
+ * Shows the edit control at the upper right of the block or canvas element.
  *
- * The button stays hidden until the owner is hovered or focused. Opening the
+ * Ordinary widgets reveal the button on hover or focus. Unsafe blocks keep
+ * the access indicator visible and display the current warning on it. Opening the
  * editor removes it; Close and Done live in the editor instead.
  *
  * @param props - Edit flag and toggle handler.
  * @param props.editing - Whether the source editor is open. The button is omitted then.
+ * @param props.access - Optional unsafe-block state for the warning icon and message.
  * @param props.onToggle - Opens the source editor.
  * @param props.onPointerDown - Optional pointer-down hook for selection.
- * @returns The icon button placed in the right slot, or nothing while editing.
+ * @returns The edit button with its optional warning, or nothing while editing.
  */
-export function HtmlSlotEditButton({ editing, onToggle, onPointerDown }: HtmlSlotEditButtonProps) {
+export function HtmlSlotEditButton({
+  editing,
+  access,
+  onToggle,
+  onPointerDown,
+}: HtmlSlotEditButtonProps) {
   if (editing) {
     return null;
   }
+  const label = access ? "Edit Unsafe HTML" : "Edit HTML";
+  const message =
+    access === "denied"
+      ? "This HTML requested editor access. Enable it in edit mode to allow it."
+      : "";
   return (
     <Button
       {...editorControlProps}
       type="button"
       variant="ghost"
-      size="icon-xs"
-      aria-label="Edit HTML"
-      title="Edit HTML"
+      size={message ? "sm" : "icon-xs"}
+      className={message ? "h-auto whitespace-normal" : undefined}
+      aria-label={label}
+      aria-description={
+        access === "enabled" ? "Editor access is enabled for this HTML." : undefined
+      }
+      title={label}
+      data-html-access={access}
       data-edgeless-ui="true"
       onPointerDown={onPointerDown}
       onClick={(event) => {
@@ -73,7 +102,8 @@ export function HtmlSlotEditButton({ editing, onToggle, onPointerDown }: HtmlSlo
         onToggle();
       }}
     >
-      <CodeXmlIcon aria-hidden="true" />
+      {message ? <TriangleAlertIcon aria-hidden="true" /> : <CodeXmlIcon aria-hidden="true" />}
+      {message && <span role="alert">{message}</span>}
     </Button>
   );
 }
@@ -146,6 +176,8 @@ export function HtmlPasteTarget({ onCommit }: HtmlPasteTargetProps) {
 
 /** Props for the source and props editor. */
 export interface HtmlSourceEditorProps {
+  /** Optional host controls shown in both inline and fullscreen edit mode. */
+  readonly children?: ReactNode;
   /** Current HTML source. */
   readonly source: string;
   /** Pretty JSON for the editable widget props. */
@@ -175,6 +207,7 @@ export interface HtmlSourceEditorProps {
  * button opens the same documents in the shared fullscreen dialog.
  *
  * @param props - Current source, prop text, and save or cancel callbacks.
+ * @param props.children - Optional controls for this edit session.
  * @param props.source - HTML loaded into the source editor.
  * @param props.propsText - JSON loaded into the props editor.
  * @param props.listPropsText - Read-only list props, when this node is a block.
@@ -183,12 +216,14 @@ export interface HtmlSourceEditorProps {
  * @returns The inline editor, or the same editor inside the fullscreen dialog.
  */
 export function HtmlSourceEditor({
+  children,
   source,
   propsText,
   listPropsText,
   onSave,
   onCancel,
 }: HtmlSourceEditorProps) {
+  const inline = useRef<HTMLDivElement>(null);
   const [html, setHtml] = useState(source);
   const [props, setProps] = useState(propsText);
   const [error, setError] = useState("");
@@ -202,6 +237,7 @@ export function HtmlSourceEditor({
       onSave={save}
       onCancel={onCancel}
     >
+      {children}
       <HtmlEditorFields
         html={html}
         propsText={props}
@@ -216,17 +252,24 @@ export function HtmlSourceEditor({
   return (
     <div
       {...editorControlProps}
+      ref={inline}
       className="html-source-editor"
       data-edgeless-ui="true"
       onPointerDown={(event) => event.stopPropagation()}
     >
-      {expanded ? (
-        <HtmlEditorDialog expanded={expanded} onExpanded={setExpanded}>
+      {!expanded && pane(false)}
+      <BlockModalDialog
+        expanded={expanded}
+        title="HTML source"
+        onExpanded={setExpanded}
+        restoreFocus={() =>
+          inline.current?.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.focus()
+        }
+      >
+        <div className="html-source-editor html-source-editor-fullscreen" {...editorControlProps}>
           {pane(true)}
-        </HtmlEditorDialog>
-      ) : (
-        pane(false)
-      )}
+        </div>
+      </BlockModalDialog>
     </div>
   );
 }
@@ -298,7 +341,7 @@ function HtmlEditorFields({
   return (
     <div className="html-code-fields">
       <label className="html-code-label">
-        HTML
+        <span>HTML</span>
         <HtmlCodeField
           value={html}
           label="HTML source"
@@ -308,7 +351,7 @@ function HtmlEditorFields({
         />
       </label>
       <label className="html-code-label">
-        Props
+        <span>Props</span>
         <HtmlCodeField
           value={propsText}
           label="Widget props"
@@ -319,7 +362,9 @@ function HtmlEditorFields({
       </label>
       {listPropsText === undefined ? null : (
         <label className="html-code-label">
-          List props
+          <span>
+            List Props <Badge variant="outline">Read only</Badge>
+          </span>
           <HtmlCodeField
             value={listPropsText}
             label="List props"
@@ -386,11 +431,16 @@ function HtmlEditorPane({
   return (
     <>
       <div className="html-source-actions">
+        <span className="html-source-title">
+          <CodeXmlIcon size={16} aria-hidden="true" />
+          HTML source
+        </span>
         <Button
           {...editorControlProps}
           type="button"
           variant="outline"
           size="icon-sm"
+          aria-expanded={expanded}
           aria-label={expanded ? "Collapse HTML editor" : "Expand HTML editor"}
           onClick={expanded ? onCollapse : onExpand}
         >
@@ -410,7 +460,7 @@ function HtmlEditorPane({
         <Button
           {...editorControlProps}
           type="button"
-          variant="outline"
+          variant="default"
           size="icon-sm"
           aria-label="Done"
           title="Done"
@@ -419,49 +469,8 @@ function HtmlEditorPane({
           <CheckIcon aria-hidden="true" />
         </Button>
       </div>
+      <Separator />
       {children}
     </>
-  );
-}
-
-/** Props for the fullscreen code dialog. */
-interface HtmlEditorDialogProps {
-  readonly expanded: boolean;
-  /**
-   * Updates whether the fullscreen dialog is open.
-   *
-   * @param expanded - True when the dialog should be open.
-   * @returns The caller has received the new visibility state.
-   */
-  readonly onExpanded: (expanded: boolean) => void;
-  readonly children: ReactNode;
-}
-
-/**
- * Opens the widget source in the shared fullscreen block dialog.
- *
- * Closing the dialog returns to the inline editor and keeps the unsaved documents.
- *
- * @param props - Dialog visibility and the editor pane.
- * @param props.expanded - Whether the dialog is open.
- * @param props.onExpanded - Updates that visibility. False returns to the inline editor.
- * @param props.children - Editor pane rendered inside the dialog.
- * @returns The dialog. It renders no inline content while closed.
- */
-function HtmlEditorDialog({ expanded, onExpanded, children }: HtmlEditorDialogProps) {
-  return (
-    <Dialog open={expanded} onOpenChange={onExpanded}>
-      {expanded ? (
-        <DialogContent
-          className="rivto-block-modal-content html-code-modal"
-          showCloseButton={false}
-          aria-describedby={undefined}
-          aria-modal="true"
-        >
-          <DialogTitle className="sr-only">HTML source</DialogTitle>
-          {children}
-        </DialogContent>
-      ) : null}
-    </Dialog>
   );
 }

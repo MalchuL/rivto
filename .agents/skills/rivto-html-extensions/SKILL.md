@@ -52,6 +52,21 @@ preview before the geometry is committed. Use package tokens and nearby UI
 primitives for extension chrome. Keep widget animations and subscriptions scoped
 to the mounted widget; replacing its source or unmounting must release them.
 
+Let a Page block's content determine its iframe height. An authored
+`html, body { height: 100%; }` makes the measured content depend on the iframe
+height that Page sets from that measurement. At fractional browser zoom this
+feedback can make the whole block alternate between heights on successive frames.
+For widgets shared with Edgeless, leave the document root and body at their
+default heights in the widget CSS. The bridge supplies full-height roots in
+Edgeless fill mode.
+
+To reproduce a reported jiggle, zoom the browser to 125% or 150% in Page mode
+and sample the iframe's bounding rectangle in the parent across animation frames.
+After layout settles, its height should stay stable. For a regression check,
+hold width and content fixed, change only the iframe viewport height, and assert
+that the widget's content height stays the same, as in the
+[Page mixer test](../../../e2e/html-widget-interactions.spec.ts).
+
 ## Bridge and capabilities
 
 The HTML iframe allows scripts and forms but withholds the parent's origin. Its document is
@@ -76,8 +91,8 @@ opt-in, disabled by default. `rivto.panel` and `rivto.reactEditor` are `null`
 when disabled; when enabled they expose bounded asynchronous operations, not live
 objects. Recheck the current grant and source on each request, keep panel-local
 and shared-editor scopes distinct, and show the existing warning when access is
-requested while disabled and while it is enabled. Never store permission in
-iframe-writable widget props. The sandbox does not block network requests or pin
+requested while disabled. Show enabled access with the compact green edit icon
+and its accessible description. Never store permission in iframe-writable widget props. The sandbox does not block network requests or pin
 external script contents; snapshot data can be sent to remote services. Forms can
 submit network requests and navigate their iframe; prevent the default `submit`
 action for in-place widget operations, while preserving button and Enter activation.

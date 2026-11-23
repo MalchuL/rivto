@@ -163,7 +163,9 @@ async function verifySourceRevocation(
   targetId: string,
 ): Promise<void> {
   await setAccess(host, true);
-  await expect(host.getByRole("alert")).toContainText("access is enabled");
+  await expect(host.getByRole("button", { name: "Edit Unsafe HTML" })).toHaveAccessibleDescription(
+    "Editor access is enabled for this HTML.",
+  );
   let frame = await unsafeFrame(page, label);
   await sendSourceChangeAndWrite(frame, targetId);
   await expect
@@ -201,15 +203,24 @@ for (const [label, target] of [
     if (!targetId) {
       throw new Error("Missing target block");
     }
+    const editIcon = host.getByRole("button", { name: "Edit Unsafe HTML" }).locator("svg");
+    await expect(editIcon).toHaveClass(/lucide-code-xml/);
     expect(await forgeDisabledRequest(frame, targetId)).toBe("Editor access is disabled");
     expect(await targetContent(page, target)).toBe(target);
     await frame.getByRole("button", { name: "Append Unsafe!!!" }).click();
+    await expect(editIcon).toHaveClass(/lucide-triangle-alert/);
     await expect(host.getByRole("alert")).toContainText("requested editor access");
     expect(
       await frame.evaluate(() => (window as unknown as { rivto: { panel: unknown } }).rivto.panel),
     ).toBeNull();
     await setAccess(host, true);
-    await expect(host.getByRole("alert")).toContainText("access is enabled");
+    await expect(
+      host.getByRole("button", { name: "Edit Unsafe HTML" }),
+    ).toHaveAccessibleDescription("Editor access is enabled for this HTML.");
+    const enabledButton = host.getByRole("button", { name: "Edit Unsafe HTML" });
+    await expect(enabledButton).toHaveText("");
+    await expect(enabledButton).toHaveCSS("width", "24px");
+    await expect(editIcon).toHaveClass(/lucide-code-xml/);
     frame = await unsafeFrame(page, label);
     await frame.getByRole("button", { name: "Append Unsafe!!!" }).click();
     await expect.poll(() => targetContent(page, target)).toBe(`${target} Unsafe!!!`);
@@ -333,9 +344,78 @@ test("an access attempt during initial script execution shows a warning", async 
   });
   const host = page.locator('[data-html-surface="unsafe-block"][data-html-label="Startup access"]');
   await host.scrollIntoViewIfNeeded();
-  await expect(host.getByRole("alert")).toContainText("requested editor access");
+  const edit = host.getByRole("button", { name: "Edit Unsafe HTML" });
+  await expect(edit.getByRole("alert")).toContainText("requested editor access");
+  await expect(edit).toHaveAttribute("data-html-access", "denied");
+  await expect.poll(() => edit.evaluate((el) => el.clientWidth)).toBeGreaterThan(100);
+  await expect
+    .poll(() => edit.evaluate((el) => el.scrollWidth - el.clientWidth))
+    .toBeLessThanOrEqual(1);
   const frame = await unsafeFrame(page, "Startup access");
   expect(
     await frame.evaluate(() => (window as unknown as { attempt: unknown }).attempt),
   ).toBeNull();
+});
+
+test("long unsafe HTML lines scroll inside the inline and fullscreen code fields", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const host = page.locator('[data-html-label="Unsafe panel example"]');
+  await host.getByRole("button", { name: "Edit Unsafe HTML" }).click();
+  await host.getByRole("textbox", { name: "HTML source" }).fill("x".repeat(3000));
+  for (const pane of [host, page.getByRole("dialog")]) {
+    const scroller = pane.locator(".cm-scroller").first();
+    await expect
+      .poll(() =>
+        scroller.evaluate((el) => {
+          el.scrollLeft = 400;
+          return el.scrollLeft;
+        }),
+      )
+      .toBeGreaterThan(0);
+    expect(await pane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+    if (pane === host) {
+      await host.getByRole("button", { name: "Expand HTML editor" }).click();
+    }
+  }
+  const dialog = page.getByRole("dialog", { name: "HTML source" });
+  await expect(dialog).toHaveClass(/rivto-block-modal-content/);
+  await dialog.getByRole("checkbox").check();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(host.getByRole("button", { name: "Expand HTML editor" })).toBeFocused();
+  await expect(host.getByRole("textbox", { name: "HTML source" })).toHaveText("x".repeat(3000));
+  await expect(host.getByRole("checkbox")).toBeChecked();
+  await host.getByRole("button", { name: "Close", exact: true }).click();
+  await host.getByRole("button", { name: "Edit Unsafe HTML" }).click();
+  await expect(host.getByRole("checkbox")).not.toBeChecked();
+});
+
+test("fullscreen JSON editors stay top-aligned when one document grows", async ({ page }) => {
+  await page.setViewportSize({ width: 720, height: 800 });
+  await page.goto("/");
+  const host = page.locator('[data-html-label="Unsafe panel example"]');
+  await host.getByRole("button", { name: "Edit Unsafe HTML" }).click();
+  await host.getByRole("button", { name: "Expand HTML editor" }).click();
+  const dialog = page.getByRole("dialog");
+  const props = dialog
+    .locator(".cm-editor")
+    .filter({ has: page.getByRole("textbox", { name: "Widget props" }) });
+  const listProps = dialog
+    .locator(".cm-editor")
+    .filter({ has: page.locator('[aria-label="List props"]') });
+  const before = await listProps.boundingBox();
+  expect(before).not.toBeNull();
+  await dialog
+    .getByRole("textbox", { name: "Widget props" })
+    .fill(Array(40).fill("1234").join("\n"));
+  await expect
+    .poll(async () => (await props.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(before!.height);
+  const taller = (await props.boundingBox())!;
+  const shorter = (await listProps.boundingBox())!;
+  expect(shorter.x).toBeGreaterThanOrEqual(taller.x + taller.width);
+  expect(shorter.y).toBeCloseTo(taller.y, 0);
+  expect(shorter.height).toBeCloseTo(before!.height, 2);
 });

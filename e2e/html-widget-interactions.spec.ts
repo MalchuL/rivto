@@ -649,6 +649,18 @@ test("canvas mixer responds to slider and playback without moving the element", 
   await expect(frame.getByRole("button", { name: "Play" })).toBeVisible();
 });
 
+test("Page mixer content height is independent of the iframe viewport", async ({ page }) => {
+  await page.goto("/");
+  const iframe = page.locator('iframe[name="Page mixer"]');
+  const mixer = iframe.contentFrame().locator(".mixer");
+  await expect(mixer.getByRole("button", { name: "Play" })).toBeVisible();
+  // Browser zoom resizes the iframe viewport before the host receives its next height report.
+  await iframe.evaluate((element) => element.style.setProperty("height", "400px", "important"));
+  const height = await mixer.evaluate((element) => element.getBoundingClientRect().height);
+  await iframe.evaluate((element) => element.style.setProperty("height", "500px", "important"));
+  expect(await mixer.evaluate((element) => element.getBoundingClientRect().height)).toBe(height);
+});
+
 test("the same mixer works as a Page block", async ({ page }) => {
   await page.goto("/");
   const id = await page.evaluate(() => {
