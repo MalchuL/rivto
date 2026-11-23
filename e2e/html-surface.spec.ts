@@ -8,6 +8,19 @@ interface DemoWindow extends Window {
   stopResizeObservation: () => void;
 }
 
+test("HTML previews leave the border radius to the widget", async ({ page }) => {
+  await page.goto("/");
+  for (const [frameName, selector] of [
+    ["Page mixer", ".mixer"],
+    ["Unsafe panel example", ".card"],
+  ]) {
+    const frame = page.locator(`iframe[name="${frameName}"]`);
+    const widget = frame.contentFrame().locator(selector);
+    await expect(frame).toHaveCSS("border-radius", "0px");
+    await expect(widget).toHaveCSS("border-radius", frameName === "Page mixer" ? "16px" : "12px");
+  }
+});
+
 test("HTML block height follows small and changing content", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {

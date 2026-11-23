@@ -3,6 +3,7 @@
  *
  * @module
  */
+import { CodeXmlIcon, TriangleAlertIcon } from "lucide-react";
 import type { BlockRendererProps } from "../../managers/blocks/renderer-types";
 import type { ElementRenderProps } from "../../managers/elements/types";
 import type { BlockSlotProps, ElementSlotProps } from "../../managers/surfaces/types";
@@ -69,6 +70,38 @@ export function htmlSurfaceExtension(): ReactEditorExtension {
       const removeBlock = registerHtmlBlock(editor, editingStore);
       const removeElement = registerHtmlElement(editor, editingStore);
       const removeUnsafeBlock = registerUnsafeHtmlBlock(editor);
+      for (const [from, to, title, icon] of [
+        [HTML_BLOCK_TYPE, UNSAFE_HTML_BLOCK_TYPE, "Convert to unsafe HTML", TriangleAlertIcon],
+        [UNSAFE_HTML_BLOCK_TYPE, HTML_BLOCK_TYPE, "Convert to safe HTML", CodeXmlIcon],
+      ] as const) {
+        editor.blockContextMenu.register({
+          id: `html-surface.convert-to-${to}`,
+          title,
+          icon,
+          order: 30,
+          /**
+           * Offers this direction only for a selection of matching HTML blocks.
+           *
+           * @param context - The invoking panel and its captured block IDs.
+           * @returns Whether every target currently has the source type.
+           */
+          isAvailable: ({ reactPanel, blockIds }) =>
+            blockIds.every((id) => reactPanel.blocks.getBlockNode(id)?.type === from),
+          /**
+           * Changes the selected blocks in place as one undoable edit.
+           *
+           * @param context - The invoking panel and the targets rechecked by the menu.
+           * @returns The blocks have the destination type. Access grants belong to the renderer.
+           * @throws If a panel block cannot be converted.
+           */
+          execute: ({ reactPanel, blockIds }) =>
+            reactPanel.batchUpdates(() => {
+              for (const id of blockIds) {
+                reactPanel.blocks.setBlockType(id, to);
+              }
+            }),
+        });
+      }
       return () => {
         removeUnsafeBlock();
         removeElement();

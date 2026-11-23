@@ -52,6 +52,15 @@ preview before the geometry is committed. Use package tokens and nearby UI
 primitives for extension chrome. Keep widget animations and subscriptions scoped
 to the mounted widget; replacing its source or unmounting must release them.
 
+Let each widget draw its own border and choose its corner radius. Keep Page and
+Edgeless preview iframes borderless and square. A radius on the iframe clips
+authored corners even when the iframe has no border. Avoid decorative wrappers
+that combine rounded corners with `overflow: hidden` around the preview.
+
+In edit mode, a thin square border can mark the source panel and CodeMirror
+fields. Keep their corners aligned with the line-number gutter and leave
+overflow scrolling on CodeMirror's scroller so long lines remain reachable.
+
 Let a Page block's content determine its iframe height. An authored
 `html, body { height: 100%; }` makes the measured content depend on the iframe
 height that Page sets from that measurement. At fractional browser zoom this
