@@ -1,4 +1,5 @@
 /** Shared source editing state for one installed HTML extension. */
+import { useReactPanel } from "../../../hooks/editor/use-react-panel";
 import { useCallback, useSyncExternalStore } from "react";
 
 /** State shared by the renderer and slot of an installed extension. */
@@ -102,7 +103,7 @@ export function useHtmlEditing(
   kind: "block" | "element",
   id: string,
 ): readonly [boolean, (next: boolean) => void] {
-  const key = `${kind}:${id}`;
+  const key = `${useReactPanel().id}:${kind}:${id}`;
   const subscribe = useCallback(
     (listener: () => void) => store.subscribe(key, listener),
     [store, key],

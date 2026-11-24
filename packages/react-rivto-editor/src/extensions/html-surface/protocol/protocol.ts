@@ -77,6 +77,8 @@ export type HtmlWidgetCommand = Exclude<
 
 /** Saved source and widget props from the edit form. */
 export interface HtmlDraft {
+  /** Opening HTML used to identify an intentional source edit. */
+  readonly openingSource: string;
   readonly source: string;
   readonly props: Record<string, unknown>;
 }
@@ -86,6 +88,8 @@ const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const BRIDGE_RUNTIME = `
 (function () {
   var token = __TOKEN__;
+  var connection = new MessageChannel();
+  var port = connection.port1;
   var autoHandles = true;
   var channel = ${JSON.stringify(HTML_CHANNEL)};
   var current = null;
@@ -93,7 +97,7 @@ const BRIDGE_RUNTIME = `
   var listeners = [];
   var contextListeners = [];
   function send(message) {
-    parent.postMessage(Object.assign({ channel: channel, token: token }, message), "*");
+    port.postMessage(Object.assign({ channel: channel, token: token }, message));
   }
   /**
    * Publishes document data and any accompanying presentation change.
@@ -131,7 +135,7 @@ const BRIDGE_RUNTIME = `
     current = Object.assign({}, current, { context: context });
     contextListeners.slice().forEach(function (listener) { listener(context); });
   }
-  window.addEventListener("message", function (event) {
+  port.addEventListener("message", function (event) {
     var data = event.data;
     if (!data || data.channel !== channel || data.token !== token) {
       return;
@@ -140,9 +144,6 @@ const BRIDGE_RUNTIME = `
       publish(data.node);
     } else if (data.kind === "context") {
       publishContext(data.context);
-    } else if (data.kind === "host-ready") {
-      lastHandles = "";
-      scheduleHandles();
     }
   });
   window.rivto = {
@@ -182,7 +183,14 @@ const BRIDGE_RUNTIME = `
     setListProps: function (listProps) { send({ kind: "set-list-props", listProps: listProps }); },
     setContent: function (content) { send({ kind: "set-content", content: content }); }
   };
-  send({ kind: "ready" });
+  port.start();
+  parent.postMessage({ channel: channel, token: token, kind: "ready" }, "*", [connection.port2]);
+  window.addEventListener("pagehide", function () {
+    send({ kind: "drag-handles", handles: [] });
+    // IMPORTANT: editor access belongs to this document. Close its port when leaving so the
+    // next page in this iframe cannot inherit the widget's connection.
+    port.close();
+  });
   window.addEventListener("pointerdown", function (event) {
     if (event.isTrusted && event.button === 0) {
       send({ kind: "pointerdown", primary: event.ctrlKey || event.metaKey });
@@ -190,7 +198,7 @@ const BRIDGE_RUNTIME = `
   }, true);
   var handleObserver = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleHandles) : null;
   var observedHandles = [];
-  var observedNodes = [];
+  var observedNodes = new Set();
   var interactiveNodes = new Set();
   var interactiveReferences = new WeakMap();
   var lastHandles = "";
@@ -265,7 +273,7 @@ const BRIDGE_RUNTIME = `
    */
   function automaticHandles(width, height) {
     var regions = [{ x: 0, y: 0, width: 1, height: 1 }];
-    var controls = document.querySelectorAll('button, a[href], input, textarea, select, [contenteditable], [tabindex], [role="button"], [draggable="true"], [onclick], [onmousedown], [onpointerdown], [ondragstart], [ondragenter], [ondragover], [ondrop], [data-rivto-interactive]');
+    var controls = document.querySelectorAll('summary, label, audio[controls], video[controls], button, a[href], input, textarea, select, [contenteditable], [tabindex], [role="button"], [draggable="true"], [onclick], [onmousedown], [onpointerdown], [ondragstart], [ondragenter], [ondragover], [ondrop], [data-rivto-interactive]');
     controls.forEach(function (node) { regions = excludeRectangle(regions, handleRectangle(node, width, height)); });
     document.body.querySelectorAll("*").forEach(function (node) {
       var style = getComputedStyle(node);
@@ -300,12 +308,16 @@ const BRIDGE_RUNTIME = `
     var handles = Array.from(document.querySelectorAll("[data-rivto-drag-handle]")).slice(0, 64);
     if (handleObserver) {
       var nextNodes = new Set();
+      if (!handles.length && document.body) {
+        nextNodes.add(document.body);
+        document.body.querySelectorAll("*").forEach(function (node) { nextNodes.add(node); });
+      }
       handles.forEach(function (node) {
         for (var currentNode = node; currentNode; currentNode = currentNode.parentElement) { nextNodes.add(currentNode); }
       });
-      observedNodes.filter(function (node) { return !nextNodes.has(node); }).forEach(function (node) { handleObserver.unobserve(node); });
-      nextNodes.forEach(function (node) { if (!observedNodes.includes(node)) { handleObserver.observe(node); } });
-      observedNodes = Array.from(nextNodes);
+      observedNodes.forEach(function (node) { if (!nextNodes.has(node)) { handleObserver.unobserve(node); } });
+      nextNodes.forEach(function (node) { if (!observedNodes.has(node)) { handleObserver.observe(node); } });
+      observedNodes = nextNodes;
     }
     observedHandles = handles;
     var width = window.innerWidth, height = window.innerHeight;
@@ -344,8 +356,11 @@ const BRIDGE_RUNTIME = `
   if (typeof MutationObserver === "function") {
     new MutationObserver(function (changes) {
       if (autoHandles || changes.some(affectsHandles)) { scheduleHandles(); }
-    }).observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["style", "class", "data-rivto-drag-handle", "data-rivto-interactive", "onclick", "onmousedown", "onpointerdown", "ondragstart", "ondragenter", "ondragover", "ondrop", "draggable", "tabindex", "contenteditable", "role", "href"] });
+    }).observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["open", "hidden", "controls", "style", "class", "data-rivto-drag-handle", "data-rivto-interactive", "onclick", "onmousedown", "onpointerdown", "ondragstart", "ondragenter", "ondragover", "ondrop", "draggable", "tabindex", "contenteditable", "role", "href"] });
   }
+  // Replaced content and fonts can move controls without an attribute mutation.
+  document.addEventListener("load", scheduleHandles, true);
+  if (document.fonts) { document.fonts.addEventListener("loadingdone", scheduleHandles); }
   window.addEventListener("resize", scheduleHandles);
   window.addEventListener("scroll", scheduleHandles, true);
   window.addEventListener("DOMContentLoaded", scheduleHandles);
@@ -366,18 +381,97 @@ const BRIDGE_RUNTIME = `
   window.addEventListener("load", report);
   if (autoHandles) {
     var addListener = EventTarget.prototype.addEventListener;
-    EventTarget.prototype.addEventListener = function (type, listener, options) {
-      if (listener && /^(click|dblclick|mousedown|pointerdown|touchstart|dragstart|dragenter|dragover|drop)$/.test(type)) {
-        if (this instanceof Element && !interactiveReferences.has(this)) {
-          var reference = new WeakRef(this);
-          interactiveReferences.set(this, reference);
-          interactiveNodes.add(reference);
-        }
-        scheduleHandles();
+    var removeListener = EventTarget.prototype.removeEventListener;
+    /**
+     * Finds the native listener identity used for duplicate adds and removals.
+     *
+     * @param node - Target receiving the listener operation.
+     * @param type - Native event type.
+     * @param listener - Original callback function or listener object.
+     * @param capture - Capture flag used by native listener matching.
+     * @returns The matching live registration, if one exists.
+     */
+    function findRegistration(node, type, listener, capture) {
+      var entry = interactiveReferences.get(node);
+      return entry && Array.from(entry.registrations).find(function (registration) {
+        return registration.type === type && registration.listener === listener && registration.capture === capture;
+      });
+    }
+    /**
+     * Releases one listener exclusion and schedules a geometry update.
+     *
+     * @param node - Live element owning the registration.
+     * @param registration - Listener removed explicitly, after dispatch, or by abort.
+     * @returns The element becomes draggable when its last exclusion is gone.
+     */
+    function forget(node, registration) {
+      var entry = interactiveReferences.get(node);
+      if (!entry) { return; }
+      entry.registrations.delete(registration);
+      if (registration.signal) { removeListener.call(registration.signal, "abort", registration.abort); }
+      if (!entry.registrations.size) {
+        interactiveNodes.delete(entry.reference);
+        interactiveReferences.delete(node);
       }
-      return addListener.call(this, type, listener, options);
+      scheduleHandles();
+    }
+    EventTarget.prototype.addEventListener = function (type, listener, options) {
+      if (!(this instanceof Element) || !listener || !/^(click|dblclick|mousedown|pointerdown|touchstart|dragstart|dragenter|dragover|drop)$/.test(type)) {
+        return addListener.call(this, type, listener, options);
+      }
+      var capture = typeof options === "boolean" ? options : Boolean(options && options.capture);
+      var signal = options && options.signal;
+      if (signal && signal.aborted) { return; }
+      var previous = findRegistration(this, type, listener, capture);
+      if (previous) { return; }
+      var registration = { type: type, listener: listener, capture: capture, signal: signal, callback: listener };
+      if (options && options.once) {
+        registration.callback = function (event) {
+          forget(this, registration);
+          if (typeof listener === "function") { listener.call(this, event); }
+          else { listener.handleEvent(event); }
+        };
+      }
+      addListener.call(this, type, registration.callback, options);
+      var entry = interactiveReferences.get(this);
+      if (!entry) {
+        entry = { reference: new WeakRef(this), registrations: new Set() };
+        interactiveReferences.set(this, entry);
+        interactiveNodes.add(entry.reference);
+      }
+      entry.registrations.add(registration);
+      if (signal) {
+        // A long-lived signal must not retain a detached element or its listener.
+        registration.abort = abortRegistration(entry.reference, new WeakRef(registration));
+        addListener.call(signal, "abort", registration.abort, { once: true });
+      }
+      scheduleHandles();
+    };
+    /**
+     * Builds an abort callback that borrows both records through weak references.
+     *
+     * @param nodeRef - Element that may be collected before the signal aborts.
+     * @param registrationRef - Listener record owned by the element.
+     * @returns A callback that removes the record when both objects remain live.
+     */
+    function abortRegistration(nodeRef, registrationRef) {
+      return function () {
+        var node = nodeRef.deref(), registration = registrationRef.deref();
+        if (node && registration) { forget(node, registration); }
+      };
+    }
+    EventTarget.prototype.removeEventListener = function (type, listener, options) {
+      var capture = typeof options === "boolean" ? options : Boolean(options && options.capture);
+      var registration = findRegistration(this, type, listener, capture);
+      if (registration) {
+        removeListener.call(this, type, registration.callback, capture);
+        forget(this, registration);
+      } else {
+        removeListener.call(this, type, listener, options);
+      }
     };
   }
+  /*__ADDITIONAL_SCRIPT__*/
 })();`;
 
 /**
@@ -444,7 +538,8 @@ export function isJsonRecord(value: unknown): value is Record<string, unknown> {
  * Builds the iframe document, injecting the node bridge without changing the markup.
  *
  * A full HTML document keeps its own structure and receives the bridge in `head`.
- * A fragment becomes the body of a small document, which is the AFFiNE embed shape.
+ * The browser supplies an implicit head and body for fragments and for documents
+ * that omit those optional tags. The authored markup keeps its original parsing order.
  * The sandbox token is bound into the bridge so another frame cannot answer for it.
  *
  * @param source - Authored HTML fragment or complete document.
@@ -463,14 +558,27 @@ export function composeSrcDoc(
     fit === "fill"
       ? "html,body{margin:0;height:100%;background:transparent}body{overflow:hidden}"
       : "html,body{margin:0;background:transparent}";
-  const runtime = BRIDGE_RUNTIME.replace("__TOKEN__", JSON.stringify(token));
-  const head = `<meta charset="utf-8"><style>${sizing}</style><script>${runtime}${additionalScript}</scr${"ipt>"}`;
-  const headOpen = /<head[^>]*>/i.exec(source);
-  if (headOpen && /<html[\s>]/i.test(source)) {
-    const index = headOpen.index + headOpen[0].length;
-    return `${source.slice(0, index)}${head}${source.slice(index)}`;
+  const runtime = BRIDGE_RUNTIME.replace("__TOKEN__", JSON.stringify(token)).replace(
+    "/*__ADDITIONAL_SCRIPT__*/",
+    () => additionalScript,
+  );
+  const head = `<meta charset="utf-8"><style>${sizing}</style><script>${runtime}</scr${"ipt>"}`;
+  // Stop at the first authored content. A head-like string inside a script, comment
+  // or attribute must never move the bootstrap past an authored script.
+  const prefix =
+    /\s+|<!--[\s\S]*?-->|<(!doctype|html|head)(?=[\s>])(?:[^>"']|"[^"]*"|'[^']*')*>/giy;
+  let index = 0;
+  let doctype = "<!DOCTYPE html>";
+  for (const match of source.matchAll(prefix)) {
+    index += match[0].length;
+    const tag = match[1]?.toLowerCase();
+    if (tag === "!doctype") {
+      doctype = "";
+    } else if (tag === "head") {
+      break;
+    }
   }
-  return `<!DOCTYPE html><html><head>${head}</head><body>${source}</body></html>`;
+  return `${doctype}${source.slice(0, index)}${head}${source.slice(index)}`;
 }
 
 /**
@@ -479,7 +587,7 @@ export function composeSrcDoc(
  * Messages for another token are ignored. Property writes that are not JSON, or
  * that use a prototype key, are ignored rather than applied.
  *
- * @param data - `MessageEvent.data` from the host window.
+ * @param data - Handshake from the iframe window or payload from its connected port.
  * @param token - Token of the iframe that is allowed to issue commands.
  * @returns The command, or undefined when the message is not for this frame.
  */
@@ -559,33 +667,61 @@ export function parseWidgetProps(text: string): Record<string, unknown> {
 }
 
 /**
- * Builds a property patch that replaces widget data and preserves named host keys.
+ * Compares the opening JSON with the saved JSON to find edited widget properties.
  *
- * Keys present on the current record but absent from the next object are set to
- * `undefined`, which removes them. Preserved keys stay when the editor omitted them.
+ * Each top-level property is one CRDT value. Omitting an opening key deletes it
+ * with an undefined patch value. Untouched keys stay under the document's ownership.
  *
- * @param current - Properties currently stored on the node.
- * @param next - Complete widget properties that should remain, plus any source key.
- * @param preserved - Host keys that stay when `next` does not mention them.
- * @returns A shallow patch for `updateBlock` or `updateElement`.
+ * @param opening - Detached properties displayed when the editor opened.
+ * @param next - Parsed properties submitted by the user.
+ * @returns Only the additions, replacements and deletions made in this session.
  */
-export function replacedPropPatch(
-  current: Record<string, unknown>,
+export function changedPropPatch(
+  opening: Record<string, unknown>,
   next: Record<string, unknown>,
-  preserved: readonly string[],
 ): Record<string, unknown> {
-  const patch: Record<string, unknown> = { ...next };
-  for (const key of preserved) {
-    if (Object.hasOwn(current, key) && !Object.hasOwn(patch, key)) {
-      patch[key] = current[key];
-    }
-  }
-  for (const key of Object.keys(current)) {
-    if (!Object.hasOwn(patch, key)) {
+  const patch: Record<string, unknown> = {};
+  for (const key of new Set([...Object.keys(opening), ...Object.keys(next)])) {
+    if (!Object.hasOwn(next, key)) {
       patch[key] = undefined;
+    } else if (!Object.hasOwn(opening, key) || !sameWidgetValue(opening[key], next[key])) {
+      patch[key] = next[key];
     }
   }
   return patch;
+}
+
+/**
+ * Compares two parsed widget values, preserving array order and ignoring object key order.
+ *
+ * Both inputs come from validated JSON, so all enumerable keys are own string keys
+ * and nested values are acyclic. Formatting and reordering properties in the draft
+ * must leave a collaborator's current value untouched.
+ *
+ * @param opening - Value displayed when editing began.
+ * @param next - Value in the submitted JSON.
+ * @returns Whether both represent the same JSON value.
+ */
+function sameWidgetValue(opening: unknown, next: unknown): boolean {
+  if (opening === next) {
+    return true;
+  }
+  if (
+    !opening ||
+    !next ||
+    typeof opening !== "object" ||
+    typeof next !== "object" ||
+    Array.isArray(opening) !== Array.isArray(next)
+  ) {
+    return false;
+  }
+  const entries = Object.entries(opening);
+  return (
+    entries.length === Object.keys(next).length &&
+    entries.every(
+      ([key, value]) => Object.hasOwn(next, key) && sameWidgetValue(value, Reflect.get(next, key)),
+    )
+  );
 }
 
 /**

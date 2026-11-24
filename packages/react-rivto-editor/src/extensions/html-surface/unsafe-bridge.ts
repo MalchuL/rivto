@@ -89,7 +89,7 @@ export function executeUnsafeHtmlRequest(
 /**
  * Builds the iframe-side asynchronous proxies without exposing host objects.
  *
- * Messages wait for the host listener so requests made during initial script
+ * The message port queues requests for the host so calls made during initial script
  * execution are delivered after the iframe and its parent are ready.
  *
  * @param token - Channel token for this frame.
@@ -102,10 +102,7 @@ export function unsafeHtmlRuntime(token: string, enabled: boolean): string {
   var enabled = ${JSON.stringify(enabled)};
   var nextId = 0;
   var pending = new Map();
-  var hostReady = false;
-  var queued = [];
-  function post(message) { parent.postMessage(Object.assign({channel: ${JSON.stringify(HTML_CHANNEL)}, token: token}, message), '*'); }
-  function send(message) { if (hostReady) post(message); else queued.push(message); }
+  function send(message) { port.postMessage(Object.assign({channel: ${JSON.stringify(HTML_CHANNEL)}, token: token}, message)); }
   function request(target, method, args) {
     return new Promise(function (resolve, reject) {
       var id = ++nextId;
@@ -113,14 +110,9 @@ export function unsafeHtmlRuntime(token: string, enabled: boolean): string {
       send({kind: 'unsafe-request', id: id, target: target, method: method, args: args});
     });
   }
-  window.addEventListener('message', function (event) {
+  port.addEventListener('message', function (event) {
     var data = event.data;
-    if (event.source !== parent || !data || data.channel !== ${JSON.stringify(HTML_CHANNEL)} || data.token !== token) return;
-    if (data.kind === 'unsafe-host-ready') {
-      hostReady = true;
-      queued.splice(0).forEach(post);
-      return;
-    }
+    if (!data || data.channel !== ${JSON.stringify(HTML_CHANNEL)} || data.token !== token) return;
     if (data.kind !== 'unsafe-result') return;
     var entry = pending.get(data.id);
     if (!entry) return;
@@ -134,7 +126,6 @@ export function unsafeHtmlRuntime(token: string, enabled: boolean): string {
     });
     return Object.freeze({blocks: Object.freeze(blocks)});
   }
-  post({kind: 'unsafe-ready'});
   var panel = proxy('panel'); var editor = proxy('reactEditor');
   ['panel', 'reactEditor'].forEach(function (name) {
     Object.defineProperty(window.rivto, name, {get: function () {

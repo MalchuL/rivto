@@ -5,7 +5,7 @@
  */
 import { html } from "@codemirror/lang-html";
 import { json } from "@codemirror/lang-json";
-import { EditorState } from "@codemirror/state";
+import { EditorState, StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { useEffect, useRef } from "react";
@@ -28,8 +28,13 @@ const htmlCodeTheme = EditorView.theme({
 /** Language highlighted inside one widget editor. */
 export type HtmlCodeLanguage = "html" | "json";
 
+/** Fields borrow access to their saved state for the lifetime of one source-editing session. */
+export type HtmlCodeDocuments = Pick<Map<string, EditorState>, "get" | "set">;
+
 /** Props for one CodeMirror document. */
 export interface HtmlCodeFieldProps {
+  /** Session-owned states retained when a field moves between inline and modal layouts. */
+  readonly documents: HtmlCodeDocuments;
   /** Current document text. External changes replace the editor contents. */
   readonly value: string;
   /** Accessible name of the editor content. */
@@ -56,6 +61,7 @@ export interface HtmlCodeFieldProps {
  * did not come from the view itself replace the document without recreating it.
  *
  * @param props - Document text, language, and change callback.
+ * @param props.documents - Session-owned state by field label, including history and selection.
  * @param props.value - Text loaded into the document.
  * @param props.label - Accessible name announced for the editor.
  * @param props.language - `html` or `json` highlighting.
@@ -65,6 +71,7 @@ export interface HtmlCodeFieldProps {
  * @returns The host element that owns the CodeMirror view.
  */
 export function HtmlCodeField({
+  documents,
   value,
   label,
   language,
@@ -80,12 +87,13 @@ export function HtmlCodeField({
   valueRef.current = value;
   useEffect(() => {
     return mountCodeView(host.current, view, valueRef.current, {
+      documents,
       label,
       language,
       readOnly,
       onChange: (next) => onChangeRef.current?.(next),
     });
-  }, [label, language, readOnly]);
+  }, [documents, label, language, readOnly]);
   useEffect(() => {
     replaceCodeDocument(view.current, value);
   }, [value]);
@@ -95,6 +103,7 @@ export function HtmlCodeField({
 
 /** Options captured when a CodeMirror view is created. */
 interface CodeViewOptions {
+  readonly documents: HtmlCodeDocuments;
   readonly label: string;
   readonly language: HtmlCodeLanguage;
   readonly readOnly: boolean;
@@ -125,15 +134,16 @@ function mountCodeView(
   if (!parent) {
     return () => {};
   }
-  const created = new EditorView({
-    parent,
-    state: EditorState.create({
-      doc: initial,
-      extensions: codeExtensions(options),
-    }),
-  });
+  const saved = options.documents.get(options.label);
+  const extensions = codeExtensions(options);
+  // Replace the previous view's listener while preserving the history and selection fields.
+  const state = saved
+    ? saved.update({ effects: StateEffect.reconfigure.of(extensions) }).state
+    : EditorState.create({ doc: initial, extensions });
+  const created = new EditorView({ parent, state });
   view.current = created;
   return () => {
+    options.documents.set(options.label, created.state);
     created.destroy();
     view.current = null;
   };

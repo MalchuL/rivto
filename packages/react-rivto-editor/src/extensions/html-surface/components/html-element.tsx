@@ -19,7 +19,6 @@ import { HtmlFrame } from "./html-frame";
 import {
   formatWidgetProps,
   readLabel,
-  replacedPropPatch,
   type HtmlDraft,
   type HtmlElementView,
   type HtmlWidgetCommand,
@@ -279,9 +278,13 @@ function commitElementDraft(
   const data = { ...draft.props };
   delete data.html;
   delete data.rotation;
+  if (draft.source !== draft.openingSource) {
+    data.html = draft.source;
+  }
+  if (!Object.keys(data).length) {
+    return;
+  }
   panel.batchUpdates(() => {
-    panel.elements.updateElement(elementId, {
-      props: replacedPropPatch(current.props, { ...data, html: draft.source }, ["rotation"]),
-    });
+    panel.elements.updateElement(elementId, { props: data });
   });
 }

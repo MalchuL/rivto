@@ -3,7 +3,7 @@
  *
  * @module
  */
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { EmbeddedDragHandles } from "../../../components/embedded-drag-handles";
 import type {
   EmbeddedContentContext,
@@ -55,7 +55,7 @@ export interface HtmlFrameProps {
   readonly frameName: string;
   /** Authored HTML fragment or complete document. */
   readonly source: string;
-  /** Current node snapshot posted after the document loads and whenever it changes. */
+  /** Current node snapshot posted when the bridge connects and whenever the node changes. */
   readonly node: HtmlNodeData;
   /** Current surface and selection, synchronized separately from document data. */
   readonly context: EmbeddedContentContext;
@@ -163,206 +163,167 @@ function useHtmlFrame({
   onCommand,
   unsafeAccess,
 }: Omit<HtmlFrameProps, "frameName">) {
-  const token = useRef(crypto.randomUUID());
+  const enabled = unsafeAccess?.enabled;
+  const document = useMemo(() => {
+    const token = crypto.randomUUID();
+    const extra = enabled === undefined ? "" : unsafeHtmlRuntime(token, enabled);
+    return { token, srcDoc: composeSrcDoc(source, token, fit, extra) };
+  }, [source, fit, enabled]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const nodeRef = useRef(node);
-  const contextRef = useRef(context);
+  const port = useRef<MessagePort | null>(null);
   const [height, setHeight] = useState(180);
   const [dragHandles, setDragHandles] = useState<readonly EmbeddedDragHandleRegion[]>([]);
-  const unsafeRef = useRef(unsafeAccess);
-  unsafeRef.current = unsafeAccess;
-  const srcDoc = useMemo(
-    () =>
-      composeSrcDoc(
-        source,
-        token.current,
-        fit,
-        unsafeAccess ? unsafeHtmlRuntime(token.current, unsafeAccess.enabled) : "",
-      ),
-    [source, fit, Boolean(unsafeAccess), unsafeAccess?.enabled],
-  );
-  nodeRef.current = node;
-  contextRef.current = context;
-
-  useEffect(() => setDragHandles([]), [srcDoc]);
-
-  useHtmlNodeSync(iframeRef, nodeRef, contextRef, token, srcDoc, node);
-  useHtmlContextSync(iframeRef, token, srcDoc, context);
-
-  useHtmlMessages({
-    iframeRef,
-    token,
-    unsafeRef,
-    interactive,
-    fit,
-    onCommand,
-    setHeight,
-    setDragHandles,
+  const latest = useRef({ node, context, unsafeAccess, interactive, onCommand });
+  useLayoutEffect(() => {
+    latest.current = { node, context, unsafeAccess, interactive, onCommand };
   });
-
-  return { iframeRef, srcDoc, height, dragHandles };
+  useLayoutEffect(() => {
+    setDragHandles([]);
+    return connectHtmlDocument(iframeRef.current, document.token, port, latest, (data) => {
+      const command = parseFrameMessage(data, document.token);
+      if (!command || command.kind === "ready") {
+        return;
+      }
+      if (command.kind === "resize") {
+        applyResize(fit, command.height, setHeight);
+      } else if (command.kind === "drag-handles") {
+        if (latest.current.interactive) {
+          setDragHandles(command.handles);
+        }
+      } else if (latest.current.interactive) {
+        latest.current.onCommand(command);
+      }
+    });
+  }, [document, fit]);
+  useEffect(() => {
+    postHtmlNode(port.current, document.token, latest.current);
+  }, [node, document]);
+  useEffect(() => {
+    port.current?.postMessage({
+      channel: HTML_CHANNEL,
+      token: document.token,
+      kind: "context",
+      context,
+    });
+  }, [context, document]);
+  return { iframeRef, srcDoc: document.srcDoc, height, dragHandles };
 }
 
-/** Dependencies of the iframe message subscription. */
-interface HtmlMessageOptions {
-  /** Currently mounted frame. */
-  readonly iframeRef: RefObject<HTMLIFrameElement | null>;
-  /** Secret identifying this frame. */
-  readonly token: RefObject<string>;
-  /** Current permission and borrowed managers. */
-  readonly unsafeRef: RefObject<UnsafeHtmlFrameAccess | undefined>;
-  /** Whether writes are accepted for this occurrence. */
-  readonly interactive: boolean;
-  /** Frame sizing policy. */
-  readonly fit: HtmlFrameFit;
-  /**
-   * Applies a validated ordinary widget command.
-   *
-   * @param command - Command received from the frame.
-   * @returns The owner has processed the command.
-   */
-  readonly onCommand: (command: HtmlWidgetCommand) => void;
-  /**
-   * Updates the measured frame height.
-   *
-   * @param update - Computes a new height from the current height.
-   * @returns The height update has been scheduled.
-   */
-  readonly setHeight: (update: (current: number) => number) => void;
-  /**
-   * Replaces the validated regions exposed by this iframe.
-   *
-   * @param handles - Clipped iframe-relative drag regions.
-   * @returns The region update has been scheduled.
-   */
-  readonly setDragHandles: (handles: readonly EmbeddedDragHandleRegion[]) => void;
+/** Live render data and permission state borrowed by the document connection. */
+type HtmlConnectionState = Pick<
+  HtmlFrameProps,
+  "node" | "context" | "unsafeAccess" | "interactive"
+>;
+
+/**
+ * Sends the current node and presentation context to the authenticated document.
+ *
+ * The receiving port belongs to the script realm that announced readiness.
+ * Following a link within the iframe never transfers that endpoint to its destination.
+ *
+ * @param port - Connected endpoint, or null before the ready message.
+ * @param token - Secret generated for this source and permission state.
+ * @param state - Most recently committed node and presentation state.
+ * @returns The node snapshot has been posted when the endpoint exists.
+ */
+function postHtmlNode(
+  port: MessagePort | null,
+  token: string,
+  state: Pick<HtmlFrameProps, "node" | "context">,
+): void {
+  port?.postMessage({
+    channel: HTML_CHANNEL,
+    token,
+    kind: "node",
+    node: { ...state.node, context: state.context },
+  });
 }
 
 /**
- * Subscribes to the mounted frame's commands and removes the listener on cleanup.
+ * Accepts a port transferred by the authored document when its bridge starts.
  *
- * @param options - Frame references, permission, and command recipients.
- * @param options.iframeRef - Current frame receiving replies.
- * @param options.token - Secret shared with the current frame.
- * @param options.unsafeRef - Current host-controlled permission and managers.
- * @param options.interactive - Whether this occurrence can submit writes.
- * @param options.fit - Whether height reports affect the frame.
- * @param options.onCommand - Receives ordinary widget commands.
- * @param options.setHeight - Applies automatic height updates.
- * @param options.setDragHandles - Updates validated drag regions.
- * @returns The listener remains active until its dependencies change or it unmounts.
+ * Only the initial handshake uses the iframe window. Replies, snapshots and
+ * later commands use the port, which remains bound to the original document
+ * even if the iframe navigates before a reply is delivered.
+ *
+ * @param iframe - Mounted frame whose window may announce this document.
+ * @param token - Per-document secret embedded in the authored srcdoc.
+ * @param port - Endpoint owned by this connection and closed on teardown.
+ * @param latest - Live occurrence state used to authorize requests and initialize subscribers.
+ * @param onCommand - Routes ordinary messages through widget command validation.
+ * @returns Cleanup that releases the window listener and closes the endpoint.
  */
-function useHtmlMessages({
-  iframeRef,
-  token,
-  unsafeRef,
-  interactive,
-  fit,
-  onCommand,
-  setHeight,
-  setDragHandles,
-}: HtmlMessageOptions): void {
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) =>
-      applyHtmlMessage(event, {
-        iframeRef,
-        token,
-        unsafeRef,
-        interactive,
-        fit,
-        onCommand,
-        setHeight,
-        setDragHandles,
-      });
-    const iframe = iframeRef.current;
-    const announce = () => {
-      iframe?.contentWindow?.postMessage(
-        { channel: HTML_CHANNEL, token: token.current, kind: "host-ready" },
-        "*",
-      );
-      if (unsafeRef.current) {
-        iframe?.contentWindow?.postMessage(
-          { channel: HTML_CHANNEL, token: token.current, kind: "unsafe-host-ready" },
-          "*",
-        );
+function connectHtmlDocument(
+  iframe: HTMLIFrameElement | null,
+  token: string,
+  port: { current: MessagePort | null },
+  latest: RefObject<HtmlConnectionState>,
+  onCommand: (data: unknown) => void,
+): () => void {
+  const connect = (event: MessageEvent) => {
+    // IMPORTANT: contentWindow keeps the same identity when a link or form loads another page.
+    // Authenticate the ready message with the source token and send snapshots and replies only
+    // through its transferred port. A reply sent to contentWindow could reach the next page.
+    if (
+      event.source !== iframe?.contentWindow ||
+      parseFrameMessage(event.data, token)?.kind !== "ready"
+    ) {
+      return;
+    }
+    const endpoint = event.ports[0];
+    if (!endpoint) {
+      return;
+    }
+    // Reloading the authored srcdoc starts a new realm with its own port.
+    port.current?.close();
+    port.current = endpoint;
+    endpoint.onmessage = ({ data }) => {
+      if (port.current !== endpoint) {
+        return;
+      }
+      const { unsafeAccess, interactive } = latest.current;
+      if (!handleUnsafeMessage(data, endpoint, token, unsafeAccess, interactive)) {
+        onCommand(data);
       }
     };
-    window.addEventListener("message", onMessage);
-    iframe?.addEventListener("load", announce);
-    announce();
-    return () => {
-      window.removeEventListener("message", onMessage);
-      iframe?.removeEventListener("load", announce);
-    };
-  }, [fit, interactive, onCommand]);
+    postHtmlNode(endpoint, token, latest.current);
+  };
+  window.addEventListener("message", connect);
+  return () => {
+    window.removeEventListener("message", connect);
+    port.current?.close();
+    port.current = null;
+  };
 }
 
 /**
- * Applies one message from the mounted frame after validating its source and token.
+ * Responds to an unsafe request only from the connected document with current permission.
  *
- * @param event - Browser message received by the host.
- * @param options - Frame identity, permissions, and command recipients.
- * @returns The accepted message has been routed to its owner.
- */
-function applyHtmlMessage(event: MessageEvent, options: HtmlMessageOptions): void {
-  const { iframeRef, token, unsafeRef, interactive, fit, onCommand, setHeight, setDragHandles } =
-    options;
-  if (event.source !== iframeRef.current?.contentWindow) {
-    return;
-  }
-  if (
-    handleUnsafeMessage(event, iframeRef.current, token.current, unsafeRef.current, interactive)
-  ) {
-    return;
-  }
-  const command = parseFrameMessage(event.data, token.current);
-  if (!command || command.kind === "ready") {
-    return;
-  }
-  if (command.kind === "resize") {
-    applyResize(fit, command.height, setHeight);
-  } else if (command.kind === "drag-handles") {
-    if (interactive) {
-      setDragHandles(command.handles);
-    }
-  } else if (interactive) {
-    onCommand(command);
-  }
-}
-
-/**
- * Responds to an unsafe request only from the mounted frame with current permission.
- *
- * @param event - Browser message from the iframe.
- * @param iframe - Current frame, if mounted.
- * @param token - Secret identifying this frame.
+ * @param data - Message received on the authenticated port.
+ * @param port - Endpoint belonging to the document that requested access.
+ * @param token - Secret identifying this srcdoc and its grant.
  * @param access - Live host-controlled capabilities, if provided.
  * @param interactive - Whether this is an interactive document occurrence.
  * @returns True for unsafe messages, including rejected requests.
  */
 function handleUnsafeMessage(
-  event: MessageEvent,
-  iframe: HTMLIFrameElement | null,
+  data: unknown,
+  port: MessagePort,
   token: string,
   access: UnsafeHtmlFrameAccess | undefined,
   interactive: boolean,
 ): boolean {
-  const data = event.data;
   if (
     !access ||
     !data ||
     typeof data !== "object" ||
+    !("channel" in data) ||
     data.channel !== HTML_CHANNEL ||
-    data.token !== token
+    !("token" in data) ||
+    data.token !== token ||
+    !("kind" in data)
   ) {
     return false;
-  }
-  if (data.kind === "unsafe-ready") {
-    iframe?.contentWindow?.postMessage(
-      { channel: HTML_CHANNEL, token, kind: "unsafe-host-ready" },
-      "*",
-    );
-    return true;
   }
   if (data.kind === "unsafe-denied") {
     access.onDenied();
@@ -372,25 +333,27 @@ function handleUnsafeMessage(
     return false;
   }
   const request = parseUnsafeHtmlRequest(data);
-  if (!request || !iframe?.contentWindow) {
-    return true;
+  if (request) {
+    respondToUnsafeRequest(port, token, access, interactive, request);
   }
-  respondToUnsafeRequest(iframe, token, access, interactive, request);
   return true;
 }
 
 /**
- * Runs an authorized request and posts its result to the requesting frame.
+ * Runs an authorized request and posts its result to the requesting document.
  *
- * @param iframe - The mounted requesting frame.
- * @param token - Secret identifying this frame.
+ * Permission is checked again at execution time so a queued request cannot
+ * retain a grant after a source edit or a switch to a noninteractive preview.
+ *
+ * @param port - The requesting document's connected endpoint.
+ * @param token - Secret identifying this document.
  * @param access - Current permission and borrowed managers.
  * @param interactive - Whether this occurrence accepts writes.
  * @param request - Parsed request with untrusted arguments.
- * @returns A result or rejection has been posted to the frame.
+ * @returns A result or rejection has been posted to the original document.
  */
 function respondToUnsafeRequest(
-  iframe: HTMLIFrameElement,
+  port: MessagePort,
   token: string,
   access: UnsafeHtmlFrameAccess,
   interactive: boolean,
@@ -411,77 +374,14 @@ function respondToUnsafeRequest(
       error = caught instanceof Error ? caught.message : "Editor operation failed";
     }
   }
-  iframe.contentWindow?.postMessage(
-    { channel: HTML_CHANNEL, token, kind: "unsafe-result", id: request.id, value, error },
-    "*",
-  );
-}
-
-/**
- * Posts the latest snapshot after frame load and whenever the node changes.
- *
- * @param iframeRef - Mounted sandbox frame.
- * @param nodeRef - Ref containing its latest snapshot.
- * @param contextRef - Ref containing the latest presentation state.
- * @param token - Secret identifying messages for this frame.
- * @param srcDoc - Current frame document, used to resubscribe after replacement.
- * @param node - Current snapshot, which triggers a fresh post.
- * @returns Installs a listener that is removed when the frame or snapshot changes.
- */
-function useHtmlNodeSync(
-  iframeRef: RefObject<HTMLIFrameElement | null>,
-  nodeRef: RefObject<HtmlNodeData>,
-  contextRef: RefObject<EmbeddedContentContext>,
-  token: RefObject<string>,
-  srcDoc: string,
-  node: HtmlNodeData,
-): void {
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) {
-      return;
-    }
-    const post = () => {
-      iframe.contentWindow?.postMessage(
-        {
-          channel: HTML_CHANNEL,
-          token: token.current,
-          kind: "node",
-          node: { ...nodeRef.current, context: contextRef.current },
-        },
-        "*",
-      );
-    };
-    post();
-    iframe.addEventListener("load", post);
-    return () => iframe.removeEventListener("load", post);
-  }, [srcDoc, node, iframeRef, nodeRef, contextRef, token]);
-}
-
-/**
- * Sends presentation-only changes without notifying document-data subscribers.
- *
- * The node load message includes the latest context, so a context sent before
- * iframe startup can be safely ignored by the new document.
- *
- * @param iframeRef - Mounted sandbox frame.
- * @param token - Secret identifying messages for this frame.
- * @param srcDoc - Frame document identity, including replacements.
- * @param context - Current surface, whole-item selection, and preview state.
- * @returns An effect that posts the latest context to the current frame after commit.
- */
-function useHtmlContextSync(
-  iframeRef: RefObject<HTMLIFrameElement | null>,
-  token: RefObject<string>,
-  srcDoc: string,
-  context: EmbeddedContentContext,
-): void {
-  useEffect(() => {
-    iframeRef.current?.contentWindow?.postMessage(
-      { channel: HTML_CHANNEL, token: token.current, kind: "context", context },
-      "*",
-    );
-  }, [iframeRef, token, srcDoc, context]);
+  port.postMessage({
+    channel: HTML_CHANNEL,
+    token,
+    kind: "unsafe-result",
+    id: request.id,
+    value,
+    error,
+  });
 }
 
 /**

@@ -28,8 +28,9 @@ import { Textarea } from "../../../components/ui/textarea";
 import { BlockModalDialog } from "../../../blocks/block-modal/block-modal";
 import { Badge } from "../../../components/ui/badge";
 import { Separator } from "../../../components/ui/separator";
-import { HtmlCodeField } from "./html-code";
-import { parseWidgetProps, type HtmlDraft } from "../protocol/protocol";
+import type { EditorState } from "@codemirror/state";
+import { HtmlCodeField, type HtmlCodeDocuments } from "./html-code";
+import { changedPropPatch, parseWidgetProps, type HtmlDraft } from "../protocol/protocol";
 
 const HTML_EDIT_HINT =
   "Scripts call rivto.ready() for this node. Blocks expose props, listProps, content, pluginData, and childIds. Elements expose props, frame, zIndex, and childIds. rivto.setProp(key, value) writes one property.";
@@ -225,11 +226,13 @@ export function HtmlSourceEditor({
   onCancel,
 }: HtmlSourceEditorProps) {
   const inline = useRef<HTMLDivElement>(null);
+  const [documents] = useState(() => new Map<string, EditorState>());
+  const opening = useRef({ source, propsText });
   const [html, setHtml] = useState(source);
   const [props, setProps] = useState(propsText);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
-  const save = () => saveHtmlDraft(html, props, onSave, setError);
+  const save = () => saveHtmlDraft(opening.current, html, props, onSave, setError);
   const pane = (fullscreen: boolean) => (
     <HtmlEditorPane
       expanded={fullscreen}
@@ -240,6 +243,7 @@ export function HtmlSourceEditor({
     >
       {children}
       <HtmlEditorFields
+        documents={documents}
         html={html}
         propsText={props}
         listPropsText={listPropsText}
@@ -278,6 +282,7 @@ export function HtmlSourceEditor({
 /**
  * Parses widget properties before passing a draft to its owner.
  *
+ * @param opening - Source and serialized props shown at the start of editing.
  * @param html - Current HTML source.
  * @param props - JSON text from the properties editor.
  * @param onSave - Persists the parsed draft.
@@ -285,13 +290,18 @@ export function HtmlSourceEditor({
  * @returns The draft is saved or its error is displayed.
  */
 function saveHtmlDraft(
+  opening: { source: string; propsText: string },
   html: string,
   props: string,
   onSave: (draft: HtmlDraft) => void,
   setError: (message: string) => void,
 ): void {
   try {
-    onSave({ source: html, props: parseWidgetProps(props) });
+    onSave({
+      openingSource: opening.source,
+      source: html,
+      props: changedPropPatch(parseWidgetProps(opening.propsText), parseWidgetProps(props)),
+    });
   } catch (caught) {
     setError(caught instanceof Error ? caught.message : "Props must be a JSON object");
   }
@@ -299,6 +309,7 @@ function saveHtmlDraft(
 
 /** Props for the HTML, props, and optional list-props documents. */
 interface HtmlEditorFieldsProps {
+  readonly documents: HtmlCodeDocuments;
   readonly html: string;
   readonly propsText: string;
   readonly listPropsText?: string;
@@ -323,6 +334,7 @@ interface HtmlEditorFieldsProps {
  * Renders the CodeMirror documents for one edit session.
  *
  * @param props - Current texts and their writers.
+ * @param props.documents - States retained across inline and expanded layouts.
  * @param props.html - HTML document.
  * @param props.propsText - Editable props JSON.
  * @param props.listPropsText - Read-only list props, when this node is a block.
@@ -332,6 +344,7 @@ interface HtmlEditorFieldsProps {
  * @returns The labeled code editors.
  */
 function HtmlEditorFields({
+  documents,
   html,
   propsText,
   listPropsText,
@@ -344,6 +357,7 @@ function HtmlEditorFields({
       <label className="html-code-label">
         <span>HTML</span>
         <HtmlCodeField
+          documents={documents}
           value={html}
           label="HTML source"
           language="html"
@@ -354,6 +368,7 @@ function HtmlEditorFields({
       <label className="html-code-label">
         <span>Props</span>
         <HtmlCodeField
+          documents={documents}
           value={propsText}
           label="Widget props"
           language="json"
@@ -367,6 +382,7 @@ function HtmlEditorFields({
             List Props <Badge variant="outline">Read only</Badge>
           </span>
           <HtmlCodeField
+            documents={documents}
             value={listPropsText}
             label="List props"
             language="json"

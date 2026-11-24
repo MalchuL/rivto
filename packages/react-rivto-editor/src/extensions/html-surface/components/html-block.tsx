@@ -18,7 +18,6 @@ import { HtmlFrame } from "./html-frame";
 import {
   formatWidgetProps,
   readLabel,
-  replacedPropPatch,
   type HtmlBlockView,
   type HtmlDraft,
   type HtmlWidgetCommand,
@@ -278,7 +277,7 @@ export function applyBlockCommand(
 }
 
 /**
- * Saves the editor as one history entry: new HTML content and replaced props.
+ * Saves the editor as one history entry: locally changed HTML content and a patch of edited properties.
  *
  * @param panel - Panel that owns the block.
  * @param blockId - Stable id of the HTML block.
@@ -290,14 +289,14 @@ export function commitBlockDraft(
   blockId: string,
   draft: HtmlDraft,
 ): void {
-  const current = panel.blocks.getBlockNode(blockId);
-  if (!current) {
+  const sourceChanged = draft.source !== draft.openingSource;
+  if ((!sourceChanged && !Object.keys(draft.props).length) || !panel.blocks.getBlockNode(blockId)) {
     return;
   }
   panel.batchUpdates(() => {
     panel.blocks.updateBlock(blockId, {
-      content: draft.source,
-      props: replacedPropPatch(current.props, draft.props, []),
+      ...(sourceChanged ? { content: draft.source } : {}),
+      props: draft.props,
     });
   });
 }

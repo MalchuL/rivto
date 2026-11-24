@@ -66,6 +66,8 @@ export interface PanelPageApi {
  * this contract; components obtain it from useReactPanel rather than constructing it.
  */
 export interface ReactPanelApi extends PanelAPI, ReactEditorApi {
+  /** Stable identity of this mounted panel, including when multiple panels share an editor. */
+  readonly id: string;
   /** Occurrence-local Page placement without attachment or registration ownership. */
   readonly page: PanelPageApi;
   /**

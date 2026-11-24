@@ -8,7 +8,7 @@ types. Uninstalling the extension removes its registrations, not document data.
 
 A block stores its HTML in `content`; an element stores it in `props.html`.
 Each widget runs its markup in an iframe sandbox with `allow-scripts` and `allow-forms`, and no
-`allow-same-origin`. The parent posts a detached snapshot for that widget.
+`allow-same-origin`. The authored document opens a private message port. The parent sends the initial detached snapshot as soon as that port connects, including while images are still loading. Snapshots, commands and replies use that port for the lifetime of the document.
 A block snapshot contains `kind`, `id`, `type`, `content`, `props`, `listProps`,
 `pluginData`, and `childIds`. An element snapshot contains `kind`, `id`, `type`,
 `frame`, `zIndex`, `props`, and `childIds`.
@@ -87,10 +87,12 @@ can pass the selection state owned by their existing layout.
 
 The sandbox prevents scripts from reading the parent's DOM and origin, but does
 not prevent network requests or form submissions. A form can navigate its iframe;
-use `submit` with `preventDefault()` for in-place widget actions. Scripts receive the widget's snapshot, including
+the destination receives no widget connection. Use `submit` with `preventDefault()` for in-place widget actions. Scripts receive the widget's snapshot, including
 block plugin data, and can send those values to remote services. Install this
 extension only where executing authored HTML and that data exposure are acceptable;
 the sandbox is not a network isolation boundary.
+
+Each mounted panel owns its source-editing session. Inline and expanded fields share their selection and undo history. Saving applies the edited source and top-level property changes relative to the opening draft. Concurrent changes to untouched fields survive.
 
 ## Unsafe HTML block
 

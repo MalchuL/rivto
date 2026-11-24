@@ -1,5 +1,6 @@
 import {
   HTML_CHANNEL,
+  changedPropPatch,
   clampFrameHeight,
   isJsonValue,
   parseFrameMessage,
@@ -82,4 +83,13 @@ test("clips embedded drag regions and rejects malformed frame messages", () => {
     parseFrameMessage(message(Array.from({ length: 65 }, () => ({}))), "frame"),
   ).toBeUndefined();
   expect(parseFrameMessage(message([]), "another-frame")).toBeUndefined();
+});
+
+test("draft patches omit equivalent JSON and can delete keys inherited by plain objects", () => {
+  const patch = changedPropPatch(
+    { toString: "old", settings: { a: 1, b: [true] }, steps: [1, 2] },
+    { settings: { b: [true], a: 1 }, steps: [2, 1] },
+  );
+  expect(Object.hasOwn(patch, "toString")).toBe(true);
+  expect(patch).toStrictEqual({ toString: undefined, steps: [2, 1] });
 });

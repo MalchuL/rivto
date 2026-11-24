@@ -910,6 +910,46 @@ test("clicking an HTML canvas element selects it and its source supports text se
   await expect.poll(() => readElementSource(page, "circle")).toBe(originalSource);
 });
 
+test("saving element markup preserves remotely edited widget properties and rotation", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator('[data-editor-mode="edgeless"]').click();
+  await panToHtmlElement(page, "circle");
+  const host = page
+    .locator('[data-edgeless-visual-kind="html"]')
+    .filter({ has: page.locator('[data-html-label="Focus"]') });
+  await host.hover();
+  await host.getByRole("button", { name: "Edit HTML" }).click();
+  const id = await page.evaluate(() => {
+    const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
+    const element = editor.elements
+      .getElementNodes()
+      .find((item) => item.props.sample === "circle")!;
+    editor.elements.updateElement(element.id, {
+      props: { label: "Updated remotely", extra: 17, rotation: 3 },
+    });
+    return element.id;
+  });
+  const visual = page
+    .locator('[data-edgeless-visual-kind="html"]')
+    .filter({ has: page.getByRole("textbox", { name: "HTML source" }) });
+  await visual.getByRole("textbox", { name: "HTML source" }).fill("<p>Edited</p>");
+  await visual.getByRole("button", { name: "Done" }).click();
+  const props = await page.evaluate(
+    (elementId) =>
+      (window as unknown as DemoWindow).__rivtoDemo.editor.elements.getElementNode(elementId)
+        ?.props,
+    id,
+  );
+  expect(props).toMatchObject({
+    html: "<p>Edited</p>",
+    label: "Updated remotely",
+    extra: 17,
+    rotation: 3,
+  });
+});
+
 test("HTML canvas source editing keeps native focus, selection, and text operations", async ({
   page,
 }) => {

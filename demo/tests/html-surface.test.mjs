@@ -8,7 +8,7 @@ import {
   isJsonValue,
   parseFrameMessage,
   parseWidgetProps,
-  replacedPropPatch,
+  changedPropPatch,
   validateHtmlElementProps,
 } from "../../packages/react-rivto-editor/src/extensions/html-surface/protocol/protocol.ts";
 import {
@@ -90,10 +90,11 @@ test("element props require html and widget json survives editing", () => {
   assert.throws(() => validateHtmlElementProps({ html: "<p></p>", speed: Number.NaN }));
 
   const current = { html: "<p></p>", rotation: 15, speed: 6, color: "#111111" };
-  const patch = replacedPropPatch(current, { html: "<b></b>", speed: 8 }, ["rotation"]);
+  const patch = changedPropPatch(current, { html: "<b></b>", speed: 8, rotation: 15 });
   assert.equal(patch.html, "<b></b>");
   assert.equal(patch.speed, 8);
-  assert.equal(patch.rotation, 15);
+  assert.equal(Object.hasOwn(patch, "rotation"), false);
+  assert.equal(Object.hasOwn(patch, "color"), true);
   assert.equal(patch.color, undefined);
   assert.equal(formatWidgetProps(current, ["html", "rotation"]).includes("html"), false);
   assert.deepEqual(parseWidgetProps('{"timer":25,"start":false}'), { timer: 25, start: false });
