@@ -1,9 +1,9 @@
-/** @jest-environment ../../../jest-browser-environment.mjs */
+/** @jest-environment ./jest-browser-environment.mjs */
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import type { HtmlWidgetContext } from "../types";
-import { SurfaceContext } from "../../../surfaces/surface";
-import { useHtmlWidgetContext } from "./use-html-widget-context";
+import type { HtmlWidgetContext } from "../../types";
+import { SurfaceContext } from "../../../../surfaces/surface";
+import { useHtmlWidgetContext } from "../use-html-widget-context";
 
 /** State supplied to the test renderer by its owner. */
 interface ProbeProps {

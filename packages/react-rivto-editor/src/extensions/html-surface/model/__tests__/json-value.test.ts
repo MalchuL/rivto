@@ -1,4 +1,4 @@
-import { isJsonValue, validateHtmlElementProps } from "./json-value";
+import { isJsonValue, validateHtmlElementProps } from "../json-value";
 
 test("accepts JSON data and rejects values structured clone allows but JSON does not", () => {
   expect(isJsonValue({ timer: 25, start: false, list: [1, "a", null] })).toBe(true);

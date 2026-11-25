@@ -1,8 +1,8 @@
-/** @jest-environment ../../../jest-browser-environment.mjs */
+/** @jest-environment ./jest-browser-environment.mjs */
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { HtmlFrame } from "./html-frame";
-import { HTML_CHANNEL } from "../constants";
+import { HtmlFrame } from "../html-frame";
+import { HTML_CHANNEL } from "../../constants";
 
 test("only the authenticated document port receives snapshots, permission decisions and updates", () => {
   const environment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };

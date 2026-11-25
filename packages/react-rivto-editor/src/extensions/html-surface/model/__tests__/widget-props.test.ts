@@ -1,4 +1,4 @@
-import { changedPropPatch, formatWidgetProps, parseWidgetProps, readLabel } from "./widget-props";
+import { changedPropPatch, formatWidgetProps, parseWidgetProps, readLabel } from "../widget-props";
 
 test("draft patches omit equivalent JSON and can delete keys inherited by plain objects", () => {
   const patch = changedPropPatch(

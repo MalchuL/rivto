@@ -1,5 +1,5 @@
-import { HTML_CHANNEL } from "../constants";
-import { composeSrcDoc } from "./compose-src-doc";
+import { HTML_CHANNEL } from "../../constants";
+import { composeSrcDoc } from "../compose-src-doc";
 
 test("html documents keep authored markup and install the node bridge", () => {
   const fragment = composeSrcDoc({ source: "<p>Hi</p>", token: "token-1", fit: "auto" });

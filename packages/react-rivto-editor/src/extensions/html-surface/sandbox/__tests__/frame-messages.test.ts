@@ -1,7 +1,7 @@
-import { HTML_CHANNEL } from "../constants";
-import { isJsonValue } from "../model/json-value";
-import { parseWidgetProps } from "../model/widget-props";
-import { parseFrameMessage } from "./frame-messages";
+import { HTML_CHANNEL } from "../../constants";
+import { isJsonValue } from "../../model/json-value";
+import { parseWidgetProps } from "../../model/widget-props";
+import { parseFrameMessage } from "../frame-messages";
 
 test("rejects unsafe or non-JSON values in sandbox messages and edited props", () => {
   const cyclic: { self?: unknown } = {};

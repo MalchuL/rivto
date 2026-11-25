@@ -1,4 +1,4 @@
-/** @jest-environment ../../../jest-browser-environment.mjs */
+/** @jest-environment ./jest-browser-environment.mjs */
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { BlockEditor } from "@chulane/rivto-page";
@@ -7,9 +7,9 @@ import {
   createTestPanel,
   createTestCoreEditor,
   createTestReactEditor,
-} from "../../../test-utils";
-import { htmlSurfaceExtension } from "../extension";
-import { HTML_BLOCK_TYPE } from "../constants";
+} from "../../../../test-utils";
+import { htmlSurfaceExtension } from "../../extension";
+import { HTML_BLOCK_TYPE } from "../../constants";
 
 test.each([false, true])(
   "panel occurrences isolate drafts (shared runtime: %s)",

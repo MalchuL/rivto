@@ -1,7 +1,7 @@
-/** @jest-environment ../../../jest-browser-environment.mjs */
+/** @jest-environment ./jest-browser-environment.mjs */
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { HtmlDragHandles } from "./html-drag-handles";
+import { HtmlDragHandles } from "../html-drag-handles";
 
 test("drag targets expose Page anchors only when requested", () => {
   const environment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };

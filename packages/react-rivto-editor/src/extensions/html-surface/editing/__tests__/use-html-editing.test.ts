@@ -1,4 +1,4 @@
-import { createHtmlEditingStore } from "./use-html-editing";
+import { createHtmlEditingStore } from "../use-html-editing";
 
 test("editing is scoped to an installation and released after its last observer", () => {
   const first = createHtmlEditingStore();
