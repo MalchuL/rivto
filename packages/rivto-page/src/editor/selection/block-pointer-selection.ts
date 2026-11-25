@@ -38,6 +38,7 @@ export interface BlockPointerSelectionHost {
 /** Pointer-down origin and evolving selection, owned by one controller. */
 interface PointerSelection {
   readonly root: HTMLElement;
+  readonly embeddedDocument?: AbortSignal;
   readonly startX: number;
   readonly startY: number;
   readonly anchor?: DOMSelectionPoint;
@@ -124,6 +125,15 @@ export class BlockPointerSelection {
         );
       }
       if (feature === "pointer") {
+        events.register(
+          "selection.embedded-text",
+          {
+            type: "rivto-embedded-text-selection",
+            scope: "block",
+            priority: BLOCK_SELECTION_INPUT_PRIORITY,
+          },
+          this.onEmbeddedTextSelection,
+        );
         // Track this pointer outside the root through release or cancellation.
         events.register(
           "selection.move",
@@ -321,6 +331,80 @@ export class BlockPointerSelection {
   };
 
   /**
+   * Continues a native text drag once it reaches another block in this occurrence.
+   *
+   * The frame owns text offsets and keeps receiving the physical pointer after exit.
+   * Only Page resolves the source and destination block IDs. Returning to the source
+   * releases structural coverage and lets the still-active native selection show again.
+   *
+   * @param input - Scoped frame, document lifetime and pointer position in Page coordinates.
+   * @returns Whether this occurrence accepted the embedded selection update.
+   */
+  private onEmbeddedTextSelection = ({
+    raw,
+    blockId,
+    root,
+  }: BlockInputEvent<"rivto-embedded-text-selection">): BlockInputResult => {
+    const { phase, clientX, clientY, signal } = raw.detail;
+    if (!blockId || signal.aborted || (this.pointer && this.pointer.embeddedDocument !== signal)) {
+      return "continue";
+    }
+    if (phase === "cancel") {
+      this.cancelEmbedded();
+      return "continue";
+    }
+    const hit = this.dom.readBlockIdAtPoint(root, clientX, clientY);
+    if (hit === blockId) {
+      this.cancelEmbedded();
+      return "continue";
+    }
+    if (!this.pointer) {
+      if (!hit || this.editor.adapter.selection.canStartSelection?.(raw) === false) {
+        return "continue";
+      }
+      this.cancel();
+      this.releasePointer = this.editor.pointer.acquire();
+      if (!this.releasePointer) {
+        return "continue";
+      }
+      this.pointer = {
+        root,
+        startX: clientX,
+        startY: clientY,
+        anchorPosition: { blockId, offset: 0 },
+        embeddedDocument: signal,
+        crossBlock: false,
+        wholeBlocks: false,
+      };
+      signal.addEventListener("abort", this.cancelEmbedded, { once: true });
+    }
+    if (hit && hit !== this.pointer.selection?.focusBlockId) {
+      this.ownsCrossBlockSelection = true;
+      this.publish(this.pointer, undefined, { blockId: hit, offset: 0 }, true);
+    }
+    if (phase === "end") {
+      raw.preventDefault();
+      this.stop();
+    } else {
+      this.latestPointer = { x: clientX, y: clientY, exact: false };
+      this.scheduleAutoScroll(root);
+    }
+    return "handled";
+  };
+
+  /**
+   * Releases the embedded gesture and clears any provisional whole-block range.
+   *
+   * @returns Page no longer owns this gesture; the iframe retains its native text selection.
+   */
+  private cancelEmbedded = (): void => {
+    if (this.pointer?.embeddedDocument) {
+      this.cancel();
+      this.editor.adapter.selection.clear();
+    }
+  };
+
+  /**
    * Resolves and publishes the moving endpoint at current pointer coordinates.
    * @param active - Gesture retaining the fixed endpoint.
    * @param current - Latest viewport coordinates and selection modifiers.
@@ -447,6 +531,7 @@ export class BlockPointerSelection {
     this.releasePointer = undefined;
     this.latestPointer = undefined;
     const completed = this.pointer;
+    completed?.embeddedDocument?.removeEventListener("abort", this.cancelEmbedded);
     const root = completed?.root;
     this.pointer = null;
     if (
@@ -728,6 +813,7 @@ export class BlockPointerSelection {
    * @returns Timers, animation frames, and pointer references are released.
    */
   private cancel = (): void => {
+    this.pointer?.embeddedDocument?.removeEventListener("abort", this.cancelEmbedded);
     this.stopAutoScroll();
     this.releasePointer?.();
     this.releasePointer = undefined;

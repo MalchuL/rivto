@@ -142,6 +142,8 @@ const BRIDGE_RUNTIME = `
     }
     if (data.kind === "node") {
       publish(data.node);
+    } else if (data.kind === "clear-text-selection") {
+      window.getSelection()?.removeAllRanges();
     } else if (data.kind === "context") {
       publishContext(data.context);
     }
@@ -185,6 +187,7 @@ const BRIDGE_RUNTIME = `
   };
   port.start();
   parent.postMessage({ channel: channel, token: token, kind: "ready" }, "*", [connection.port2]);
+  /*__TEXT_SELECTION__*/
   window.addEventListener("pagehide", function () {
     send({ kind: "drag-handles", handles: [] });
     // IMPORTANT: editor access belongs to this document. Close its port when leaving so the
@@ -535,6 +538,84 @@ export function isJsonRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * Installs trusted mouse sampling before authored scripts execute.
+ *
+ * Browsers keep delivering pointer movement and release to the selecting iframe
+ * outside its viewport. Preserve native selection until a nonempty range crosses
+ * an edge. Links, controls, editors and widget-owned drags keep their own input.
+ *
+ * @param key - Host credential reserved for physical text selection reports.
+ * @returns Bootstrap code that sends only viewport coordinates and gesture phases.
+ */
+function embeddedTextSelectionRuntime(key: string): string {
+  return `(function () {
+    // IMPORTANT: widget commands must never impersonate cross-block pointer input.
+    // Remove the bootstrap containing this private key and capture native transport
+    // and coordinate getters before any authored script can replace them.
+    document.currentScript.remove();
+    var post = port.postMessage.bind(port);
+    var readX = Function.prototype.call.bind(Object.getOwnPropertyDescriptor(MouseEvent.prototype, "clientX").get);
+    var readY = Function.prototype.call.bind(Object.getOwnPropertyDescriptor(MouseEvent.prototype, "clientY").get);
+    var id = null, x = 0, y = 0, crossing = false;
+    function report(phase) {
+      post({ selectionKey: ${JSON.stringify(key)}, phase: phase, x: x, y: y });
+    }
+    function reset() {
+      if (crossing) { report("cancel"); }
+      id = null;
+      crossing = false;
+    }
+    function update(phase) {
+      if (id === null) { return; }
+      if (!crossing) {
+        if (x >= 0 && y >= 0 && x < innerWidth && y < innerHeight) { return; }
+        var selection = window.getSelection();
+        if (!selection || selection.isCollapsed) { return; }
+        crossing = true;
+      }
+      report(phase);
+    }
+    window.addEventListener("pointerdown", function (event) {
+      if (!event.isTrusted || event.pointerType !== "mouse" || event.button !== 0) { return; }
+      reset();
+      var target = event.target;
+      if (!(target instanceof Element) || target.isContentEditable ||
+          target.closest('input,textarea,select,button,label,summary,a[href],audio[controls],video[controls],[role=button],[draggable=true],[data-rivto-interactive]')) { return; }
+      id = event.pointerId;
+      x = readX(event); y = readY(event);
+    }, true);
+    window.addEventListener("pointermove", function (event) {
+      if (!event.isTrusted || id !== event.pointerId) { return; }
+      if (event.buttons !== 1) { reset(); return; }
+      x = readX(event); y = readY(event);
+      update("move");
+    }, true);
+    document.addEventListener("selectionchange", function () {
+      if (!crossing) { update("move"); }
+    });
+    window.addEventListener("pointerup", function (event) {
+      if (!event.isTrusted || id !== event.pointerId) { return; }
+      x = readX(event); y = readY(event);
+      update("end");
+      crossing = false;
+      id = null;
+    }, true);
+    window.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") { reset(); }
+    }, true);
+    window.addEventListener("blur", function (event) {
+      if (event.target === window) { reset(); }
+    });
+    window.addEventListener("gotpointercapture", function (event) {
+      if (event.pointerId === id) { reset(); }
+    }, true);
+    ["dragstart", "pointercancel", "pagehide"].forEach(function (type) {
+      window.addEventListener(type, reset, true);
+    });
+  })();`;
+}
+
+/**
  * Builds the iframe document, injecting the node bridge without changing the markup.
  *
  * A full HTML document keeps its own structure and receives the bridge in `head`.
@@ -546,6 +627,7 @@ export function isJsonRecord(value: unknown): value is Record<string, unknown> {
  * @param token - Per-frame secret required on every message in either direction.
  * @param fit - `fill` locks the document to the host box; `auto` lets the body grow.
  * @param additionalScript - Optional host-provided bridge installed before authored scripts.
+ * @param selectionKey - Private credential for native text drags in interactive block occurrences.
  * @returns A `srcdoc` string that installs `window.rivto` before the authored markup runs.
  */
 export function composeSrcDoc(
@@ -553,6 +635,7 @@ export function composeSrcDoc(
   token: string,
   fit: HtmlFrameFit,
   additionalScript = "",
+  selectionKey?: string,
 ): string {
   const sizing =
     fit === "fill"
@@ -562,7 +645,10 @@ export function composeSrcDoc(
     "/*__ADDITIONAL_SCRIPT__*/",
     () => additionalScript,
   );
-  const head = `<meta charset="utf-8"><style>${sizing}</style><script>${runtime}</scr${"ipt>"}`;
+  const script = runtime.replace("/*__TEXT_SELECTION__*/", () =>
+    selectionKey ? embeddedTextSelectionRuntime(selectionKey) : "",
+  );
+  const head = `<meta charset="utf-8"><style>${sizing}</style><script>${script}</scr${"ipt>"}`;
   // Stop at the first authored content. A head-like string inside a script, comment
   // or attribute must never move the bootstrap past an authored script.
   const prefix =

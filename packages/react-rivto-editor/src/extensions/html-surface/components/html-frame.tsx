@@ -4,6 +4,7 @@
  * @module
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { createEmbeddedTextSelectionHandler } from "./embedded-text-selection";
 import { EmbeddedDragHandles } from "../../../components/embedded-drag-handles";
 import type {
   EmbeddedContentContext,
@@ -164,11 +165,13 @@ function useHtmlFrame({
   unsafeAccess,
 }: Omit<HtmlFrameProps, "frameName">) {
   const enabled = unsafeAccess?.enabled;
+  const canSelectText = interactive && node.kind === "block";
   const document = useMemo(() => {
     const token = crypto.randomUUID();
     const extra = enabled === undefined ? "" : unsafeHtmlRuntime(token, enabled);
-    return { token, srcDoc: composeSrcDoc(source, token, fit, extra) };
-  }, [source, fit, enabled]);
+    const selectionKey = canSelectText ? crypto.randomUUID() : undefined;
+    return { token, selectionKey, srcDoc: composeSrcDoc(source, token, fit, extra, selectionKey) };
+  }, [source, fit, enabled, canSelectText]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const port = useRef<MessagePort | null>(null);
   const [height, setHeight] = useState(180);
@@ -179,7 +182,7 @@ function useHtmlFrame({
   });
   useLayoutEffect(() => {
     setDragHandles([]);
-    return connectHtmlDocument(iframeRef.current, document.token, port, latest, (data) => {
+    return connectHtmlDocument(iframeRef.current, document, port, latest, (data) => {
       const command = parseFrameMessage(data, document.token);
       if (!command || command.kind === "ready") {
         return;
@@ -247,7 +250,7 @@ function postHtmlNode(
  * even if the iframe navigates before a reply is delivered.
  *
  * @param iframe - Mounted frame whose window may announce this document.
- * @param token - Per-document secret embedded in the authored srcdoc.
+ * @param document - Credentials for widget commands and separately authenticated native input.
  * @param port - Endpoint owned by this connection and closed on teardown.
  * @param latest - Live occurrence state used to authorize requests and initialize subscribers.
  * @param onCommand - Routes ordinary messages through widget command validation.
@@ -255,11 +258,13 @@ function postHtmlNode(
  */
 function connectHtmlDocument(
   iframe: HTMLIFrameElement | null,
-  token: string,
+  document: { token: string; selectionKey?: string },
   port: { current: MessagePort | null },
   latest: RefObject<HtmlConnectionState>,
   onCommand: (data: unknown) => void,
 ): () => void {
+  const { token, selectionKey } = document;
+  let lifetime: AbortController | undefined;
   const connect = (event: MessageEvent) => {
     // IMPORTANT: contentWindow keeps the same identity when a link or form loads another page.
     // Authenticate the ready message with the source token and send snapshots and replies only
@@ -276,9 +281,21 @@ function connectHtmlDocument(
     }
     // Reloading the authored srcdoc starts a new realm with its own port.
     port.current?.close();
+    lifetime?.abort();
+    lifetime = new AbortController();
+    const select =
+      iframe && selectionKey
+        ? createEmbeddedTextSelectionHandler(iframe, selectionKey, lifetime.signal)
+        : undefined;
     port.current = endpoint;
     endpoint.onmessage = ({ data }) => {
       if (port.current !== endpoint) {
+        return;
+      }
+      if (data?.selectionKey && select) {
+        if (select(data)) {
+          endpoint.postMessage({ channel: HTML_CHANNEL, token, kind: "clear-text-selection" });
+        }
         return;
       }
       const { unsafeAccess, interactive } = latest.current;
@@ -290,6 +307,7 @@ function connectHtmlDocument(
   };
   window.addEventListener("message", connect);
   return () => {
+    lifetime?.abort();
     window.removeEventListener("message", connect);
     port.current?.close();
     port.current = null;

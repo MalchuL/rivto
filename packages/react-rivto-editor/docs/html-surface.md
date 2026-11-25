@@ -38,6 +38,13 @@ Writes go through the current panel's managers and participate in document
 history. Placement previews ignore writes. Block iframe height follows its content
 up to 720 CSS pixels; an element iframe fills the host frame.
 
+In an interactive HTML block, dragging selected text into a neighboring Page block
+selects both blocks and the range between them. Returning to the starting block
+while holding the mouse resumes native text selection. Escape cancels the block
+range. The iframe reports mouse coordinates through its document connection;
+Page resolves the blocks under the pointer. Links and form controls keep their
+normal mouse behavior.
+
 Use `rivto.ready()` for the initial state and `rivto.subscribe()` for subsequent
 changes. These are detached snapshots: mutate widget properties with the bridge
 methods rather than changing `rivto.props` directly. A widget can use ordinary

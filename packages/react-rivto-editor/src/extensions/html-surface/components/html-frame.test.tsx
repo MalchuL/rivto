@@ -1,4 +1,5 @@
 /** @jest-environment ../../../jest-browser-environment.mjs */
+import { jest } from "@jest/globals";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { HtmlFrame } from "./html-frame";
@@ -89,6 +90,10 @@ test("only the authenticated document port receives snapshots, permission decisi
         node: expect.objectContaining({ props: { label: "original" } }),
       }),
     );
+    const selectionEvents = jest.fn();
+    iframe.addEventListener("rivto-embedded-text-selection", selectionEvents);
+    port.onmessage!({ data: { selectionKey: token, phase: "move", x: 2, y: 120 } });
+    expect(selectionEvents).not.toHaveBeenCalled();
     port.onmessage!({
       data: {
         ...data,

@@ -134,10 +134,10 @@ export interface BlockEditorSelection {
   /**
    * Lets the host reserve pointer input for interactions outside block selection.
    *
-   * @param event - Native pointer or click event starting a selection operation.
+   * @param event - Pointer, click or embedded text-selection event starting a selection operation.
    * @returns False when a host gesture owns this input; omission permits selection.
    */
-  canStartSelection?(event: MouseEvent): boolean;
+  canStartSelection?(event: Event): boolean;
   /**
    * Reports whether a host command is restoring native selection asynchronously.
    *

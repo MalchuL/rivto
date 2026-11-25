@@ -121,7 +121,7 @@ Avoid guessed offscreen heights for HTML blocks: activating an offscreen iframe'
 real layout can move another control between pointer-down and release. Check real
 scroll and pointer behavior before adding content-visibility optimizations.
 
-Gestures starting inside the iframe need real host-side hit targets. Unmarked HTML
+Use host-side hit targets for gestures that start on the widget background. Unmarked HTML
 backgrounds receive automatic targets; text, native controls and recognized
 interactive elements retain their iframe events. Native draggable elements and
 elements with detected `dragstart`, `dragenter`, `dragover` or `drop` listeners
@@ -134,6 +134,16 @@ Regions follow layout, scrolling and size and are clipped to the iframe and
 rectangular overflow ancestors; continuous CSS transforms on marked regions are
 not tracked frame by frame. Placement previews are inert. Removing the last marker
 restores automatic targets.
+
+Keep ordinary text in an interactive HTML block selectable. When the primary mouse
+button stays down and a nonempty native selection crosses the iframe boundary,
+the bridge reports movement and release through the originating document's port.
+Page resolves the block IDs from host geometry and starts whole-block selection
+when the pointer reaches another block. Returning to the source block resumes
+native selection. Escape cancels the provisional range. Releasing over the
+neighbor commits it. Keep this path internal to the bridge. The widget API has
+no need for a command that selects neighboring blocks. The
+[iframe selection test](../../../e2e/html-interaction.spec.ts) exercises all three outcomes.
 
 Other embedded renderers can use `EmbeddedDragHandles` with clipped, viewport-relative
 regions in a positioned box. Set `blockSelectionAnchor` for Page block content.
@@ -170,7 +180,10 @@ For an in-widget reorder, follow the [Priority board](../../../demo/src/extensio
 Use native HTML drag-and-drop when the interaction needs browser data transfer.
 For local sorting, delegate pointer events to the list and capture the primary
 pointer on the pressed row. Leave nested buttons and inputs available to their
-own handlers. Scope `touch-action` to the drag surface so the rest of the widget
+own handlers. On the reorderable row, `user-select: none` keeps dragging its
+label from selecting text. The bridge stops tracking text selection on
+`gotpointercapture` for that pointer or on native `dragstart`, so dragging
+outside the widget keeps the gesture with the sorter. Scope `touch-action` to the drag surface so the rest of the widget
 can still scroll.
 
 During capture, `event.target` continues to identify the captured element. Find

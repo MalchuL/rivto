@@ -1,5 +1,15 @@
+/** Viewport position reported by an embedded text selection in this occurrence. */
+export interface EmbeddedTextSelectionDetail {
+  readonly phase: "move" | "end" | "cancel";
+  readonly clientX: number;
+  readonly clientY: number;
+  /** Aborted when the originating document disconnects. */
+  readonly signal: AbortSignal;
+}
+
 /** Native input names accepted by a Page occurrence, including document lifecycle events. */
 export interface BlockInputEventMap extends GlobalEventHandlersEventMap {
+  "rivto-embedded-text-selection": CustomEvent<EmbeddedTextSelectionDetail>;
   selectionchange: Event;
   visibilitychange: Event;
 }

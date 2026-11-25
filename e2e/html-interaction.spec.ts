@@ -1225,3 +1225,53 @@ async function panToCard(page: Page, cardId: string): Promise<void> {
     .poll(async () => Number(await viewport.getAttribute("data-edgeless-pan-y")))
     .toBeCloseTo(expected.y);
 }
+
+for (const repeat of [0, 200]) {
+  test(`dragging selected iframe text into a sibling selects Page blocks, repeat=${repeat}`, async ({
+    page,
+  }) => {
+    await page.goto(`/?repeat=${repeat}`);
+    const id = await page.evaluate(() => {
+      const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
+      const widget = editor.blocks.insertBlock({
+        type: "html",
+        content: '<div style="height:56px"><span>Selectable widget text</span></div>',
+      });
+      editor.blocks.insertBlock(
+        { id: "iframe-text-next", type: "paragraph", content: "Next paragraph" },
+        editor.blocks.getInsertionDestinationAfter(widget.id),
+      );
+      return widget.id;
+    });
+    const block = page.locator(`[data-block-id="${id}"]`);
+    await block.scrollIntoViewIfNeeded();
+    const text = block.locator("iframe").contentFrame().locator("span");
+    const box = (await text.boundingBox())!;
+    const next = page.locator('[data-block-id="iframe-text-next"]');
+    const target = (await next.locator("[data-block-content]").boundingBox())!;
+    await page.mouse.move(box.x + 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width - 5, box.y + box.height / 2, { steps: 4 });
+    await expect.poll(() => text.evaluate(() => getSelection()?.toString())).toContain("widget");
+    await expect(block).not.toHaveAttribute("data-block-selected", "true");
+    await page.mouse.move(target.x + 15, target.y + target.height / 2, { steps: 5 });
+    await expect(next).toHaveAttribute("data-block-selected", "true");
+    await expect(block).toHaveAttribute("data-block-selected", "true");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 4 });
+    await expect(next).not.toHaveAttribute("data-block-selected", "true");
+    await expect.poll(() => text.evaluate(() => getSelection()?.toString())).toContain("Select");
+    await page.mouse.move(target.x + 15, target.y + target.height / 2, { steps: 5 });
+    await expect(next).toHaveAttribute("data-block-selected", "true");
+    await page.keyboard.press("Escape");
+    await expect(next).not.toHaveAttribute("data-block-selected", "true");
+    await page.mouse.up();
+    await text.click();
+    await page.mouse.move(box.x + 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width - 5, box.y + box.height / 2, { steps: 4 });
+    await page.mouse.move(target.x + 15, target.y + target.height / 2, { steps: 5 });
+    await page.mouse.up();
+    await expect(next).toHaveAttribute("data-block-selected", "true");
+    await expect(block).toHaveAttribute("data-block-selected", "true");
+  });
+}

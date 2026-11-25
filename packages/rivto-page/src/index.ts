@@ -114,6 +114,7 @@ export { BlockInputEvent } from "./editor/events/block-input-event";
 export type {
   BlockInputDefinition,
   BlockInputEventMap,
+  EmbeddedTextSelectionDetail,
   BlockInputHandler,
   BlockInputObserver,
   BlockInputResult,
