@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import type { DocumentEditorAPI } from "@chulane/rivto";
 import { blockIdSelector } from "./dom-markers";
+import { showCanvasCard } from "./fixtures/canvas-card";
 
 const TODAY = '[data-journal-document="today"]';
 
@@ -112,30 +112,6 @@ async function pasteStructured(content: Locator, structured: string, plain: stri
 
 function block(page: Page, id: string): Locator {
   return page.locator(TODAY).locator(blockIdSelector(id));
-}
-
-/**
- * Places the fixture roots together in one visible Edgeless card.
- *
- * @param page - Demo page containing the fixture document.
- * @param ids - Nonempty ordered list of existing root IDs to display.
- * @returns Resolves after switching to the canvas containing the card.
- */
-async function showCanvasCard(page: Page, ids: string[]): Promise<void> {
-  await page.evaluate((ids) => {
-    const { editor } = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
-      .__rivtoDemo;
-    const snapshot = editor.dump();
-    const blocks = ids.map((id) => snapshot.blocks.find((block) => block.id === id)!);
-    editor.load({ ...snapshot, blocks, elements: [], rootElementIds: [] });
-    editor.elements.insertElement({
-      type: "block",
-      zIndex: 0,
-      frame: { x: 20, y: 20, width: 700, height: 500 },
-      props: { startBlockId: ids[0], endBlockId: ids.at(-1) },
-    });
-  }, ids);
-  await page.locator('[data-editor-mode="edgeless"]').click();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -753,22 +729,7 @@ test("math results stay aligned with unwrapped source lines", async ({ page }) =
 
 test("math line results remain editable on the canvas", async ({ page }) => {
   const equation = await insertBlock(page, { type: "demo.math", content: "a = 2\na * 3" });
-  await page.evaluate((id) => {
-    const blocks = (
-      window as unknown as {
-        __rivtoDemo: {
-          editor: {
-            blocks: {
-              getRootIds: () => string[];
-              moveBlock: (id: string, target: string, position: "before") => void;
-            };
-          };
-        };
-      }
-    ).__rivtoDemo.editor.blocks;
-    blocks.moveBlock(id, blocks.getRootIds()[0]!, "before");
-  }, equation.id);
-  await page.locator('[data-editor-mode="edgeless"]').click();
+  await showCanvasCard(page, [equation.id]);
   const row = block(page, equation.id);
   await expect(row.locator("[data-math-line]")).toHaveText(["2", "6"]);
   const source = row.getByRole("textbox", { name: "Math source" });
@@ -791,22 +752,9 @@ test("math Enter replaces selected text and preserves caret and undo in both sur
 }) => {
   for (const mode of ["block", "edgeless"] as const) {
     const equation = await insertBlock(page, { type: "demo.math", content: "12 + 34" });
-    await page.evaluate((id) => {
-      const blocks = (
-        window as unknown as {
-          __rivtoDemo: {
-            editor: {
-              blocks: {
-                getRootIds: () => string[];
-                moveBlock: (id: string, target: string, position: "before") => void;
-              };
-            };
-          };
-        }
-      ).__rivtoDemo.editor.blocks;
-      blocks.moveBlock(id, blocks.getRootIds()[0]!, "before");
-    }, equation.id);
-    await page.locator(`[data-editor-mode="${mode}"]`).click();
+    if (mode === "edgeless") {
+      await showCanvasCard(page, [equation.id]);
+    }
     const row = block(page, equation.id);
     const source = row.getByRole("textbox", { name: "Math source" });
     await source.click();

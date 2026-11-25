@@ -896,7 +896,7 @@ test("clicking an HTML canvas element selects it and its source supports text se
   await host.hover();
   await host.getByRole("button", { name: "Edit HTML" }).click();
   const source = host.getByRole("textbox", { name: "HTML source" });
-  await source.click();
+  await source.click({ position: { x: 9, y: 10 } });
   await expect(source).toBeFocused();
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.insertText("<p>Hello selection world</p>");
@@ -963,7 +963,7 @@ test("HTML canvas source editing keeps native focus, selection, and text operati
   await host.hover();
   await host.getByRole("button", { name: "Edit HTML" }).click();
   const source = host.getByRole("textbox", { name: "HTML source" });
-  await source.click();
+  await source.click({ position: { x: 9, y: 10 } });
   await expect(source).toBeFocused();
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.insertText("<p>Hello selection world</p>");
@@ -1123,12 +1123,12 @@ test("HTML block source keeps text selection inside an edgeless card", async ({ 
   await panToCard(page, ids.card);
   const block = page.locator(`[data-block-id="${ids.block}"]`);
   await expect(block.locator("iframe")).toBeVisible();
-  const sandbox = page.frame({ name: "Pomodoro" });
-  if (!sandbox) {
-    throw new Error("Missing HTML block frame");
-  }
   await expect
-    .poll(() => sandbox.evaluate(() => (window as unknown as WidgetWindow).rivto.context.mode))
+    .poll(() =>
+      page
+        .frame({ name: "Pomodoro" })
+        ?.evaluate(() => (window as unknown as WidgetWindow).rivto?.context.mode),
+    )
     .toBe("edgeless");
   await block.hover();
   await block.getByRole("button", { name: "Edit HTML" }).click();

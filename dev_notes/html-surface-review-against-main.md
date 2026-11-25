@@ -10,7 +10,7 @@ A link or form can navigate the iframe while the persisted block source stays un
 
 [html-block.tsx:300](../packages/react-rivto-editor/src/extensions/html-surface/components/html-block.tsx#L300)
 
-If a collaborator adds a property while the source editor is open, clicking **Done** deletes it even when the local user edited only HTML. `replacedPropPatch` compares the opening draft against the *current* properties and marks every missing key for deletion. The element editor uses the same logic, and both editors also write the opening source back after a props-only edit. Compute the user’s changes against the opening snapshot and apply only those changes to the current node.
+If a collaborator adds a property while the source editor is open, clicking **Done** deletes it even when the local user edited only HTML. `replacedPropPatch` compares the opening draft against the _current_ properties and marks every missing key for deletion. The element editor uses the same logic, and both editors also write the opening source back after a props-only edit. Compute the user’s changes against the opening snapshot and apply only those changes to the current node.
 
 ## [P2] Scope source-editing state to the mounted panel
 
