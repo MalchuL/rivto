@@ -6,6 +6,24 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 type Container = "outline" | "columns" | "kanban" | "bento" | "table" | "todo-storage";
 
 for (const mode of ["block", "edgeless"] as const) {
+  test(`default outline switches from sibling insertion to nesting past 9px in ${mode}`, async ({
+    page,
+  }) => {
+    await load(page, "outline", mode);
+    await startDrag(page);
+    const target = page.locator('[data-block-id="first"]');
+    const box = (await target.boundingBox())!;
+    const x = box.x + box.width / 2;
+    await page.mouse.move(x, box.y + 9);
+    await expectBoundaryLine(page);
+    await page.mouse.move(x, box.y + 10);
+    await expect(target).toHaveAttribute("data-block-drop-active", "true");
+    await page.mouse.up();
+    await expect.poll(() => readChildIds(page, "first")).toEqual(["source"]);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => readChildIds(page, "first")).toEqual([]);
+  });
+
   for (const type of ["outline", "kanban"] as const) {
     test(`populated block keeps its configured top sibling edge in ${type}, ${mode}`, async ({
       page,
