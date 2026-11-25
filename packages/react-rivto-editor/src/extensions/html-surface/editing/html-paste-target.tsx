@@ -1,5 +1,5 @@
 /**
- * Empty-state input for a block that has no HTML yet.
+ * The input shown by a block that has no HTML yet.
  *
  * @module
  */
@@ -12,22 +12,24 @@ import { HTML_EDIT_HINT } from "../constants";
 /** Props for {@link HtmlPasteTarget}. */
 export interface HtmlPasteTargetProps {
   /**
-   * Receives nonblank HTML from a paste or from Render.
+   * Receives the HTML when the user pastes it or presses Render. Blank text is never passed.
    *
-   * @param source - Authored HTML.
-   * @returns The owner has stored the source.
+   * @param source - The HTML to store.
+   * @returns Nothing. The owner has stored the source.
    */
   readonly onCommit: (source: string) => void;
 }
 
 /**
- * Accepts pasted HTML and renders it as soon as the paste arrives.
+ * Renders a text box that turns pasted HTML into a widget immediately.
  *
- * Typed text is kept locally until Render is pressed. A paste without text
- * (e.g. an image) is left to the field's default behavior.
+ * Pasting text stores it right away; there is no need to press Render.
+ * Typed text stays local until Render is pressed. A paste without text,
+ * such as an image, is left to the text box's default behavior.
  *
  * @param props - Commit callback.
- * @returns The paste field and Render button.
+ * @param props.onCommit - Receives the HTML to store.
+ * @returns The text box and the Render button.
  */
 export function HtmlPasteTarget({ onCommit }: HtmlPasteTargetProps) {
   const [text, setText] = useState("");

@@ -1,27 +1,44 @@
 /**
- * Iframe-side proxies for the editor access an Unsafe HTML block may be granted.
+ * Page side of Unsafe HTML editor access: the `rivto.panel` and
+ * `rivto.reactEditor` objects a widget script calls.
  *
  * @module
  */
 import { UNSAFE_HTML_METHODS } from "../../unsafe/unsafe-requests";
 
 /**
- * Defines `rivto.panel` and `rivto.reactEditor` as promise-returning proxies.
+ * Defines `rivto.panel` and `rivto.reactEditor`.
  *
- * Every call becomes an `unsafe-request`; the host decides at execution time
- * whether to honor it. While access is disabled, the getters return `null`
- * and notify the host so it can show its access warning. Requests made during
- * initial script execution are queued by the port until the host connects.
+ * Each exposes `blocks` with the methods in {@link UNSAFE_HTML_METHODS}. Every
+ * method returns a promise: the call is sent to the editor as an
+ * `unsafe-request`, and the editor decides when it arrives whether to run it.
+ * `rivto.panel` works within the panel showing the block; `rivto.reactEditor`
+ * works on the whole document.
  *
- * @param enabled - Whether the host granted access when this document was composed.
- * @returns ES5 source; requires `port`, `send`, `channel` and `token`.
+ * While access is off, both getters return `null` and tell the editor, which
+ * then shows its "this HTML requested editor access" warning. Calls made
+ * while the page is still starting are queued by the port until the editor
+ * connects.
+ *
+ * @param enabled - Whether access was granted when this page was built.
+ * @returns ES5 source; uses `port`, `send`, `channel` and `token`.
  */
 export function unsafeAccessScript(enabled: boolean): string {
   return `
   (function () {
     var enabled = ${JSON.stringify(enabled)};
     var nextId = 0;
+    /** Unanswered requests: request ID -> the promise's resolve and reject. */
     var pending = new Map();
+
+    /**
+     * Sends a request to the editor.
+     *
+     * @param target - "panel" or "reactEditor".
+     * @param method - Name of the block method.
+     * @param args - Arguments as passed by the widget.
+     * @returns A promise of the editor's answer; rejected if the editor refuses or the call fails.
+     */
     function request(target, method, args) {
       return new Promise(function (resolve, reject) {
         var id = ++nextId;
@@ -37,6 +54,12 @@ export function unsafeAccessScript(enabled: boolean): string {
       pending.delete(data.id);
       if (data.error) { entry.reject(new Error(data.error)); } else { entry.resolve(data.value); }
     });
+    /**
+     * Builds the frozen object a widget sees as rivto.panel or rivto.reactEditor.
+     *
+     * @param target - "panel" or "reactEditor".
+     * @returns An object with a frozen blocks object of request functions.
+     */
     function proxy(target) {
       var blocks = {};
       ${JSON.stringify(UNSAFE_HTML_METHODS)}.forEach(function (method) {

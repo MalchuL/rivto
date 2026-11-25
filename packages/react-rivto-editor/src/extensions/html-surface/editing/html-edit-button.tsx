@@ -1,5 +1,5 @@
 /**
- * Control that opens a widget's source editor.
+ * The button that opens a widget's source editor.
  *
  * @module
  */
@@ -8,39 +8,50 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { Button } from "../../../components/ui/button";
 import { editorControlProps } from "../../../constants";
 
-/** Editor-access state of an Unsafe HTML block, as shown on its edit button. */
+/**
+ * Editor-access state of an Unsafe HTML block, as shown on its edit button:
+ * no access, a refused access attempt, or access granted.
+ */
 export type UnsafeHtmlAccessState = "disabled" | "denied" | "enabled";
 
 /** Props for {@link HtmlEditButton}. */
 export interface HtmlEditButtonProps {
-  /** True while the source editor is open; the button is hidden then. */
+  /** Whether the source editor is open. The button is hidden while it is. */
   readonly editing: boolean;
-  /** Set only for Unsafe HTML blocks. `denied` shows a warning; `enabled` is announced. */
+  /** Access state of an Unsafe HTML block; omitted for ordinary widgets. */
   readonly access?: UnsafeHtmlAccessState;
   /**
-   * Opens the source editor.
+   * Opens the source editor. Called on click.
    *
-   * @returns The owner has opened the editor.
+   * @returns Nothing. The owner has opened the editor.
    */
   readonly onOpen: () => void;
   /**
-   * Runs on pointer down, before the click; canvas elements select themselves here.
+   * Runs on pointer down, before the click. Canvas elements use it to select themselves.
    *
-   * @param event - Pointer event on the button.
-   * @returns The owner has handled the event.
+   * @param event - The pointer event on the button.
+   * @returns Nothing.
    */
   readonly onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
 }
 
 /**
- * Shows the edit control at the upper right of a block or canvas element.
+ * Renders the edit button at the upper right of a block or canvas element.
  *
- * Ordinary widgets reveal the button on hover or focus (see CSS). When an
- * Unsafe HTML widget asked for access it does not have, the button expands
- * into a warning explaining how to grant it.
+ * For ordinary widgets the stylesheet reveals the button on hover or focus.
+ * For Unsafe HTML blocks it also reflects the access state:
+ * - `denied`: the widget tried to use access it does not have. The button
+ *   grows into a visible warning that explains how to grant access;
+ * - `enabled`: screen readers are told that editor access is on.
+ *
+ * Clicking does not propagate, so it never also selects the block or element.
  *
  * @param props - Editing state, optional access state and callbacks.
- * @returns The button, or nothing while editing.
+ * @param props.editing - Whether the source editor is open.
+ * @param props.access - Access state of an Unsafe HTML block, if any.
+ * @param props.onOpen - Opens the source editor.
+ * @param props.onPointerDown - Runs on pointer down, before the click.
+ * @returns The button, or nothing while the editor is open.
  */
 export function HtmlEditButton({ editing, access, onOpen, onPointerDown }: HtmlEditButtonProps) {
   if (editing) {

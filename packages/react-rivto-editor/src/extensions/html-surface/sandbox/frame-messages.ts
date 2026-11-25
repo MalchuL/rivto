@@ -1,5 +1,5 @@
 /**
- * The message protocol between a widget document and its host, in both directions.
+ * The message protocol between a widget page and the editor, in both directions.
  *
  * Every message carries `{channel: HTML_CHANNEL, token}`. Incoming messages
  * are untrusted and validated here before anything acts on them; outgoing
@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { HTML_CHANNEL, MAX_DRAG_REGIONS } from "../constants";
+import { HTML_CHANNEL } from "../constants";
 import { isJsonRecord, isJsonValue, isWritableKey } from "../model/json-value";
 import type {
   HtmlDragHandleRegion,
@@ -21,7 +21,16 @@ import {
   type UnsafeHtmlResult,
 } from "../unsafe/unsafe-requests";
 
-/** Every validated message a widget document may send to its host. */
+/**
+ * Every validated message a widget page may send to the editor.
+ *
+ * - Widget commands ({@link HtmlWidgetCommand}): pointer presses and writes.
+ * - `ready`: the bridge has started; sent once per page load with the private port.
+ * - `resize`: the page's content height, for auto-sized Page blocks.
+ * - `drag-handles`: the areas where pressing should move the block or element.
+ * - `unsafe-request`: an Unsafe HTML widget calls `rivto.panel` / `rivto.reactEditor`.
+ * - `unsafe-denied`: a widget touched `rivto.panel` while access is off.
+ */
 export type HtmlFrameMessage =
   | HtmlWidgetCommand
   | { readonly kind: "ready" }
@@ -30,7 +39,14 @@ export type HtmlFrameMessage =
   | { readonly kind: "unsafe-request"; readonly request: UnsafeHtmlRequest }
   | { readonly kind: "unsafe-denied" };
 
-/** Every message the host sends to a widget document. */
+/**
+ * Every message the editor sends to a widget page.
+ *
+ * - `node`: a new snapshot (`rivto.node`), including its context.
+ * - `context`: presentation changed but the data did not (`rivto.context`).
+ * - `clear-text-selection`: Page took over a text drag; drop the widget's own highlight.
+ * - `unsafe-result`: the answer to an `unsafe-request`.
+ */
 export type HtmlHostMessage =
   | { readonly kind: "node"; readonly node: HtmlNodeView }
   | { readonly kind: "context"; readonly context: HtmlWidgetContext }
@@ -38,7 +54,7 @@ export type HtmlHostMessage =
   | ({ readonly kind: "unsafe-result" } & UnsafeHtmlResult);
 
 /**
- * Posts a host message to a widget document's port, adding the envelope.
+ * Posts an editor message to a widget page's port, adding the channel and token.
  *
  * @param port - The document's connected endpoint.
  * @param token - The document's secret.
@@ -57,9 +73,14 @@ export function postHostMessage(port: MessagePort, token: string, message: HtmlH
  *
  * @param data - Handshake from the iframe window or payload from its port.
  * @param token - Secret of the document allowed to send.
+ * @param maxDragRegions - Longest drag-region list accepted; longer lists are rejected.
  * @returns The validated message, or undefined.
  */
-export function parseFrameMessage(data: unknown, token: string): HtmlFrameMessage | undefined {
+export function parseFrameMessage(
+  data: unknown,
+  token: string,
+  maxDragRegions: number,
+): HtmlFrameMessage | undefined {
   if (!data || typeof data !== "object") {
     return undefined;
   }
@@ -76,7 +97,7 @@ export function parseFrameMessage(data: unknown, token: string): HtmlFrameMessag
         ? { kind: "resize", height: message.height }
         : undefined;
     case "drag-handles":
-      return parseDragRegions(message.handles);
+      return parseDragRegions(message.handles, maxDragRegions);
     case "unsafe-request": {
       const request = parseUnsafeHtmlRequest(message);
       return request && { kind: "unsafe-request", request };
@@ -123,10 +144,12 @@ function parseWidgetCommand(message: Record<string, unknown>): HtmlWidgetCommand
  * Validates drag regions and clips them to the unit viewport.
  *
  * @param value - Untrusted region list.
- * @returns The clipped regions (empty ones dropped), or undefined if any entry is malformed.
+ * @param maxDragRegions - Longest list accepted.
+ * @returns The clipped regions (empty ones dropped), or undefined if the list is too
+ * long or any entry is malformed.
  */
-function parseDragRegions(value: unknown): HtmlFrameMessage | undefined {
-  if (!Array.isArray(value) || value.length > MAX_DRAG_REGIONS) {
+function parseDragRegions(value: unknown, maxDragRegions: number): HtmlFrameMessage | undefined {
+  if (!Array.isArray(value) || value.length > maxDragRegions) {
     return undefined;
   }
   const handles: HtmlDragHandleRegion[] = [];

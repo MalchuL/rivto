@@ -1,5 +1,5 @@
 /**
- * Host end of the private channel to one composed widget document.
+ * The editor's end of the private message channel to one widget page.
  *
  * @module
  */
@@ -11,77 +11,90 @@ import {
 } from "../sandbox/frame-messages";
 import { createIframeTextSelectionRelay } from "./iframe-text-selection";
 
-/** Credentials baked into one composed `srcdoc`. */
-export interface HtmlFrameCredentials {
-  /** Secret required on every envelope in both directions. */
+/** Secrets and limits baked into one composed widget page. */
+export interface HtmlFrameDocument {
+  /** Secret the page must include in every message, and that the editor includes in its replies. */
   readonly token: string;
-  /** Separate secret for native text-selection reports, when the relay is installed. */
+  /** Separate secret for text-selection reports. Present only when the relay is installed. */
   readonly selectionKey?: string;
+  /** Drag-region limit the page's script was built with; the parser enforces the same limit. */
+  readonly maxDragRegions: number;
 }
 
 /** Callbacks through which the connection reports to its owner. */
 export interface HtmlFrameConnectionHandlers {
   /**
-   * Runs once each time a document realm connects (initial load or srcdoc reload).
+   * Runs each time a page connects: on first load, and again if the iframe reloads it.
    *
-   * @returns The owner has posted its initial state through the connection.
+   * @returns Nothing. The owner has posted the current node to the page.
    */
   readonly onConnect: () => void;
   /**
-   * Receives every validated message from the connected document except `ready`.
+   * Receives every validated message from the connected page, except `ready`.
    *
-   * @param message - Parsed message.
-   * @returns The owner has handled the message.
+   * @param message - The parsed message.
+   * @returns Nothing. The owner has handled the message.
    */
   readonly onMessage: (message: HtmlFrameMessage) => void;
 }
 
 /**
- * Accepts the port a widget document transfers when its bridge starts and
- * routes messages over it until disposed.
+ * Connects to one widget page and carries messages to and from it until disposed.
  *
- * IMPORTANT: an iframe's `contentWindow` keeps its identity when a link or form
- * navigates it. The `ready` handshake is therefore authenticated by window *and*
- * token, and everything afterwards (snapshots, replies) goes through the
- * transferred port, which belongs to the authored document's realm only. A
- * message posted to `contentWindow` could reach the next page instead.
+ * How the connection is set up: when the page's bridge script starts, it
+ * creates a `MessageChannel`, keeps one port, and sends the other to the
+ * editor in a `ready` message. From then on every message in both directions
+ * goes through that private port.
+ *
+ * IMPORTANT: this is a security boundary. An iframe keeps the same
+ * `contentWindow` when a link or form inside it loads a different page. If the
+ * editor replied through `contentWindow`, the next page would receive the
+ * widget's data and, for Unsafe HTML, its editor access. So:
+ * - `ready` is accepted only from this iframe's window *and* with this page's token;
+ * - all replies go through the transferred port, which belongs to the page
+ *   that sent `ready` and is closed when that page unloads.
+ *
+ * Each page load is a separate JavaScript environment (a "realm"). Reloading
+ * the same `srcdoc` creates a new realm with a new port; the connection
+ * switches to it and closes the old one.
  */
 export class HtmlFrameConnection {
+  /** Port of the currently connected page, or null before `ready` and after dispose. */
   private port: MessagePort | null = null;
-  /** Lifetime of the currently connected realm; aborts the text-selection relay. */
+  /** Aborted when the connected page is replaced or the connection is disposed. */
   private realm: AbortController | null = null;
 
   /**
-   * Starts listening for the document's `ready` handshake.
+   * Starts listening for the page's `ready` message.
    *
-   * @param iframe - Frame whose window may announce the document.
-   * @param credentials - Secrets of the composed document.
-   * @param handlers - Owner callbacks.
+   * @param iframe - The iframe whose window may send `ready`.
+   * @param frameDocument - Secrets and limits of the composed page.
+   * @param handlers - Callbacks to the owner.
    */
   constructor(
     private readonly iframe: HTMLIFrameElement,
-    private readonly credentials: HtmlFrameCredentials,
+    private readonly frameDocument: HtmlFrameDocument,
     private readonly handlers: HtmlFrameConnectionHandlers,
   ) {
     window.addEventListener("message", this.onWindowMessage);
   }
 
   /**
-   * Sends a message to the connected document.
+   * Sends a message to the connected page.
    *
-   * @param message - Message body; the envelope is added.
-   * @returns The message is queued, or dropped when no document is connected yet.
+   * @param message - Message body; the channel and token are added.
+   * @returns Nothing. The message is queued on the port, or dropped if no page is connected yet.
    */
   post(message: HtmlHostMessage): void {
     if (this.port) {
-      postHostMessage(this.port, this.credentials.token, message);
+      postHostMessage(this.port, this.frameDocument.token, message);
     }
   }
 
   /**
    * Stops listening, closes the port and releases the text-selection relay.
    *
-   * @returns The connection can no longer send or receive.
+   * @returns Nothing. The connection can no longer send or receive.
    */
   dispose(): void {
     window.removeEventListener("message", this.onWindowMessage);
@@ -89,52 +102,66 @@ export class HtmlFrameConnection {
   }
 
   /**
-   * Accepts a `ready` handshake from this iframe's current document.
+   * Connects to the page that sent a valid `ready` message.
    *
-   * @param event - Any window message; others are ignored.
-   * @returns The new realm is connected when the handshake is valid.
+   * @param event - Any message delivered to the editor window; others are ignored.
+   * @returns Nothing. The page is connected if the message was a valid `ready`.
    */
   private readonly onWindowMessage = (event: MessageEvent): void => {
-    const endpoint = event.ports[0];
-    if (
-      event.source !== this.iframe.contentWindow ||
-      !endpoint ||
-      parseFrameMessage(event.data, this.credentials.token)?.kind !== "ready"
-    ) {
+    const port = event.ports[0];
+    if (!port || !this.isReadyFromThisPage(event)) {
       return;
     }
-    // Reloading the same srcdoc starts a new realm with its own port.
     this.disconnect();
     this.realm = new AbortController();
-    this.port = endpoint;
-    endpoint.onmessage = this.createPortListener(endpoint, this.realm.signal);
+    this.port = port;
+    port.onmessage = this.createPortListener(port, this.realm.signal);
     this.handlers.onConnect();
   };
 
   /**
-   * Builds the message listener for one connected realm.
+   * Checks that a window message is this page's `ready` handshake.
    *
-   * @param endpoint - The realm's port.
-   * @param signal - Aborted when the realm is replaced or the connection is disposed.
-   * @returns A listener that ignores messages once the realm is no longer current.
+   * @param event - A message delivered to the editor window.
+   * @returns True when it comes from this iframe's window and carries this page's token.
    */
-  private createPortListener(endpoint: MessagePort, signal: AbortSignal) {
-    const { token, selectionKey } = this.credentials;
-    const relayTextSelection = selectionKey
+  private isReadyFromThisPage(event: MessageEvent): boolean {
+    const { token, maxDragRegions } = this.frameDocument;
+    return (
+      event.source === this.iframe.contentWindow &&
+      parseFrameMessage(event.data, token, maxDragRegions)?.kind === "ready"
+    );
+  }
+
+  /**
+   * Builds the port listener for one connected page.
+   *
+   * Text-selection reports are authenticated with their own secret and handled
+   * here. Everything else is validated by the message parser and passed to
+   * the owner.
+   *
+   * @param port - The page's port.
+   * @param signal - Aborted when the page is replaced or the connection is disposed.
+   * @returns A listener that ignores messages once this page is no longer the connected one.
+   */
+  private createPortListener(port: MessagePort, signal: AbortSignal) {
+    const { token, selectionKey, maxDragRegions } = this.frameDocument;
+    const textSelection = selectionKey
       ? createIframeTextSelectionRelay(this.iframe, selectionKey, signal)
       : undefined;
     return ({ data }: MessageEvent) => {
-      if (this.port !== endpoint) {
+      if (this.port !== port) {
         return;
       }
-      // Text-selection reports use their own secret, not the frame envelope.
-      if (relayTextSelection?.isReport(data)) {
-        if (relayTextSelection.relay(data)) {
+      if (textSelection?.isReport(data)) {
+        // When Page took over the drag as a block selection, clear the
+        // widget's own text highlight so only one selection is visible.
+        if (textSelection.relay(data)) {
           this.post({ kind: "clear-text-selection" });
         }
         return;
       }
-      const message = parseFrameMessage(data, token);
+      const message = parseFrameMessage(data, token, maxDragRegions);
       if (message && message.kind !== "ready") {
         this.handlers.onMessage(message);
       }
@@ -142,9 +169,9 @@ export class HtmlFrameConnection {
   }
 
   /**
-   * Closes the current realm's port and aborts its lifetime.
+   * Closes the connected page's port and aborts its lifetime signal.
    *
-   * @returns No realm is connected.
+   * @returns Nothing. No page is connected.
    */
   private disconnect(): void {
     this.realm?.abort();

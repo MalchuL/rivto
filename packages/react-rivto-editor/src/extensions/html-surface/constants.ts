@@ -1,20 +1,14 @@
-/** Persisted block type for authored HTML, CSS and JavaScript. Source lives in `content`. */
+/** Persisted type of HTML widget blocks. The widget's HTML, CSS and JavaScript live in `content`. */
 export const HTML_BLOCK_TYPE = "html";
 
 /** Persisted block type for HTML that the user may grant editor access. */
 export const UNSAFE_HTML_BLOCK_TYPE = "unsafe-html";
 
-/** Persisted canvas element type for authored HTML. Source lives in `props.html`. */
+/** Persisted type of HTML widget canvas elements. The widget's HTML lives in `props.html`. */
 export const HTML_ELEMENT_TYPE = "html";
 
-/** Discriminator on every message exchanged between the host and a widget document. */
+/** Marker carried by every message between the editor and a widget page, so unrelated messages are ignored. */
 export const HTML_CHANNEL = "rivto-html";
-
-/** Upper bound for an auto-sized Page block iframe, in CSS pixels. */
-export const MAX_AUTO_FRAME_HEIGHT = 720;
-
-/** Upper bound for drag regions reported by one widget document. */
-export const MAX_DRAG_REGIONS = 64;
 
 /** Short reference for the widget script API, shown next to source fields. */
 export const HTML_EDIT_HINT =

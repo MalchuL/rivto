@@ -1,5 +1,5 @@
 /**
- * Host pointer targets laid over a widget iframe's drag regions.
+ * Transparent pointer targets laid over a widget's background areas.
  *
  * @module
  */
@@ -8,23 +8,30 @@ import type { HtmlDragHandleRegion } from "../types";
 
 /** Props for {@link HtmlDragHandles}. */
 export interface HtmlDragHandlesProps {
-  /** Regions reported by the widget document, already clipped to its viewport. */
+  /** Regions reported by the widget, as fractions of the iframe viewport, already clipped. */
   readonly regions: readonly HtmlDragHandleRegion[];
-  /** Mark the targets as Page block-selection anchors (range gestures and modifier selection). */
+  /** Whether the targets act as Page block-selection anchors. True for Page blocks. */
   readonly blockSelectionAnchor?: boolean;
 }
 
 /**
- * Places transparent pointer targets over a widget's drag regions.
+ * Places one transparent pointer target over each drag region of a widget.
  *
  * An iframe swallows pointer events, so a press on a widget's background would
- * never reach Page or the canvas. These targets sit above the iframe at the
- * reported regions so the surrounding surface receives the press natively;
- * they neither synthesize events nor write to the document. The parent must
- * be a positioned box matching the iframe viewport.
+ * never reach Page or the canvas, and the user could not drag the widget. These
+ * targets sit above the iframe at the reported regions, so the surrounding
+ * surface receives the press as an ordinary DOM event. They do not synthesize
+ * events or write to the document.
+ *
+ * As block-selection anchors (Page blocks), a plain click does not select the
+ * whole block, but a range drag or a modifier click does.
+ *
+ * The parent element must be positioned and exactly cover the iframe.
  *
  * @param props - Regions and the anchor flag.
- * @returns One target per region, or nothing for an empty list.
+ * @param props.regions - Regions as fractions of the iframe viewport.
+ * @param props.blockSelectionAnchor - Whether the targets act as block-selection anchors.
+ * @returns One target per region; nothing for an empty list.
  */
 export function HtmlDragHandles({ regions, blockSelectionAnchor = false }: HtmlDragHandlesProps) {
   const anchorProps = blockSelectionAnchor

@@ -66,6 +66,10 @@ the final implementation change:
 4. Remove duplicate references, unnecessary wrappers, type casts used to bypass
    boundaries, forwarding methods, and API options with no current consumer. Do
    not introduce replacement abstractions without a present requirement.
+   Exception: expose limits and thresholds that bound an extension's behavior
+   (maximum sizes, counts, timeouts) as options of its factory, with documented
+   defaults and validation, even without a current consumer. Do not hard-code them
+   as module constants; a host must be able to see and change them.
 5. Review architectural boundaries separately from behavioral validation. Passing
    tests does not establish that an interface is minimal or ownership is correct.
    Report which boundaries were inspected and any remaining limitations; do not

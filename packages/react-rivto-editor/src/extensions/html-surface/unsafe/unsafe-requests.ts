@@ -1,8 +1,8 @@
 /**
- * Host side of the opt-in editor access granted to an Unsafe HTML block.
+ * Editor side of the access an Unsafe HTML block can be granted to read and modify blocks.
  *
  * The widget never receives live objects. It sends `unsafe-request` messages that
- * name one of a fixed set of block operations; the host validates the request,
+ * name one of a fixed set of block operations; the editor validates the request,
  * rechecks the grant, runs the operation and posts a detached result back.
  *
  * @module
@@ -60,8 +60,11 @@ export interface UnsafeHtmlFrameAccess {
 
 /** Reply delivered to the widget's pending promise. */
 export interface UnsafeHtmlResult {
+  /** ID of the request being answered. */
   readonly id: number;
+  /** Detached result of the operation; null when refused, failed or invalid. */
   readonly value: unknown;
+  /** Why the request failed or was refused; absent on success. */
   readonly error?: string;
 }
 

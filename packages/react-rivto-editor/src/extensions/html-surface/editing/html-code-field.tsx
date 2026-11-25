@@ -10,7 +10,7 @@ import { EditorView } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { useEffect, useLayoutEffect, useRef } from "react";
 
-/** Shares Rivto's gutter palette and code typography across mounted source and JSON fields. */
+/** Theme that gives every field Rivto's gutter colors and inherits the surrounding font. */
 const htmlCodeTheme = EditorView.theme({
   ".cm-scroller": { fontFamily: "inherit", lineHeight: "inherit" },
   ".cm-activeLine": { backgroundColor: "transparent" },
@@ -25,7 +25,7 @@ const htmlCodeTheme = EditorView.theme({
   },
 });
 
-/** Language highlighted inside one widget editor. */
+/** Syntax highlighting used by a field. */
 export type HtmlCodeLanguage = "html" | "json";
 
 /**
@@ -36,44 +36,50 @@ export type HtmlCodeLanguage = "html" | "json";
  */
 export type HtmlCodeFieldStates = Pick<Map<string, EditorState>, "get" | "set">;
 
-/** Props for one CodeMirror document. */
+/** Props for {@link HtmlCodeField}. */
 export interface HtmlCodeFieldProps {
-  /** Session-owned states retained when a field moves between inline and modal layouts. */
+  /** Saved CodeMirror states of the editing session; see {@link HtmlCodeFieldStates}. */
   readonly fieldStates: HtmlCodeFieldStates;
-  /** Current document text. External changes replace the editor contents. */
+  /** Text the field should show. A change that did not come from typing replaces the contents. */
   readonly value: string;
-  /** Accessible name of the editor content. */
+  /** Accessible name of the field. Also the key of its saved state, so it must be unique per session. */
   readonly label: string;
-  /** Highlighting used for this document. */
+  /** Syntax highlighting. */
   readonly language: HtmlCodeLanguage;
-  /** When true, the field grows with a fullscreen modal instead of a short scroller. */
+  /** Whether the field stretches to fill the fullscreen dialog instead of using a short scroller. */
   readonly fill?: boolean;
-  /** When true, the document cannot be changed. */
+  /** Whether the text cannot be edited. */
   readonly readOnly?: boolean;
   /**
-   * Receives the full document after each user edit.
+   * Receives the whole text after each edit.
    *
-   * @param value - Current document text.
-   * @returns The caller has received the edited text.
+   * @param value - The field's text after the edit.
+   * @returns Nothing.
    */
   readonly onChange?: (value: string) => void;
 }
 
 /**
- * Mounts a CodeMirror editor for HTML or JSON.
+ * Renders a CodeMirror editor for HTML or JSON.
  *
- * The view is created once per language and label. Later `value` changes that
- * did not come from the view itself replace the document without recreating it.
+ * The CodeMirror view is created when the field mounts and recreated only if
+ * its label, language or read-only flag changes. On unmount the view's state
+ * (text, selection, undo history) is saved in `fieldStates`, and the next
+ * mount with the same label resumes from it. That is what keeps undo working
+ * when the editor moves into or out of the fullscreen dialog.
  *
- * @param props - Document text, language, and change callback.
- * @param props.fieldStates - Session-owned state by field label, including history and selection.
- * @param props.value - Text loaded into the document.
- * @param props.label - Accessible name announced for the editor.
+ * When `value` changes from outside (not by typing), the text is replaced in
+ * the existing view instead of recreating it.
+ *
+ * @param props - Field text, language and change handler.
+ * @param props.fieldStates - Saved CodeMirror states of the editing session.
+ * @param props.value - Text the field should show.
+ * @param props.label - Accessible name; also the key of the saved state.
  * @param props.language - `html` or `json` highlighting.
- * @param props.fill - Uses the taller modal layout when true.
- * @param props.readOnly - Prevents edits when true.
- * @param props.onChange - Called with the full document after a user edit.
- * @returns The host element that owns the CodeMirror view.
+ * @param props.fill - Whether the field stretches to the fullscreen dialog.
+ * @param props.readOnly - Whether the text cannot be edited.
+ * @param props.onChange - Receives the whole text after each edit.
+ * @returns The element that hosts the CodeMirror view.
  */
 export function HtmlCodeField({
   fieldStates,
@@ -86,6 +92,7 @@ export function HtmlCodeField({
 }: HtmlCodeFieldProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
+  // The view is not recreated when these change, so it reads them through refs.
   const onChangeRef = useRef(onChange);
   const valueRef = useRef(value);
   useLayoutEffect(() => {
@@ -108,29 +115,34 @@ export function HtmlCodeField({
   return <div ref={host} className={className} />;
 }
 
-/** Options captured when a CodeMirror view is created. */
+/** Settings fixed for the lifetime of one CodeMirror view. */
 interface CodeViewOptions {
+  /** Where the view's state is saved on unmount and restored from on mount. */
   readonly fieldStates: HtmlCodeFieldStates;
+  /** Accessible name and saved-state key. */
   readonly label: string;
+  /** Syntax highlighting. */
   readonly language: HtmlCodeLanguage;
+  /** Whether the text cannot be edited. */
   readonly readOnly: boolean;
   /**
-   * Receives the whole document after an edit.
+   * Receives the whole text after each edit.
    *
-   * @param value - Current document text.
-   * @returns The caller has received the edited text.
+   * @param value - The field's text after the edit.
+   * @returns Nothing.
    */
   readonly onChange: (value: string) => void;
 }
 
 /**
- * Creates a CodeMirror view in a host and destroys it on cleanup.
+ * Creates a CodeMirror view, resuming from a saved state when there is one.
  *
- * @param parent - Element that receives the view, or null before layout.
- * @param view - Ref that retains the view for later document replacement.
- * @param initial - Document text at creation.
- * @param options - Language, label, and the edit callback.
- * @returns Cleanup that destroys the view, or a no-op when the host is missing.
+ * @param parent - Element that hosts the view, or null if it is not mounted.
+ * @param view - Ref that receives the view so later text changes can reach it.
+ * @param initial - Text used only when there is no saved state.
+ * @param options - Settings of the view.
+ * @returns Cleanup that saves the view's state and destroys it; a no-op when
+ * there was no parent.
  */
 function mountCodeView(
   parent: HTMLDivElement | null,
@@ -143,7 +155,8 @@ function mountCodeView(
   }
   const saved = options.fieldStates.get(options.label);
   const extensions = codeExtensions(options);
-  // Replace the previous view's listener while preserving the history and selection fields.
+  // A saved state still holds the previous view's change listener. Reconfigure it
+  // with this view's extensions; the text, selection and history are kept.
   const state = saved
     ? saved.update({ effects: StateEffect.reconfigure.of(extensions) }).state
     : EditorState.create({ doc: initial, extensions });
@@ -157,10 +170,11 @@ function mountCodeView(
 }
 
 /**
- * Builds the extensions for one widget document.
+ * Builds the CodeMirror extensions for a field.
  *
- * @param options - Language, accessible name, read-only flag, and edit callback.
- * @returns Extensions installed on the editor state.
+ * @param options - Settings of the view.
+ * @returns Basic editing, theme, language, accessible name, change listener and,
+ * for read-only fields, the read-only flags.
  */
 function codeExtensions(options: CodeViewOptions) {
   const language = options.language === "html" ? html() : json();
@@ -182,11 +196,14 @@ function codeExtensions(options: CodeViewOptions) {
 }
 
 /**
- * Replaces the view document when the text came from outside the editor.
+ * Replaces the view's text when it differs from `value`.
  *
- * @param view - Mounted editor, or null before the view exists.
- * @param value - Document text that should be showing.
- * @returns Replaces differing text; equal text and its selection remain unchanged.
+ * Typing already updated the view, so after an edit the texts are equal and
+ * nothing happens; the cursor and selection are left alone.
+ *
+ * @param view - The mounted view, or null before it exists.
+ * @param value - Text the field should show.
+ * @returns Nothing. The view shows `value`.
  */
 function replaceCodeDocument(view: EditorView | null, value: string): void {
   if (!view || view.state.doc.toString() === value) {

@@ -1,24 +1,27 @@
 /**
- * Iframe-side measurement of "drag regions": the parts of a widget where a
- * pointer press should start a host gesture (move the block or element)
- * rather than reach the widget.
+ * Page-side measurement of a widget's drag regions: the areas where pressing
+ * should move the block or element instead of interacting with the widget.
  *
- * An iframe swallows pointer events, so the host overlays transparent targets
- * at these regions. Two modes:
+ * An iframe swallows pointer events, so the editor cannot tell on its own
+ * whether a press landed on a button or on empty background. The page script
+ * measures the regions and reports them; the editor lays transparent drag
+ * handles over them (see `frame/html-drag-handles.tsx`).
  *
- * - Explicit: elements marked `data-rivto-drag-handle` are the regions.
- * - Automatic (no markers): the whole viewport minus text, native controls and
- *   anything with a detected pointer/click/drag listener.
+ * There are two modes:
+ * - Explicit: if the widget marks elements with `data-rivto-drag-handle`,
+ *   exactly those elements are the regions.
+ * - Automatic: otherwise the whole viewport is a region, minus text, native
+ *   controls, and any element with a click, pointer or drag listener.
  *
- * Listener detection patches `EventTarget.prototype.add/removeEventListener`
- * before authored scripts run, tracking elements through weak references so a
- * removed node is never retained.
+ * To find elements with listeners, the script wraps
+ * `EventTarget.prototype.addEventListener` / `removeEventListener` before any
+ * widget script runs. Elements are tracked through weak references, so a
+ * removed element can still be garbage-collected.
  *
  * @module
  */
-import { MAX_DRAG_REGIONS } from "../../constants";
 
-/** Selector for elements whose own hit area must stay inside the widget. */
+/** Elements whose own area always stays with the widget: controls, links, editable and draggable content. */
 const INTERACTIVE_SELECTOR = [
   "summary",
   "label",
@@ -67,182 +70,304 @@ const OBSERVED_ATTRIBUTES = [
 ];
 
 /**
- * Builds the drag-region measurement and reporting runtime.
+ * Builds the script that measures drag regions and reports them to the editor.
  *
- * @returns ES5 source; requires `send`. Sends `drag-handles` messages with
- * viewport-relative rectangles whenever they change, and an empty list on `pagehide`.
+ * The script sends a `drag-handles` message with the regions, as fractions of
+ * the viewport, whenever they change, and an empty list when the page unloads.
+ * Measurements are batched: any number of changes within one animation frame
+ * cause a single measurement.
+ *
+ * @param maxDragRegions - Most regions the script measures or reports. Must
+ * equal the limit the editor's message parser enforces for this page.
+ * @returns ES5 source; uses `send`.
  */
-export function dragRegionScript(): string {
+export function dragRegionScript(maxDragRegions: number): string {
   return `
-  var regionObserver = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleRegions) : null;
-  var observedNodes = new Set();
-  var interactiveNodes = new Set();
-  var interactiveReferences = new WeakMap();
-  var lastRegions = "";
-  var regionFrame = 0;
-  function scheduleRegions() {
-    if (!regionFrame) { regionFrame = requestAnimationFrame(reportRegions); }
+  var sizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleMeasurement) : null;
+  /** Elements the ResizeObserver currently watches. */
+  var sizeObservedElements = new Set();
+  /** Weak references to elements that have click, pointer or drag listeners. */
+  var listenerElements = new Set();
+  /** For each element with listeners: its weak reference and its live registrations. */
+  var listenerEntries = new WeakMap();
+  /** JSON of the last regions sent, to avoid sending the same regions twice. */
+  var lastSentRegions = "";
+  /** Pending animation-frame request, or 0. */
+  var pendingFrame = 0;
+
+  /** Schedules one measurement for the next animation frame, unless one is pending. */
+  function scheduleMeasurement() {
+    if (!pendingFrame) { pendingFrame = requestAnimationFrame(measureAndReport); }
   }
-  // Visible rectangle of a node after rectangular overflow clips of its ancestors,
-  // as fractions of the viewport.
-  function visibleRectangle(node, width, height) {
-    var style = getComputedStyle(node);
+
+  /**
+   * Measures the visible part of an element, after clipping by scrolling ancestors.
+   *
+   * Hidden elements and elements with pointer-events: none have no visible part.
+   * Ancestors with overflow other than "visible" clip the rectangle; scale
+   * transforms on those ancestors are taken into account.
+   *
+   * @param element - The element to measure.
+   * @param viewportWidth - Viewport width in CSS pixels.
+   * @param viewportHeight - Viewport height in CSS pixels.
+   * @returns The visible rectangle as fractions of the viewport (possibly empty).
+   */
+  function visibleRectangle(element, viewportWidth, viewportHeight) {
+    var style = getComputedStyle(element);
     if (style.visibility !== "visible" || style.pointerEvents === "none") {
       return { x: 0, y: 0, width: 0, height: 0 };
     }
-    var bounds = node.getBoundingClientRect();
+    var bounds = element.getBoundingClientRect();
     var left = bounds.left, top = bounds.top, right = bounds.right, bottom = bounds.bottom;
-    for (var ancestor = node.parentElement; ancestor; ancestor = ancestor.parentElement) {
-      var clip = getComputedStyle(ancestor);
-      var clipX = /^(auto|scroll|hidden|clip)$/.test(clip.overflowX);
-      var clipY = /^(auto|scroll|hidden|clip)$/.test(clip.overflowY);
-      if (clipX || clipY) {
-        var box = ancestor.getBoundingClientRect();
-        var scaleX = ancestor.offsetWidth ? box.width / ancestor.offsetWidth : 1;
-        var scaleY = ancestor.offsetHeight ? box.height / ancestor.offsetHeight : 1;
-        var x = box.left + ancestor.clientLeft * scaleX, y = box.top + ancestor.clientTop * scaleY;
-        var clipWidth = ancestor.offsetWidth ? ancestor.clientWidth * scaleX : box.width;
-        var clipHeight = ancestor.offsetHeight ? ancestor.clientHeight * scaleY : box.height;
-        if (clipX) { left = Math.max(left, x); right = Math.min(right, x + clipWidth); }
-        if (clipY) { top = Math.max(top, y); bottom = Math.min(bottom, y + clipHeight); }
-      }
+    for (var ancestor = element.parentElement; ancestor; ancestor = ancestor.parentElement) {
+      var ancestorStyle = getComputedStyle(ancestor);
+      var clipsX = /^(auto|scroll|hidden|clip)$/.test(ancestorStyle.overflowX);
+      var clipsY = /^(auto|scroll|hidden|clip)$/.test(ancestorStyle.overflowY);
+      if (!clipsX && !clipsY) { continue; }
+      var box = ancestor.getBoundingClientRect();
+      var scaleX = ancestor.offsetWidth ? box.width / ancestor.offsetWidth : 1;
+      var scaleY = ancestor.offsetHeight ? box.height / ancestor.offsetHeight : 1;
+      var clipLeft = box.left + ancestor.clientLeft * scaleX;
+      var clipTop = box.top + ancestor.clientTop * scaleY;
+      var clipWidth = ancestor.offsetWidth ? ancestor.clientWidth * scaleX : box.width;
+      var clipHeight = ancestor.offsetHeight ? ancestor.clientHeight * scaleY : box.height;
+      if (clipsX) { left = Math.max(left, clipLeft); right = Math.min(right, clipLeft + clipWidth); }
+      if (clipsY) { top = Math.max(top, clipTop); bottom = Math.min(bottom, clipTop + clipHeight); }
     }
-    return { x: left / width, y: top / height, width: Math.max(0, right - left) / width, height: Math.max(0, bottom - top) / height };
+    return {
+      x: left / viewportWidth,
+      y: top / viewportHeight,
+      width: Math.max(0, right - left) / viewportWidth,
+      height: Math.max(0, bottom - top) / viewportHeight
+    };
   }
-  // Subtracts one rectangle from a set of rectangles, splitting each overlap into
-  // up to four remaining pieces.
-  function subtractRectangle(regions, box) {
+
+  /**
+   * Removes a rectangle from a set of rectangles.
+   *
+   * Each rectangle that overlaps the hole is split into up to four pieces
+   * around it (above, below, left, right). The result is capped at
+   * ${maxDragRegions} rectangles, so a busy widget loses its smallest leftovers.
+   *
+   * @param regions - Rectangles to cut, as viewport fractions.
+   * @param hole - The rectangle to remove, as viewport fractions.
+   * @returns The remaining rectangles.
+   */
+  function subtractRectangle(regions, hole) {
     var result = [];
-    regions.forEach(function (r) {
-      var l = Math.max(r.x, box.x), t = Math.max(r.y, box.y);
-      var right = Math.min(r.x + r.width, box.x + box.width);
-      var bottom = Math.min(r.y + r.height, box.y + box.height);
-      if (right <= l || bottom <= t) { result.push(r); return; }
-      if (t > r.y) { result.push({ x: r.x, y: r.y, width: r.width, height: t - r.y }); }
-      if (bottom < r.y + r.height) { result.push({ x: r.x, y: bottom, width: r.width, height: r.y + r.height - bottom }); }
-      if (l > r.x) { result.push({ x: r.x, y: t, width: l - r.x, height: bottom - t }); }
-      if (right < r.x + r.width) { result.push({ x: right, y: t, width: r.x + r.width - right, height: bottom - t }); }
-    });
-    return result.slice(0, ${MAX_DRAG_REGIONS});
-  }
-  // Whole viewport minus native controls, detected listeners, pointer cursors and text.
-  function automaticRegions(width, height) {
-    var regions = [{ x: 0, y: 0, width: 1, height: 1 }];
-    function exclude(node) { regions = subtractRectangle(regions, visibleRectangle(node, width, height)); }
-    document.querySelectorAll(${JSON.stringify(INTERACTIVE_SELECTOR)}).forEach(exclude);
-    document.body.querySelectorAll("*").forEach(function (node) {
-      if (node.onclick || node.onmousedown || node.onpointerdown || node.ondragstart || node.ondragenter || node.ondragover || node.ondrop || getComputedStyle(node).cursor === "pointer") {
-        exclude(node);
+    regions.forEach(function (region) {
+      var regionRight = region.x + region.width, regionBottom = region.y + region.height;
+      var overlapLeft = Math.max(region.x, hole.x), overlapTop = Math.max(region.y, hole.y);
+      var overlapRight = Math.min(regionRight, hole.x + hole.width);
+      var overlapBottom = Math.min(regionBottom, hole.y + hole.height);
+      if (overlapRight <= overlapLeft || overlapBottom <= overlapTop) { result.push(region); return; }
+      if (overlapTop > region.y) {
+        result.push({ x: region.x, y: region.y, width: region.width, height: overlapTop - region.y });
+      }
+      if (overlapBottom < regionBottom) {
+        result.push({ x: region.x, y: overlapBottom, width: region.width, height: regionBottom - overlapBottom });
+      }
+      if (overlapLeft > region.x) {
+        result.push({ x: region.x, y: overlapTop, width: overlapLeft - region.x, height: overlapBottom - overlapTop });
+      }
+      if (overlapRight < regionRight) {
+        result.push({ x: overlapRight, y: overlapTop, width: regionRight - overlapRight, height: overlapBottom - overlapTop });
       }
     });
-    interactiveNodes.forEach(function (reference) {
-      var node = reference.deref();
-      if (!node) { interactiveNodes.delete(reference); }
-      else if (node.isConnected) { exclude(node); }
+    return result.slice(0, ${maxDragRegions});
+  }
+
+  /**
+   * Computes automatic regions: the whole viewport minus everything interactive.
+   *
+   * Removed from the viewport, in order: controls and elements matching the
+   * interactive selector; elements with inline handlers or a pointer cursor;
+   * elements with tracked listeners; and every line of visible text, so text
+   * stays selectable.
+   *
+   * @param viewportWidth - Viewport width in CSS pixels.
+   * @param viewportHeight - Viewport height in CSS pixels.
+   * @returns The background rectangles, as viewport fractions.
+   */
+  function automaticRegions(viewportWidth, viewportHeight) {
+    var regions = [{ x: 0, y: 0, width: 1, height: 1 }];
+    function exclude(element) {
+      regions = subtractRectangle(regions, visibleRectangle(element, viewportWidth, viewportHeight));
+    }
+    document.querySelectorAll(${JSON.stringify(INTERACTIVE_SELECTOR)}).forEach(exclude);
+    document.body.querySelectorAll("*").forEach(function (element) {
+      var hasInlineHandler = element.onclick || element.onmousedown || element.onpointerdown ||
+        element.ondragstart || element.ondragenter || element.ondragover || element.ondrop;
+      if (hasInlineHandler || getComputedStyle(element).cursor === "pointer") { exclude(element); }
+    });
+    listenerElements.forEach(function (reference) {
+      var element = reference.deref();
+      if (!element) { listenerElements.delete(reference); }
+      else if (element.isConnected) { exclude(element); }
     });
     var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    var text;
-    while ((text = walker.nextNode())) {
-      if (!text.nodeValue.trim() || /^(SCRIPT|STYLE)$/.test(text.parentElement.tagName)) { continue; }
+    var textNode;
+    while ((textNode = walker.nextNode())) {
+      if (!textNode.nodeValue.trim() || /^(SCRIPT|STYLE)$/.test(textNode.parentElement.tagName)) { continue; }
       var range = document.createRange();
-      range.selectNodeContents(text);
-      Array.from(range.getClientRects()).forEach(function (box) {
-        regions = subtractRectangle(regions, { x: box.left / width, y: box.top / height, width: box.width / width, height: box.height / height });
+      range.selectNodeContents(textNode);
+      Array.from(range.getClientRects()).forEach(function (line) {
+        regions = subtractRectangle(regions, {
+          x: line.left / viewportWidth,
+          y: line.top / viewportHeight,
+          width: line.width / viewportWidth,
+          height: line.height / viewportHeight
+        });
       });
     }
     return regions;
   }
-  // Keeps the ResizeObserver on exactly the nodes whose size can move a region.
-  function observeRegionNodes(markers) {
-    if (!regionObserver) { return; }
-    var nextNodes = new Set();
+
+  /**
+   * Points the ResizeObserver at the elements whose size can move a region.
+   *
+   * In explicit mode those are the markers and their ancestors. In automatic
+   * mode any element can matter, so the whole body is observed.
+   *
+   * @param markers - Elements marked with data-rivto-drag-handle.
+   */
+  function observeRelevantSizes(markers) {
+    if (!sizeObserver) { return; }
+    var nextElements = new Set();
     if (!markers.length && document.body) {
-      nextNodes.add(document.body);
-      document.body.querySelectorAll("*").forEach(function (node) { nextNodes.add(node); });
+      nextElements.add(document.body);
+      document.body.querySelectorAll("*").forEach(function (element) { nextElements.add(element); });
     }
-    markers.forEach(function (node) {
-      for (var ancestor = node; ancestor; ancestor = ancestor.parentElement) { nextNodes.add(ancestor); }
+    markers.forEach(function (marker) {
+      for (var element = marker; element; element = element.parentElement) { nextElements.add(element); }
     });
-    observedNodes.forEach(function (node) { if (!nextNodes.has(node)) { regionObserver.unobserve(node); } });
-    nextNodes.forEach(function (node) { if (!observedNodes.has(node)) { regionObserver.observe(node); } });
-    observedNodes = nextNodes;
+    sizeObservedElements.forEach(function (element) {
+      if (!nextElements.has(element)) { sizeObserver.unobserve(element); }
+    });
+    nextElements.forEach(function (element) {
+      if (!sizeObservedElements.has(element)) { sizeObserver.observe(element); }
+    });
+    sizeObservedElements = nextElements;
   }
-  function reportRegions() {
-    regionFrame = 0;
-    var markers = Array.from(document.querySelectorAll("[data-rivto-drag-handle]")).slice(0, ${MAX_DRAG_REGIONS});
-    observeRegionNodes(markers);
+
+  /** Measures the regions and sends them to the editor if they changed. */
+  function measureAndReport() {
+    pendingFrame = 0;
+    var markers = Array.from(document.querySelectorAll("[data-rivto-drag-handle]")).slice(0, ${maxDragRegions});
+    observeRelevantSizes(markers);
     var width = window.innerWidth, height = window.innerHeight;
-    var rectangles = [];
+    var regions = [];
     if (width && height && markers.length) {
-      rectangles = markers.map(function (node) { return visibleRectangle(node, width, height); });
+      regions = markers.map(function (marker) { return visibleRectangle(marker, width, height); });
     } else if (width && height && document.body) {
-      rectangles = automaticRegions(width, height);
+      regions = automaticRegions(width, height);
     }
-    var serialized = JSON.stringify(rectangles);
-    if (serialized !== lastRegions) {
-      lastRegions = serialized;
-      send({ kind: "drag-handles", handles: rectangles });
+    var serialized = JSON.stringify(regions);
+    if (serialized !== lastSentRegions) {
+      lastSentRegions = serialized;
+      send({ kind: "drag-handles", handles: regions });
     }
   }
+
   if (typeof MutationObserver === "function") {
-    // Automatic regions depend on arbitrary layout, so every mutation reschedules a
-    // measurement; one animation frame coalesces bursts.
-    new MutationObserver(scheduleRegions).observe(document.documentElement, {
+    // In automatic mode any DOM change can move a region, so every mutation
+    // schedules a measurement; the animation frame batches bursts of changes.
+    new MutationObserver(scheduleMeasurement).observe(document.documentElement, {
       subtree: true, childList: true, characterData: true, attributes: true,
       attributeFilter: ${JSON.stringify(OBSERVED_ATTRIBUTES)}
     });
   }
-  // Replaced content and fonts can move controls without an attribute mutation.
-  document.addEventListener("load", scheduleRegions, true);
-  if (document.fonts) { document.fonts.addEventListener("loadingdone", scheduleRegions); }
-  window.addEventListener("resize", scheduleRegions);
-  window.addEventListener("scroll", scheduleRegions, true);
-  window.addEventListener("DOMContentLoaded", scheduleRegions);
+  // Images and fonts can finish loading and move controls without any DOM mutation.
+  document.addEventListener("load", scheduleMeasurement, true);
+  if (document.fonts) { document.fonts.addEventListener("loadingdone", scheduleMeasurement); }
+  window.addEventListener("resize", scheduleMeasurement);
+  window.addEventListener("scroll", scheduleMeasurement, true);
+  window.addEventListener("DOMContentLoaded", scheduleMeasurement);
   window.addEventListener("pagehide", function () { send({ kind: "drag-handles", handles: [] }); });
 ${listenerTrackingScript()}
 `;
 }
 
 /**
- * Tracks pointer, click and drag listeners on elements so automatic regions exclude them.
+ * Builds the script that tracks which elements have click, pointer or drag listeners.
  *
- * Registrations are matched by type, listener and capture flag like the native
- * implementation; `once` and `signal` removal release the exclusion as well.
+ * It wraps `addEventListener` / `removeEventListener` so automatic regions can
+ * leave those elements to the widget. Registrations are matched the way the
+ * browser matches them (event type, callback, capture flag). A registration
+ * also ends when a `once` listener fires or its `AbortSignal` aborts; when an
+ * element's last registration ends, its area becomes draggable again.
  *
- * @returns ES5 source; requires `interactiveNodes`, `interactiveReferences` and `scheduleRegions`.
+ * @returns ES5 source; uses `listenerElements`, `listenerEntries` and `scheduleMeasurement`.
  */
 function listenerTrackingScript(): string {
   return `
   var nativeAddListener = EventTarget.prototype.addEventListener;
   var nativeRemoveListener = EventTarget.prototype.removeEventListener;
   var TRACKED_EVENTS = /^(click|dblclick|mousedown|pointerdown|touchstart|dragstart|dragenter|dragover|drop)$/;
+
+  /**
+   * Reads the capture flag the way addEventListener does.
+   *
+   * @param options - A boolean or an options object, or undefined.
+   * @returns The capture flag.
+   */
   function captureFlag(options) {
     return typeof options === "boolean" ? options : Boolean(options && options.capture);
   }
-  function findRegistration(node, type, listener, capture) {
-    var entry = interactiveReferences.get(node);
+
+  /**
+   * Finds a live registration on an element.
+   *
+   * @param element - The element.
+   * @param type - Event type.
+   * @param listener - The callback or listener object the widget passed.
+   * @param capture - Capture flag.
+   * @returns The registration, or undefined.
+   */
+  function findRegistration(element, type, listener, capture) {
+    var entry = listenerEntries.get(element);
     return entry && Array.from(entry.registrations).find(function (registration) {
       return registration.type === type && registration.listener === listener && registration.capture === capture;
     });
   }
-  function forget(node, registration) {
-    var entry = interactiveReferences.get(node);
+
+  /**
+   * Ends one registration; when it was the element's last, stops tracking the element.
+   *
+   * Called on removeEventListener, after a once listener fires, and when its signal aborts.
+   *
+   * @param element - The element the listener was registered on.
+   * @param registration - The registration to end.
+   */
+  function forgetRegistration(element, registration) {
+    var entry = listenerEntries.get(element);
     if (!entry) { return; }
     entry.registrations.delete(registration);
-    if (registration.signal) { nativeRemoveListener.call(registration.signal, "abort", registration.abort); }
+    if (registration.signal) { nativeRemoveListener.call(registration.signal, "abort", registration.onAbort); }
     if (!entry.registrations.size) {
-      interactiveNodes.delete(entry.reference);
-      interactiveReferences.delete(node);
+      listenerElements.delete(entry.reference);
+      listenerEntries.delete(element);
     }
-    scheduleRegions();
+    scheduleMeasurement();
   }
-  // A long-lived signal must not retain a detached element or its listener.
-  function abortRegistration(nodeRef, registrationRef) {
+
+  /**
+   * Builds the abort handler of a registration made with an AbortSignal.
+   *
+   * It holds the element and the registration only weakly, so a long-lived
+   * signal does not keep a removed element alive.
+   *
+   * @param elementReference - Weak reference to the element.
+   * @param registrationReference - Weak reference to the registration.
+   * @returns The abort handler.
+   */
+  function abortHandler(elementReference, registrationReference) {
     return function () {
-      var node = nodeRef.deref(), registration = registrationRef.deref();
-      if (node && registration) { forget(node, registration); }
+      var element = elementReference.deref(), registration = registrationReference.deref();
+      if (element && registration) { forgetRegistration(element, registration); }
     };
   }
+
   EventTarget.prototype.addEventListener = function (type, listener, options) {
     if (!(this instanceof Element) || !listener || !TRACKED_EVENTS.test(type)) {
       return nativeAddListener.call(this, type, listener, options);
@@ -253,32 +378,34 @@ function listenerTrackingScript(): string {
     if (findRegistration(this, type, listener, capture)) { return; }
     var registration = { type: type, listener: listener, capture: capture, signal: signal, callback: listener };
     if (options && options.once) {
+      // A once listener ends its own registration when it fires.
       registration.callback = function (event) {
-        forget(this, registration);
+        forgetRegistration(this, registration);
         if (typeof listener === "function") { listener.call(this, event); }
         else { listener.handleEvent(event); }
       };
     }
     nativeAddListener.call(this, type, registration.callback, options);
-    var entry = interactiveReferences.get(this);
+    var entry = listenerEntries.get(this);
     if (!entry) {
       entry = { reference: new WeakRef(this), registrations: new Set() };
-      interactiveReferences.set(this, entry);
-      interactiveNodes.add(entry.reference);
+      listenerEntries.set(this, entry);
+      listenerElements.add(entry.reference);
     }
     entry.registrations.add(registration);
     if (signal) {
-      registration.abort = abortRegistration(entry.reference, new WeakRef(registration));
-      nativeAddListener.call(signal, "abort", registration.abort, { once: true });
+      registration.onAbort = abortHandler(entry.reference, new WeakRef(registration));
+      nativeAddListener.call(signal, "abort", registration.onAbort, { once: true });
     }
-    scheduleRegions();
+    scheduleMeasurement();
   };
+
   EventTarget.prototype.removeEventListener = function (type, listener, options) {
     var capture = captureFlag(options);
     var registration = findRegistration(this, type, listener, capture);
     if (registration) {
       nativeRemoveListener.call(this, type, registration.callback, capture);
-      forget(this, registration);
+      forgetRegistration(this, registration);
     } else {
       nativeRemoveListener.call(this, type, listener, options);
     }

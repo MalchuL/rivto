@@ -8,16 +8,18 @@ import { SurfaceContext } from "../../../surfaces/surface";
 import type { HtmlWidgetContext } from "../types";
 
 /**
- * Builds a stable widget context for the current surface.
+ * Builds the presentation context a widget sees as `rivto.context`.
  *
- * The caller supplies selection from the block or element that owns it. The
- * returned object keeps its identity until a field changes, so the frame posts
- * a context update only when presentation actually changed. Outside a surface
- * boundary, `SurfaceContext` defaults to `block`.
+ * `mode` comes from the surface the occurrence is rendered in (Page or
+ * Edgeless, including nested surfaces); `selected` and `preview` come from the
+ * caller, which already knows them. Outside any surface, the mode is `block`.
+ *
+ * The object keeps its identity until a field changes. The frame posts a
+ * context update whenever the identity changes, so this avoids redundant posts.
  *
  * @param selected - Whether the whole owning block or element is selected.
- * @param preview - Whether this is a detached creation preview; defaults to false.
- * @returns The memoized context.
+ * @param preview - Whether this is a placement preview. Defaults to false.
+ * @returns The context, memoized.
  */
 export function useHtmlWidgetContext(selected: boolean, preview = false): HtmlWidgetContext {
   const mode = useContext(SurfaceContext);

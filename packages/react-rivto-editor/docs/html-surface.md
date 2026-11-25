@@ -6,6 +6,19 @@ Edgeless placement tool. Import `@chulane/rivto-react/styles.css` for the UI.
 The exported `HTML_BLOCK_TYPE` and `HTML_ELEMENT_TYPE` identify the persisted
 types. Uninstalling the extension removes its registrations, not document data.
 
+`htmlSurfaceExtension(options)` accepts limits for widget frames. Each is
+validated when the extension is created; an out-of-range value throws a
+`RangeError`. `DEFAULT_HTML_SURFACE_LIMITS` exports the defaults.
+
+| Option           | Default | Meaning                                                                                                                                        |
+| ---------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `maxBlockHeight` | `720`   | Maximum height of a Page block iframe in CSS pixels. Taller content scrolls inside the frame. Canvas elements ignore it. Positive, finite.     |
+| `maxDragRegions` | `64`    | Maximum number of drag regions one widget reports. The widget runtime stops at this count and the host rejects longer lists. Positive integer. |
+
+```ts
+htmlSurfaceExtension({ maxBlockHeight: 1200 });
+```
+
 A block stores its HTML in `content`; an element stores it in `props.html`.
 Each widget runs its markup in an iframe sandbox with `allow-scripts` and `allow-forms`, and no
 `allow-same-origin`. The authored document opens a private message port. The parent sends the initial detached snapshot as soon as that port connects, including while images are still loading. Snapshots, commands and replies use that port for the lifetime of the document.
@@ -36,7 +49,7 @@ The script API is available as `window.rivto` before the authored markup runs:
 
 Writes go through the current panel's managers and participate in document
 history. Placement previews ignore writes. Block iframe height follows its content
-up to 720 CSS pixels; an element iframe fills the host frame.
+up to `maxBlockHeight`; an element iframe fills the host frame.
 
 In an interactive HTML block, dragging selected text into a neighboring Page block
 selects both blocks and the range between them. Returning to the starting block

@@ -53,6 +53,12 @@ and an optional `unsafe-html` block. HTML blocks store source in `content`; elem
 store it in `props.html`. Keep reusable registrations, renderers, hooks, protocol,
 styles and editing UI in the package; keep showcase samples in the host demo.
 
+`htmlSurfaceExtension(options)` takes the frame limits `maxBlockHeight` and
+`maxDragRegions` (see `options.ts`). Pass a new limit the same way: add it to
+`HtmlSurfaceOptions` with a documented default, validate it in
+`resolveHtmlSurfaceLimits`, and read it from the `limits` the registrations hand
+to renderers. Do not reintroduce module constants for such limits.
+
 For another extension, register each persisted type and its renderer in
 `ReactEditorExtension.setup` using the appropriate block or element registry.
 Register slots, slash commands or creation tools only when needed, and return a

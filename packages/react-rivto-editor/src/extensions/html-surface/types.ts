@@ -1,72 +1,101 @@
 /**
- * Data shapes shared by the HTML surface's host components and its sandbox protocol.
+ * Data shapes shared by the editor-side components and the widget message protocol.
+ *
+ * `HtmlBlockView`, `HtmlElementView` and `HtmlWidgetContext` are what widget
+ * scripts receive (`rivto.node`, `rivto.context`), so they are part of the
+ * public widget API.
  *
  * @module
  */
 import type { EditorMode } from "@chulane/rivto";
 
 /**
- * Presentation of the block or element occurrence hosting a widget.
+ * Presentation of the block or element showing a widget.
  *
- * Scripts read it as `rivto.context` and observe changes with `rivto.subscribeContext`.
+ * Widget scripts read it as `rivto.context` and observe changes with
+ * `rivto.subscribeContext`.
  */
 export interface HtmlWidgetContext {
-  /** Actual surface containing this occurrence, including nested surfaces. */
+  /** Surface the widget is shown on: `"block"` (Page) or `"edgeless"` (canvas), including nested surfaces. */
   readonly mode: EditorMode;
-  /** Whether the whole owning block or canvas element is selected (not text selection). */
+  /** Whether the whole block or element is selected. Text selection inside the widget does not count. */
   readonly selected: boolean;
-  /** Whether this is a detached creation preview that cannot write to the document. */
+  /** Whether this is the ghost shown while placing a new canvas element. Previews cannot write. */
   readonly preview: boolean;
 }
 
-/**
- * Rectangle where a press starts a host gesture (moving the block or element)
- * instead of reaching the widget. All fields are fractions of the iframe viewport.
- */
+/** One area where pressing moves the block or element instead of reaching the widget. */
 export interface HtmlDragHandleRegion {
+  /** Left edge, as a fraction of the iframe viewport width (0 to 1). */
   readonly x: number;
+  /** Top edge, as a fraction of the iframe viewport height (0 to 1). */
   readonly y: number;
+  /** Width, as a fraction of the iframe viewport width. */
   readonly width: number;
+  /** Height, as a fraction of the iframe viewport height. */
   readonly height: number;
 }
 
-/** How the sandboxed document sizes itself: `fill` the host box, or `auto` grow with content. */
+/** `auto`: the iframe grows with its content (Page blocks). `fill`: it fills the host box (canvas elements). */
 export type HtmlFrameFit = "auto" | "fill";
 
-/** Block fields a widget can read. `content` is the authored HTML. */
+/** What a widget in a Page block sees as `rivto.node`. */
 export interface HtmlBlockView {
+  /** Always `"block"`. */
   readonly kind: "block";
+  /** ID of the block. */
   readonly id: string;
+  /** Block type: `"html"` or `"unsafe-html"`. */
   readonly type: string;
+  /** The widget's own HTML source. */
   readonly content: string;
+  /** Widget props; the widget writes them with `rivto.setProp` / `rivto.setProps`. */
   readonly props: Record<string, unknown>;
+  /** List props of the block; written with `rivto.setListProps`. */
   readonly listProps: Record<string, unknown>;
+  /** Data other extensions attached to the block. Read-only for the widget. */
   readonly pluginData: Record<string, unknown>;
+  /** IDs of the block's children. */
   readonly childIds: readonly string[];
-  /** Presentation of this mounted block occurrence. */
+  /** Presentation of this block occurrence. */
   readonly context: HtmlWidgetContext;
 }
 
-/** Element fields a widget can read. `props.html` is the authored HTML. */
+/** What a widget in a canvas element sees as `rivto.node`. */
 export interface HtmlElementView {
+  /** Always `"element"`. */
   readonly kind: "element";
+  /** ID of the element. */
   readonly id: string;
+  /** Element type: `"html"`. */
   readonly type: string;
+  /** Position and size on the canvas, in canvas units. */
   readonly frame: { x: number; y: number; width: number; height: number };
+  /** Stacking order on the canvas. */
   readonly zIndex: number;
+  /** Element props. `props.html` is the widget's own HTML source. */
   readonly props: Record<string, unknown>;
+  /** IDs of the element's children. */
   readonly childIds: readonly string[];
-  /** Presentation of this mounted element occurrence. */
+  /** Presentation of this element occurrence. */
   readonly context: HtmlWidgetContext;
 }
 
-/** Snapshot posted into the sandbox. Scripts see this object as `rivto.node`. */
+/** The snapshot a widget sees as `rivto.node`. */
 export type HtmlNodeView = HtmlBlockView | HtmlElementView;
 
-/** Detached document data; the frame adds the live presentation context when posting. */
+/** A snapshot without its context. The frame adds the current context when posting it. */
 export type HtmlNodeData = Omit<HtmlBlockView, "context"> | Omit<HtmlElementView, "context">;
 
-/** Pointer notification or document write that a widget sends to its owning node. */
+/**
+ * A command a widget sends to its block or element.
+ *
+ * - `pointerdown`: the user pressed inside the widget; `primary` is true when
+ *   Ctrl or Cmd was held. Used to select canvas elements.
+ * - `set-prop` / `set-props`: merge props (`rivto.setProp` / `rivto.setProps`).
+ * - `set-list-props`: merge block list props (`rivto.setListProps`).
+ * - `set-content`: replace the HTML source (`rivto.setContent`).
+ */
 export type HtmlWidgetCommand =
   | { readonly kind: "pointerdown"; readonly primary: boolean }
   | { readonly kind: "set-prop"; readonly key: string; readonly value: unknown }
@@ -74,12 +103,15 @@ export type HtmlWidgetCommand =
   | { readonly kind: "set-list-props"; readonly listProps: Record<string, unknown> }
   | { readonly kind: "set-content"; readonly content: string };
 
-/** Result of the source editor: the new source and the property edits made in the session. */
+/** What the source editor produces when the user presses Done. */
 export interface HtmlDraft {
-  /** Source shown when editing began; used to tell an intentional source edit from none. */
+  /** Source when the editor opened. Compared with `source` to tell whether the HTML was edited. */
   readonly openingSource: string;
-  /** Source at the time of saving. */
+  /** Source when Done was pressed. */
   readonly source: string;
-  /** Top-level property additions, replacements and deletions (`undefined`). */
+  /**
+   * Props the user added, changed or removed during this session. A removed
+   * prop has the value `undefined`. Props the user did not touch are absent.
+   */
   readonly propsPatch: Record<string, unknown>;
 }

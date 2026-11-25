@@ -15,6 +15,11 @@ import { createHtmlEditingStore, type HtmlEditingStore } from "./editing/use-htm
 import { HtmlElement, HtmlElementEditSlot } from "./element/html-element";
 import { HTML_STARTER } from "./html-starter";
 import { validateHtmlElementProps } from "./model/json-value";
+import {
+  resolveHtmlSurfaceLimits,
+  type HtmlSurfaceLimits,
+  type HtmlSurfaceOptions,
+} from "./options";
 import { UnsafeHtmlBlock } from "./unsafe/unsafe-html-block";
 
 /** Registries borrowed while installing the extension. */
@@ -23,6 +28,14 @@ type HtmlSurfaceRegistries = Pick<
   "blockTypes" | "elementTypes" | "surfaces" | "blockContextMenu"
 >;
 
+/** State and settings of one installation, handed to every renderer and slot it registers. */
+interface HtmlSurfaceInstallation {
+  /** Editing state shared by a renderer and its edit slot within one panel. */
+  readonly editingStore: HtmlEditingStore;
+  /** Validated limits from the extension options. */
+  readonly limits: HtmlSurfaceLimits;
+}
+
 /** Default size of a newly placed HTML element, in canvas units. */
 const DEFAULT_ELEMENT_FRAME = { x: 0, y: 0, width: 280, height: 220 };
 
@@ -30,7 +43,7 @@ const DEFAULT_ELEMENT_FRAME = { x: 0, y: 0, width: 280, height: 220 };
  * Exports an HTML block's source as its portable text in every clipboard format.
  *
  * @param context - Clipboard context of the copied block.
- * @param context.block - Copied block; its content is the authored HTML.
+ * @param context.block - Copied block; its content is the widget's HTML.
  * @returns Plain text, Markdown and HTML forms, all equal to the source.
  */
 function formatHtmlClipboard({ block }: { readonly block: { readonly content: string } }) {
@@ -49,22 +62,29 @@ function formatHtmlClipboard({ block }: { readonly block: { readonly content: st
  * Disposing the extension removes every registration and leaves saved
  * widgets in the document.
  *
+ * @param options - Limits for widget frames; omitted fields take documented defaults.
  * @returns Extension to pass to the React editor.
+ * @throws RangeError if an option is out of range; options are validated here,
+ * before the extension is installed.
  */
-export function htmlSurfaceExtension(): ReactEditorExtension {
+export function htmlSurfaceExtension(options: HtmlSurfaceOptions = {}): ReactEditorExtension {
+  const limits = resolveHtmlSurfaceLimits(options);
   return {
     id: "rivto.html-surface",
     /**
-     * Installs all registrations with one editing store shared by renderers and slots.
+     * Installs all registrations with one editing store and the resolved limits.
      *
      * @param editor - Editor that owns the registries.
      * @returns Cleanup that removes every registration in reverse order.
      */
     setup(editor) {
-      const editingStore = createHtmlEditingStore();
+      const installation: HtmlSurfaceInstallation = {
+        editingStore: createHtmlEditingStore(),
+        limits,
+      };
       const disposers = [
-        registerHtmlBlock(editor, editingStore),
-        registerUnsafeHtmlBlock(editor),
+        registerHtmlBlock(editor, installation),
+        registerUnsafeHtmlBlock(editor, installation),
         registerConversion(
           editor,
           HTML_BLOCK_TYPE,
@@ -79,7 +99,7 @@ export function htmlSurfaceExtension(): ReactEditorExtension {
           "Convert to safe HTML",
           CodeXmlIcon,
         ),
-        registerHtmlElement(editor, editingStore),
+        registerHtmlElement(editor, installation),
       ];
       return () => {
         for (const dispose of disposers.reverse()) {
@@ -94,13 +114,13 @@ export function htmlSurfaceExtension(): ReactEditorExtension {
  * Registers the `html` block and its right-slot edit button.
  *
  * @param editor - Registries to install into.
- * @param editingStore - Editing state shared by the renderer and its slot.
+ * @param installation - Editing store and limits for the renderer and its slot.
  * @returns Disposer that removes both registrations.
  */
-function registerHtmlBlock(editor: HtmlSurfaceRegistries, editingStore: HtmlEditingStore) {
+function registerHtmlBlock(editor: HtmlSurfaceRegistries, installation: HtmlSurfaceInstallation) {
   const removeType = editor.blockTypes.register({
     definition: { type: HTML_BLOCK_TYPE, title: "HTML", defaultProps: { label: "HTML" } },
-    render: (props: BlockRendererProps) => <HtmlBlock {...props} editingStore={editingStore} />,
+    render: (props: BlockRendererProps) => <HtmlBlock {...props} {...installation} />,
     slashCommand: {
       title: "HTML",
       group: "Turn into",
@@ -111,7 +131,7 @@ function registerHtmlBlock(editor: HtmlSurfaceRegistries, editingStore: HtmlEdit
   const removeSlot = editor.surfaces.registerBlockSlot({
     position: "right",
     component: (props: BlockSlotProps) => (
-      <HtmlBlockEditSlot {...props} editingStore={editingStore} />
+      <HtmlBlockEditSlot {...props} editingStore={installation.editingStore} />
     ),
     when: ({ block }) => block.type === HTML_BLOCK_TYPE,
   });
@@ -125,16 +145,22 @@ function registerHtmlBlock(editor: HtmlSurfaceRegistries, editingStore: HtmlEdit
  * Registers the `unsafe-html` block. Its edit button is rendered inline by the block.
  *
  * @param editor - Registries to install into.
+ * @param installation - Supplies the limits; unsafe editing state is local to each occurrence.
  * @returns Disposer that removes the registration.
  */
-function registerUnsafeHtmlBlock(editor: HtmlSurfaceRegistries): () => void {
+function registerUnsafeHtmlBlock(
+  editor: HtmlSurfaceRegistries,
+  installation: HtmlSurfaceInstallation,
+): () => void {
   return editor.blockTypes.register({
     definition: {
       type: UNSAFE_HTML_BLOCK_TYPE,
       title: "Unsafe HTML",
       defaultProps: { label: "Unsafe HTML" },
     },
-    render: UnsafeHtmlBlock,
+    render: (props: BlockRendererProps) => (
+      <UnsafeHtmlBlock {...props} limits={installation.limits} />
+    ),
     slashCommand: {
       title: "Unsafe HTML",
       group: "Turn into",
@@ -197,10 +223,10 @@ function registerConversion(
  * Registers the `html` canvas element, its edit slot and its placement tool.
  *
  * @param editor - Registries to install into.
- * @param editingStore - Editing state shared by the renderer and its slot.
+ * @param installation - Editing store and limits for the renderer and its slot.
  * @returns Disposer that removes both registrations.
  */
-function registerHtmlElement(editor: HtmlSurfaceRegistries, editingStore: HtmlEditingStore) {
+function registerHtmlElement(editor: HtmlSurfaceRegistries, installation: HtmlSurfaceInstallation) {
   const removeType = editor.elementTypes.register({
     title: "HTML",
     definition: {
@@ -208,7 +234,7 @@ function registerHtmlElement(editor: HtmlSurfaceRegistries, editingStore: HtmlEd
       defaults: { html: HTML_STARTER, label: "HTML" },
       validate: validateHtmlElementProps,
     },
-    render: (props: ElementRenderProps) => <HtmlElement {...props} editingStore={editingStore} />,
+    render: (props: ElementRenderProps) => <HtmlElement {...props} {...installation} />,
     creation: {
       title: "HTML",
       icon: <CodeXmlIcon size={20} strokeWidth={1.75} aria-hidden="true" focusable="false" />,
@@ -223,7 +249,7 @@ function registerHtmlElement(editor: HtmlSurfaceRegistries, editingStore: HtmlEd
   const removeSlot = editor.surfaces.registerElementSlot({
     position: "right",
     component: (props: ElementSlotProps) => (
-      <HtmlElementEditSlot {...props} editingStore={editingStore} />
+      <HtmlElementEditSlot {...props} editingStore={installation.editingStore} />
     ),
     when: ({ element }) => element.type === HTML_ELEMENT_TYPE,
   });

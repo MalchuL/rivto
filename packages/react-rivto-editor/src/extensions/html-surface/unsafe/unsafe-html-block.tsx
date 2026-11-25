@@ -1,5 +1,6 @@
 /**
- * `unsafe-html` block: an HTML block whose script may be granted editor access.
+ * The `unsafe-html` block: an HTML block whose script the user may let read
+ * and modify editor blocks.
  *
  * @module
  */
@@ -11,89 +12,124 @@ import { useBlockNode } from "../../../hooks/blocks/use-block";
 import { useReactPanel } from "../../../hooks/editor/use-react-panel";
 import { HtmlBlockOccurrence } from "../block/html-block";
 import { HtmlEditButton, type UnsafeHtmlAccessState } from "../editing/html-edit-button";
+import type { HtmlSurfaceLimitsProps } from "../options";
 import type { UnsafeHtmlFrameAccess } from "./unsafe-requests";
 
 /**
- * Renders an Unsafe HTML block with an occurrence-local, source-specific grant.
+ * Renders an Unsafe HTML block.
  *
- * The grant is never stored in the document (where a widget could write it).
- * It applies to the exact source approved in the editor; any change to the
- * source, or unmounting the block, revokes it. Editing state is local to this
- * occurrence, and the edit button is rendered inline because it reflects the grant.
+ * Access is off by default. The user turns it on with a checkbox in the source
+ * editor; the grant then applies to exactly the source that was saved. Any
+ * later change to the source, or unmounting the block, revokes it.
  *
- * @param props - ID of the block in the current panel.
- * @returns The block occurrence, or nothing after deletion.
+ * The grant lives in React state of this mounted occurrence, never in the
+ * document: a widget can write its own props, so storing permission there
+ * would let it grant itself access. For the same reason the editing flag is
+ * local, and the edit button is rendered inline (not in a slot) because it
+ * displays the grant state.
+ *
+ * @param props - Renderer props supplied by the block registration.
+ * @param props.blockId - ID of the block in the current panel.
+ * @param props.limits - Frame limits of this extension installation.
+ * @returns The block occurrence, or nothing once the block is deleted.
  */
-export function UnsafeHtmlBlock({ blockId }: { readonly blockId: string }) {
+export function UnsafeHtmlBlock({
+  blockId,
+  limits,
+}: { readonly blockId: string } & HtmlSurfaceLimitsProps) {
   const { block } = useBlockNode(blockId);
   const grant = useUnsafeHtmlGrant(blockId, block?.content);
   const [editing, setEditing] = useState(false);
+  // The checkbox value while the editor is open; applied only when the draft is saved.
   const [allowAccessDraft, setAllowAccessDraft] = useState(false);
-  const permissionId = useId();
   if (!block) {
     return null;
   }
+  const openEditor = () => {
+    setAllowAccessDraft(grant.state === "enabled");
+    setEditing(true);
+  };
   return (
     <HtmlBlockOccurrence
       block={block}
       surface="unsafe-block"
       fallbackLabel="Unsafe HTML"
+      limits={limits}
       editing={editing}
       onCloseEditor={() => setEditing(false)}
       onDraftSaved={(draft) => grant.decide(draft.source, allowAccessDraft)}
       unsafeAccess={grant.frameAccess}
       editorControls={
-        <div className="html-unsafe-permission" {...editorControlProps}>
-          <Checkbox
-            id={permissionId}
-            checked={allowAccessDraft}
-            onCheckedChange={(checked) => setAllowAccessDraft(checked === true)}
-          />
-          <Label htmlFor={permissionId}>Allow this HTML to read and modify editor blocks</Label>
-        </div>
+        <EditorAccessCheckbox checked={allowAccessDraft} onChange={setAllowAccessDraft} />
       }
     >
-      <HtmlEditButton
-        editing={editing}
-        access={grant.state}
-        onOpen={() => {
-          setAllowAccessDraft(grant.state === "enabled");
-          setEditing(true);
-        }}
-      />
+      <HtmlEditButton editing={editing} access={grant.state} onOpen={openEditor} />
     </HtmlBlockOccurrence>
+  );
+}
+
+/**
+ * Renders the "allow editor access" checkbox shown in the source editor.
+ *
+ * @param props - Current value and change handler.
+ * @param props.checked - Whether access will be allowed when the draft is saved.
+ * @param props.onChange - Receives the new value when the user toggles the box.
+ * @returns The labeled checkbox.
+ */
+function EditorAccessCheckbox({
+  checked,
+  onChange,
+}: {
+  readonly checked: boolean;
+  readonly onChange: (checked: boolean) => void;
+}) {
+  const id = useId();
+  return (
+    <div className="html-unsafe-permission" {...editorControlProps}>
+      <Checkbox id={id} checked={checked} onCheckedChange={(value) => onChange(value === true)} />
+      <Label htmlFor={id}>Allow this HTML to read and modify editor blocks</Label>
+    </div>
   );
 }
 
 /** Grant state and capabilities of one Unsafe HTML occurrence. */
 interface UnsafeHtmlGrant {
-  /** What the edit button shows. */
+  /** What the edit button shows: no access, a refused access attempt, or access granted. */
   readonly state: UnsafeHtmlAccessState;
-  /** Capabilities handed to the frame. */
+  /** Capabilities passed to the frame, including the live authorization check. */
   readonly frameAccess: UnsafeHtmlFrameAccess;
   /**
-   * Records the user's decision for a saved source.
+   * Records the user's decision when a draft is saved.
    *
-   * @param source - Source that was saved.
-   * @param allow - Whether access was allowed in the editor.
-   * @returns Access is granted for exactly `source`, or revoked; the warning is cleared.
+   * @param source - The source that was saved.
+   * @param allow - Whether the user ticked "allow editor access".
+   * @returns Nothing. Access is granted for exactly `source`, or revoked; any
+   * earlier "access denied" warning is cleared.
    */
   readonly decide: (source: string, allow: boolean) => void;
 }
 
 /**
- * Tracks a grant bound to an exact source string.
+ * Tracks an access grant bound to one exact source string.
+ *
+ * The grant is checked twice:
+ * - `frameAccess.enabled` reflects the rendered snapshot and decides whether the
+ *   widget page is built with live proxies (`rivto.panel`) or with `null`;
+ * - `frameAccess.isAuthorized()` reads the live document when a request arrives,
+ *   so a request queued before a source edit is still refused.
  *
  * @param blockId - Block whose live content is rechecked on every request.
- * @param content - Current content from the rendered snapshot.
- * @returns Grant state, frame capabilities and the decision setter.
+ * @param content - Content from the rendered snapshot; undefined after deletion.
+ * @returns The grant state, the frame capabilities and the decision setter.
  */
 function useUnsafeHtmlGrant(blockId: string, content: string | undefined): UnsafeHtmlGrant {
   const panel = useReactPanel();
   const [grantedSource, setGrantedSource] = useState<string | null>(null);
   const [denied, setDenied] = useState(false);
   const enabled = grantedSource !== null && content === grantedSource;
-  // Once the source diverges, drop the grant so restoring identical text doesn't re-enable it.
+
+  // Drop the grant as soon as the source diverges, so that typing the exact
+  // approved text back in later does not silently re-enable access.
   useEffect(() => {
     if (grantedSource !== null && content !== grantedSource) {
       setGrantedSource(null);

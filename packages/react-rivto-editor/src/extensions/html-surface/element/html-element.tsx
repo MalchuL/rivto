@@ -1,54 +1,60 @@
 /**
- * Canvas element that renders pasted HTML and gives the script its whole node.
+ * Edgeless canvas element that runs an HTML widget.
  *
- * The host owns position and resize. The document fills that box, so a spinning
- * ring or clock scales while the resize gesture is still held.
+ * The canvas owns the element's position and size; the widget page fills that
+ * box. Because the iframe follows the host box, a widget scales live while a
+ * resize gesture is still in progress.
  *
  * @module
  */
-import { resolveEdgelessPointerTarget } from "../../edgeless/edgeless-pointer-target";
-import type { ElementRenderProps } from "../../../managers/elements/types";
-import type { ElementSlotProps } from "../../../managers/surfaces/types";
-import { useReactPanel } from "../../../hooks/editor/use-react-panel";
-import { useHtmlWidgetContext } from "../frame/use-html-widget-context";
 import type { EditorElementNode, PanelAPI } from "@chulane/rivto";
 import { useCallback, useMemo } from "react";
+import { useReactPanel } from "../../../hooks/editor/use-react-panel";
+import type { ElementRenderProps } from "../../../managers/elements/types";
+import type { ElementSlotProps } from "../../../managers/surfaces/types";
+import { resolveEdgelessPointerTarget } from "../../edgeless/edgeless-pointer-target";
 import { HtmlEditButton } from "../editing/html-edit-button";
 import { HtmlSourceEditor } from "../editing/html-source-editor";
 import { useHtmlEditing, type HtmlEditingStoreProps } from "../editing/use-html-editing";
 import { HtmlFrame } from "../frame/html-frame";
+import { useHtmlWidgetContext } from "../frame/use-html-widget-context";
 import { readLabel } from "../model/widget-props";
+import type { HtmlSurfaceLimitsProps } from "../options";
 import type { HtmlDraft, HtmlElementView, HtmlWidgetCommand } from "../types";
 
-/** Props owned by the canvas rather than the widget's JSON editor. */
+/**
+ * Element props managed by the canvas or the HTML field, not by the props JSON.
+ *
+ * They are hidden from the JSON field and never written from it, so editing
+ * widget props cannot overwrite the source or the canvas rotation.
+ */
 const HOST_OWNED_PROPS = ["html", "rotation"] as const;
 
-/** Panel operations needed to read and update HTML elements. */
-interface HtmlElementPanel {
+/** The panel operations an HTML element reads and writes through. */
+type HtmlElementPanel = {
+  /** Element reads and writes of the panel. */
   readonly elements: Pick<PanelAPI["elements"], "getElementNode" | "updateElement">;
-}
+  /** Groups several writes into one undo step. */
+  readonly batchUpdates: PanelAPI["batchUpdates"];
+};
 
-/** Canvas selection operations used when a press inside the iframe selects the element. */
+/** The canvas selection operations used when a press inside the iframe selects the element. */
 type HtmlElementSelection = Pick<
   ElementRenderProps["operations"],
   "getSelection" | "getParentId" | "select"
 >;
 
-/** Panel operations needed to save an HTML element draft in one history entry. */
-interface HtmlElementDraftPanel extends HtmlElementPanel {
-  readonly batchUpdates: PanelAPI["batchUpdates"];
-}
-
 /**
- * Opens the source editor from the element's right slot.
+ * Renders the edit button in an HTML element's right slot.
  *
- * Pointer down selects the element before the editor opens, matching the
- * canvas selection used by other visuals.
+ * Pressing the button first selects the element, the same way pressing any
+ * other canvas object selects it, and then opens the editor on click.
+ * Placement previews have no slots, so this never renders for a preview.
  *
- * @param props - Slot context for the HTML element.
- * @param props.element - Element whose edit flag this button toggles.
- * @param props.editingStore - State shared with the element renderer.
- * @returns The embedding-style edit button. A placement preview does not render slots.
+ * @param props - Slot props supplied by the surface.
+ * @param props.element - Element the slot belongs to.
+ * @param props.editingStore - Editing state shared with the element renderer.
+ * @returns The edit button, or nothing while the editor is open.
  */
 export function HtmlElementEditSlot({
   element,
@@ -72,19 +78,20 @@ export function HtmlElementEditSlot({
 }
 
 /**
- * Renders one HTML element from its registration.
+ * Renders an HTML canvas element: the source editor while editing, otherwise the widget.
  *
- * Creation previews paint the document and ignore writes. The edit control is
- * the right slot, which a preview host does not render.
+ * A placement preview (the ghost shown while placing a new element) renders
+ * the widget but never opens the editor, and its writes are ignored.
  *
- * @param props - Element snapshot, panel, and preview flag from the canvas host.
- * @param props.element - Current element, including local property previews.
- * @param props.reactPanel - Panel used to update this element.
- * @param props.preview - True while the element is a detached placement ghost.
- * @param props.selected - Whether the owning canvas element is selected.
- * @param props.operations - Panel-bound canvas selection operations.
- * @param props.editingStore - State shared with its slot in this extension installation.
- * @returns The sandbox or the source editor, filling the host frame.
+ * @param props - Renderer props supplied by the canvas host.
+ * @param props.element - Current element, including local property previews during gestures.
+ * @param props.reactPanel - Panel the element's writes go through.
+ * @param props.preview - True while the element is a placement preview.
+ * @param props.selected - Whether the canvas selection includes the element.
+ * @param props.operations - Canvas selection operations of this panel.
+ * @param props.editingStore - Editing state shared with the element's edit slot.
+ * @param props.limits - Frame limits of this extension installation.
+ * @returns The editor or the widget, filling the element box.
  */
 export function HtmlElement({
   element,
@@ -93,48 +100,62 @@ export function HtmlElement({
   selected,
   operations,
   editingStore,
-}: ElementRenderProps & HtmlEditingStoreProps) {
+  limits,
+}: ElementRenderProps & HtmlEditingStoreProps & HtmlSurfaceLimitsProps) {
   const [editing, setEditing] = useHtmlEditing(editingStore, "element", element.id);
-  const { node, context } = useHtmlElementView(element, selected, preview);
+  const context = useHtmlWidgetContext(selected, preview);
+  const node = useMemo(() => toElementView(element), [element]);
   const onCommand = useHtmlElementCommand(reactPanel, operations, element.id, preview);
   const label = readLabel(element.props, "HTML");
   const source = typeof element.props.html === "string" ? element.props.html : "";
+
+  let body;
+  if (editing && !preview) {
+    body = (
+      <HtmlSourceEditor
+        source={source}
+        props={element.props}
+        hiddenProps={HOST_OWNED_PROPS}
+        onCancel={() => setEditing(false)}
+        onSave={(draft) => {
+          commitElementDraft(reactPanel, element.id, draft);
+          setEditing(false);
+        }}
+      />
+    );
+  } else {
+    body = (
+      <HtmlFrame
+        frameName={label}
+        source={source}
+        node={node}
+        context={context}
+        fit="fill"
+        limits={limits}
+        interactive={!preview}
+        onCommand={onCommand}
+      />
+    );
+  }
   return (
     <div className="html-surface-canvas" data-html-surface="element" data-html-label={label}>
-      {editing && !preview ? (
-        <HtmlSourceEditor
-          source={source}
-          props={element.props}
-          hiddenProps={HOST_OWNED_PROPS}
-          onCancel={() => setEditing(false)}
-          onSave={(draft) => {
-            commitElementDraft(reactPanel, element.id, draft);
-            setEditing(false);
-          }}
-        />
-      ) : (
-        <HtmlFrame
-          frameName={label}
-          source={source}
-          node={node}
-          context={context}
-          fit="fill"
-          interactive={!preview}
-          onCommand={onCommand}
-        />
-      )}
+      {body}
     </div>
   );
 }
 
 /**
- * Routes widget notifications and writes to the owning canvas occurrence.
+ * Returns the handler for commands from an element's widget.
  *
- * @param panel - Borrowed operations for reading and updating elements.
- * @param operations - Borrowed canvas selection and parent operations.
- * @param id - Persisted element identity.
- * @param preview - Whether this is a detached, noninteractive placement preview.
- * @returns Stable callback that ignores commands from previews and deleted elements.
+ * A pointer press inside the iframe selects the element, because the iframe
+ * swallows the press and the canvas never sees it. Writes update the element.
+ * Previews and deleted elements ignore everything.
+ *
+ * @param panel - Panel the writes go through.
+ * @param operations - Canvas selection operations of this panel.
+ * @param id - ID of the HTML element.
+ * @param preview - Whether this occurrence is a placement preview.
+ * @returns A stable command handler.
  */
 function useHtmlElementCommand(
   panel: HtmlElementPanel,
@@ -158,29 +179,18 @@ function useHtmlElementCommand(
 }
 
 /**
- * Builds an element snapshot with its current surface and selection state.
+ * Updates the canvas selection after a press inside an element's iframe.
  *
- * @param element - Detached element or placement preview supplied by the host.
- * @param selected - Whether the canvas selection includes the element.
- * @param preview - Whether the element is an uncommitted placement preview.
- * @returns Stable document data and separately observed presentation context.
- */
-function useHtmlElementView(element: EditorElementNode, selected: boolean, preview: boolean) {
-  const context = useHtmlWidgetContext(selected, preview);
-  const node = useMemo(() => toElementView(element), [element]);
-  return { node, context };
-}
-
-/**
- * Selects a canvas element after a pointer gesture inside its sandboxed frame.
+ * The press itself stays with the iframe, so buttons work on the first click
+ * and text stays selectable; it is not replayed as a canvas drag. Which
+ * element gets selected follows the normal canvas rules: the first plain
+ * click on a grouped element selects its group, a later click selects the
+ * element itself, and Ctrl/Cmd toggles it in the current selection.
  *
- * The iframe owns native selection and controls, so its pointer is not replayed
- * as a canvas drag. Group entry and modifier toggling follow the shared target policy.
- *
- * @param operations - Canvas selection and parent operations for this panel.
- * @param id - Persisted HTML element under the pointer.
- * @param primary - Whether Control or Meta was held during the gesture.
- * @returns Canvas selection reflects the iframe interaction.
+ * @param operations - Canvas selection operations of this panel.
+ * @param id - ID of the HTML element that was pressed.
+ * @param primary - Whether Ctrl or Cmd was held.
+ * @returns Nothing. The canvas selection reflects the press.
  */
 function selectHtmlElement(operations: HtmlElementSelection, id: string, primary: boolean): void {
   const current = operations.getSelection().items;
@@ -192,31 +202,34 @@ function selectHtmlElement(operations: HtmlElementSelection, id: string, primary
     selectedParentId: selectedId ? operations.getParentId(selectedId) : undefined,
     primary,
   });
-  const selected = current.includes(target);
-  if (primary) {
-    operations.select(selected ? current.filter((item) => item !== target) : [...current, target]);
-  } else if (!selected) {
-    operations.select([target]);
+  const alreadySelected = current.includes(target);
+  if (!primary) {
+    if (!alreadySelected) {
+      operations.select([target]);
+    }
+    return;
+  }
+  if (alreadySelected) {
+    operations.select(current.filter((item) => item !== target));
+  } else {
+    operations.select([...current, target]);
   }
 }
 
 /**
- * Copies the element fields a script is allowed to read.
+ * Copies the element fields a widget script is allowed to read.
  *
- * @param element - Detached element node from the canvas.
- * @returns A plain snapshot safe to post into the sandbox.
+ * @param element - Detached element snapshot.
+ * @returns A plain object that can be posted into the sandbox. The frame adds
+ * the presentation context when posting.
  */
 function toElementView(element: EditorElementNode): Omit<HtmlElementView, "context"> {
+  const { x, y, width, height } = element.frame;
   return {
     kind: "element",
     id: element.id,
     type: element.type,
-    frame: {
-      x: element.frame.x,
-      y: element.frame.y,
-      width: element.frame.width,
-      height: element.frame.height,
-    },
+    frame: { x, y, width, height },
     zIndex: element.zIndex,
     props: element.props,
     childIds: element.childIds,
@@ -224,18 +237,19 @@ function toElementView(element: EditorElementNode): Omit<HtmlElementView, "conte
 }
 
 /**
- * Applies one sandbox write to the current element.
+ * Applies one widget write to the element.
  *
- * List props are not stored on elements, so that command is ignored. Setting
- * content replaces the `html` property. Other commands merge props.
+ * Elements have no list props, so `set-list-props` is ignored. `set-content`
+ * replaces the `html` prop; the other writes merge into props. A write for an
+ * element deleted in the meantime is dropped.
  *
  * @param panel - Panel that owns the element.
- * @param elementId - Stable id of the HTML element.
- * @param command - Validated write from the sandbox.
- * @returns Applies the write when the element still exists.
+ * @param elementId - ID of the HTML element.
+ * @param command - Write already validated by the message parser.
+ * @returns Nothing. The write is applied when the element still exists.
  */
 function applyElementCommand(
-  panel: HtmlElementPanel,
+  panel: Pick<HtmlElementPanel, "elements">,
   elementId: string,
   command: HtmlWidgetCommand,
 ): void {
@@ -255,33 +269,33 @@ function applyElementCommand(
 }
 
 /**
- * Saves the HTML source and widget props, leaving canvas rotation in place.
+ * Writes a source-editor draft to the element as one undo step.
+ *
+ * Like blocks, only the session's edits are written, so a collaborator's
+ * concurrent changes survive. Host-owned props are removed from the patch
+ * (the JSON field cannot set `html` or `rotation`), and `html` is set only
+ * if the HTML field itself was edited.
  *
  * @param panel - Panel that owns the element.
- * @param elementId - Stable id of the HTML element.
- * @param draft - Source and parsed props from the editor. `html` in the JSON is ignored.
- * @returns Saves the draft when the element still exists.
+ * @param elementId - ID of the HTML element.
+ * @param draft - Draft produced by the source editor.
+ * @returns Nothing. The draft is applied when there is something to write.
  */
-function commitElementDraft(
-  panel: HtmlElementDraftPanel,
-  elementId: string,
-  draft: HtmlDraft,
-): void {
-  const current = panel.elements.getElementNode(elementId);
-  if (!current) {
+function commitElementDraft(panel: HtmlElementPanel, elementId: string, draft: HtmlDraft): void {
+  if (!panel.elements.getElementNode(elementId)) {
     return;
   }
-  const data = { ...draft.propsPatch };
+  const patch = { ...draft.propsPatch };
   for (const key of HOST_OWNED_PROPS) {
-    delete data[key];
+    delete patch[key];
   }
   if (draft.source !== draft.openingSource) {
-    data.html = draft.source;
+    patch.html = draft.source;
   }
-  if (!Object.keys(data).length) {
+  if (Object.keys(patch).length === 0) {
     return;
   }
   panel.batchUpdates(() => {
-    panel.elements.updateElement(elementId, { props: data });
+    panel.elements.updateElement(elementId, { props: patch });
   });
 }

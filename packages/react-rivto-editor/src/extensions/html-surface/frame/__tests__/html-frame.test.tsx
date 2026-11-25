@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { HtmlFrame } from "../html-frame";
 import { HTML_CHANNEL } from "../../constants";
+import { DEFAULT_HTML_SURFACE_LIMITS } from "../../options";
 
 test("only the authenticated document port receives snapshots, permission decisions and updates", () => {
   const environment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -57,6 +58,7 @@ test("only the authenticated document port receives snapshots, permission decisi
           interactive
           onCommand={() => {}}
           unsafeAccess={access}
+          limits={DEFAULT_HTML_SURFACE_LIMITS}
         />,
       ),
     );
@@ -125,4 +127,60 @@ test("only the authenticated document port receives snapshots, permission decisi
     environment.IS_REACT_ACT_ENVIRONMENT = previous;
   }
   expect(closed).toBe(true);
+});
+
+test("an auto-sized frame grows with its document up to the configured maxBlockHeight", () => {
+  const environment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  const previous = environment.IS_REACT_ACT_ENVIRONMENT;
+  environment.IS_REACT_ACT_ENVIRONMENT = true;
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  const port = {
+    postMessage: () => {},
+    close: () => {},
+    onmessage: null as ((event: { data: unknown }) => void) | null,
+  };
+  try {
+    act(() =>
+      root.render(
+        <HtmlFrame
+          frameName="Tall"
+          fit="auto"
+          source="<p>Tall</p>"
+          node={{
+            kind: "block",
+            id: "tall",
+            type: "html",
+            content: "",
+            props: {},
+            listProps: {},
+            pluginData: {},
+            childIds: [],
+          }}
+          context={{ mode: "block", selected: false, preview: false }}
+          interactive
+          limits={{ ...DEFAULT_HTML_SURFACE_LIMITS, maxBlockHeight: 100 }}
+          onCommand={() => {}}
+        />,
+      ),
+    );
+    const iframe = host.querySelector("iframe")!;
+    const token = JSON.parse(/var token = ("[^"]+")/.exec(iframe.srcdoc)![1]!);
+    const envelope = { channel: HTML_CHANNEL, token };
+    window.dispatchEvent(
+      Object.assign(new Event("message"), {
+        data: { ...envelope, kind: "ready" },
+        source: iframe.contentWindow,
+        ports: [port],
+      }),
+    );
+    act(() => port.onmessage!({ data: { ...envelope, kind: "resize", height: 60 } }));
+    expect(iframe.style.height).toBe("60px");
+    act(() => port.onmessage!({ data: { ...envelope, kind: "resize", height: 500 } }));
+    expect(iframe.style.height).toBe("100px");
+  } finally {
+    act(() => root.unmount());
+    host.remove();
+    environment.IS_REACT_ACT_ENVIRONMENT = previous;
+  }
 });

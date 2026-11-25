@@ -1,29 +1,34 @@
 /**
- * Iframe-side relay that lets a native text drag continue into neighboring Page blocks.
+ * Page side of the text-selection relay: lets a text selection that starts
+ * inside an HTML block continue into the neighboring Page blocks.
  *
- * Browsers keep delivering pointer movement and release to the iframe where a
- * text selection started, even outside its viewport. Once a nonempty range
- * leaves the viewport, this fragment reports the pointer position to the host,
- * which converts it to parent coordinates and lets Page select whole blocks.
+ * While the mouse button is held, the browser keeps sending pointer events to
+ * the iframe where a text selection started, even after the pointer leaves
+ * it. This script watches for that: once the selection is non-empty and the
+ * pointer is outside the viewport, it reports the pointer position to the
+ * editor, which lets Page select whole blocks (see `frame/iframe-text-selection.ts`).
+ * Moving back into the iframe returns to an ordinary text selection.
  *
  * @module
  */
 
-/** Targets that own their own pointer behavior and never start a relayed selection. */
+/** Elements with their own pointer behavior; a press on them never starts a relayed selection. */
 const NATIVE_INPUT_SELECTOR =
   "input,textarea,select,button,label,summary,a[href],audio[controls],video[controls],[role=button],[draggable=true],[data-rivto-interactive]";
 
 /**
- * Builds the text-selection relay.
+ * Builds the page-side text-selection relay.
  *
- * IMPORTANT: widget commands must never be able to impersonate cross-block
- * pointer input. Reports are authenticated with a separate `selectionKey`
- * that authored scripts cannot read: the fragment removes its own `<script>`
- * element and captures `postMessage` and the native coordinate getters before
- * any authored script runs.
+ * IMPORTANT: a widget script must not be able to fake these reports, or it
+ * could make Page select blocks the user never dragged over. So reports use a
+ * separate secret, `selectionKey`, that widget scripts cannot read. Before
+ * any widget script runs, this script:
+ * - removes its own `<script>` element, which contains the key;
+ * - keeps private copies of `port.postMessage` and of the native
+ *   `clientX` / `clientY` getters, so a widget cannot replace them.
  *
- * @param selectionKey - Host secret used only for these reports, distinct from the frame token.
- * @returns ES5 source; requires `port`.
+ * @param selectionKey - Secret used only for these reports; different from the page token.
+ * @returns ES5 source; uses `port`.
  */
 export function textSelectionScript(selectionKey: string): string {
   return `
@@ -32,15 +37,33 @@ export function textSelectionScript(selectionKey: string): string {
     var post = port.postMessage.bind(port);
     var readX = Function.prototype.call.bind(Object.getOwnPropertyDescriptor(MouseEvent.prototype, "clientX").get);
     var readY = Function.prototype.call.bind(Object.getOwnPropertyDescriptor(MouseEvent.prototype, "clientY").get);
-    var id = null, x = 0, y = 0, crossing = false;
+    /** Pointer ID of the drag being watched, or null. */
+    var id = null;
+    /** Last pointer position, in iframe viewport coordinates. */
+    var x = 0, y = 0;
+    /** Whether the drag has left the iframe with a non-empty selection, so reports are being sent. */
+    var crossing = false;
+
+    /**
+     * Sends the current position to the editor.
+     *
+     * @param phase - "move", "end" or "cancel".
+     */
     function report(phase) {
       post({ selectionKey: ${JSON.stringify(selectionKey)}, phase: phase, x: x, y: y });
     }
+    /** Stops watching the drag, telling the editor to cancel if reports were being sent. */
     function reset() {
       if (crossing) { report("cancel"); }
       id = null;
       crossing = false;
     }
+    /**
+     * Reports the position once the drag qualifies: a non-empty selection and
+     * the pointer outside the viewport. After that, every position is reported.
+     *
+     * @param phase - "move" or "end".
+     */
     function update(phase) {
       if (id === null) { return; }
       if (!crossing) {
@@ -82,7 +105,7 @@ export function textSelectionScript(selectionKey: string): string {
     window.addEventListener("blur", function (event) {
       if (event.target === window) { reset(); }
     });
-    // A widget that captures the pointer (e.g. a sortable list) owns the gesture.
+    // A widget that captures the pointer (a sortable list, a slider) owns the gesture.
     window.addEventListener("gotpointercapture", function (event) {
       if (event.pointerId === id) { reset(); }
     }, true);

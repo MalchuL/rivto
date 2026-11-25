@@ -21,7 +21,7 @@ export function readLabel(props: Record<string, unknown>, fallback: string): str
 }
 
 /**
- * Formats widget props for the editor, leaving host-owned keys out of the text.
+ * Formats widget props as JSON for the source editor, leaving out keys managed elsewhere.
  *
  * @param props - Current persisted properties.
  * @param omit - Keys edited elsewhere, such as element `html` or canvas `rotation`.
