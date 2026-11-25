@@ -253,5 +253,5 @@ preset dragging as well as canvas placement on normal and large documents.
 
 ## Interactive HTML elements
 
-For HTML/CSS/JavaScript elements and iframe-based embedded content, also read
+For HTML/CSS/JavaScript elements and other iframe-based content, also read
 [rivto-html-extensions](../rivto-html-extensions/SKILL.md).

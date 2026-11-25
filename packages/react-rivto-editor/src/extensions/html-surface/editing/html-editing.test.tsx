@@ -7,9 +7,9 @@ import {
   createTestPanel,
   createTestCoreEditor,
   createTestReactEditor,
-} from "../../test-utils";
-import { htmlSurfaceExtension } from "./extension";
-import { HTML_BLOCK_TYPE } from "./protocol/protocol";
+} from "../../../test-utils";
+import { htmlSurfaceExtension } from "../extension";
+import { HTML_BLOCK_TYPE } from "../constants";
 
 test.each([false, true])(
   "panel occurrences isolate drafts (shared runtime: %s)",

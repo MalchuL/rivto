@@ -200,7 +200,7 @@ export class EdgelessSelectionController {
     if (!primary) {
       this.selection.clear();
     }
-    // Capture keeps canvas input alive when the pointer crosses an embedded iframe.
+    // Capture keeps canvas input alive when the pointer crosses an iframe.
     this.root.setPointerCapture(event.pointerId);
     this.pointerId = event.pointerId;
     this.marquee.start(event.clientX, event.clientY, primary ? this.selection.get().items : []);

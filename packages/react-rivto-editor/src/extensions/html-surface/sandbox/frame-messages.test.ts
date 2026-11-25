@@ -1,18 +1,7 @@
-import {
-  HTML_CHANNEL,
-  changedPropPatch,
-  clampFrameHeight,
-  isJsonValue,
-  parseFrameMessage,
-  parseWidgetProps,
-} from "./protocol";
-
-test("allows small iframe heights while bounding invalid and oversized measurements", () => {
-  expect(clampFrameHeight(0)).toBe(0);
-  expect(clampFrameHeight(24.4)).toBe(24);
-  expect(clampFrameHeight(-1)).toBe(0);
-  expect(clampFrameHeight(900)).toBe(720);
-});
+import { HTML_CHANNEL } from "../constants";
+import { isJsonValue } from "../model/json-value";
+import { parseWidgetProps } from "../model/widget-props";
+import { parseFrameMessage } from "./frame-messages";
 
 test("rejects unsafe or non-JSON values in sandbox messages and edited props", () => {
   const cyclic: { self?: unknown } = {};
@@ -66,7 +55,7 @@ test("accepts only boolean modifier state for iframe pointer messages", () => {
   ).toBeUndefined();
 });
 
-test("clips embedded drag regions and rejects malformed frame messages", () => {
+test("clips widget drag regions and rejects malformed frame messages", () => {
   const message = (handles: unknown) => ({
     channel: HTML_CHANNEL,
     token: "frame",
@@ -85,11 +74,44 @@ test("clips embedded drag regions and rejects malformed frame messages", () => {
   expect(parseFrameMessage(message([]), "another-frame")).toBeUndefined();
 });
 
-test("draft patches omit equivalent JSON and can delete keys inherited by plain objects", () => {
-  const patch = changedPropPatch(
-    { toString: "old", settings: { a: 1, b: [true] }, steps: [1, 2] },
-    { settings: { b: [true], a: 1 }, steps: [2, 1] },
-  );
-  expect(Object.hasOwn(patch, "toString")).toBe(true);
-  expect(patch).toStrictEqual({ toString: undefined, steps: [2, 1] });
+test("routes unsafe requests and denials through the same envelope check", () => {
+  const envelope = { channel: HTML_CHANNEL, token: "frame" };
+  expect(
+    parseFrameMessage(
+      {
+        ...envelope,
+        kind: "unsafe-request",
+        id: 3,
+        target: "panel",
+        method: "getRootIds",
+        args: [],
+      },
+      "frame",
+    ),
+  ).toEqual({
+    kind: "unsafe-request",
+    request: { id: 3, target: "panel", method: "getRootIds", args: [] },
+  });
+  expect(
+    parseFrameMessage({ ...envelope, kind: "unsafe-request", id: 1.5, target: "panel" }, "frame"),
+  ).toBeUndefined();
+  expect(parseFrameMessage({ ...envelope, kind: "unsafe-denied" }, "frame")).toEqual({
+    kind: "unsafe-denied",
+  });
+  expect(parseFrameMessage({ ...envelope, kind: "unknown" }, "frame")).toBeUndefined();
+});
+
+test("frame messages accept JSON writes for this token only", () => {
+  const envelope = { channel: HTML_CHANNEL, token: "token" };
+  expect(parseFrameMessage({ ...envelope, token: "nope", kind: "ready" }, "token")).toBeUndefined();
+  expect(parseFrameMessage({ ...envelope, kind: "ready" }, "token")).toEqual({ kind: "ready" });
+  expect(
+    parseFrameMessage({ ...envelope, kind: "set-prop", key: "start", value: true }, "token"),
+  ).toEqual({ kind: "set-prop", key: "start", value: true });
+  expect(
+    parseFrameMessage({ ...envelope, kind: "set-prop", key: "__proto__", value: {} }, "token"),
+  ).toBeUndefined();
+  expect(
+    parseFrameMessage({ ...envelope, kind: "set-prop", key: "timer", value: Infinity }, "token"),
+  ).toBeUndefined();
 });

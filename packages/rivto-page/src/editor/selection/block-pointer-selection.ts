@@ -2,7 +2,7 @@ import { BlockAutoScroll } from "../pointer/block-auto-scroll";
 import type { BlockInputResult } from "../events/block-input-event";
 import type { HeldKeyBinding } from "@chulane/rivto-keyboard";
 import type { BlockEditorApi } from "../block-editor-api";
-import type { BlockInputEvent } from "../events/block-input-event";
+import { IFRAME_TEXT_SELECTION_EVENT, type BlockInputEvent } from "../events/block-input-event";
 import type { BlockSelectionPosition as EditorPosition, BlockSelectionSnapshot } from "./types";
 import { BlockDOMSelection, type DOMSelectionPoint } from "./block-dom-selection";
 import { BlockSelectionRanges } from "./block-selection-ranges";
@@ -38,7 +38,7 @@ export interface BlockPointerSelectionHost {
 /** Pointer-down origin and evolving selection, owned by one controller. */
 interface PointerSelection {
   readonly root: HTMLElement;
-  readonly embeddedDocument?: AbortSignal;
+  readonly iframeDocument?: AbortSignal;
   readonly startX: number;
   readonly startY: number;
   readonly anchor?: DOMSelectionPoint;
@@ -126,13 +126,13 @@ export class BlockPointerSelection {
       }
       if (feature === "pointer") {
         events.register(
-          "selection.embedded-text",
+          "selection.iframe-text",
           {
-            type: "rivto-embedded-text-selection",
+            type: IFRAME_TEXT_SELECTION_EVENT,
             scope: "block",
             priority: BLOCK_SELECTION_INPUT_PRIORITY,
           },
-          this.onEmbeddedTextSelection,
+          this.onIframeTextSelection,
         );
         // Track this pointer outside the root through release or cancellation.
         events.register(
@@ -338,24 +338,24 @@ export class BlockPointerSelection {
    * releases structural coverage and lets the still-active native selection show again.
    *
    * @param input - Scoped frame, document lifetime and pointer position in Page coordinates.
-   * @returns Whether this occurrence accepted the embedded selection update.
+   * @returns Whether this occurrence accepted the iframe selection update.
    */
-  private onEmbeddedTextSelection = ({
+  private onIframeTextSelection = ({
     raw,
     blockId,
     root,
-  }: BlockInputEvent<"rivto-embedded-text-selection">): BlockInputResult => {
+  }: BlockInputEvent<typeof IFRAME_TEXT_SELECTION_EVENT>): BlockInputResult => {
     const { phase, clientX, clientY, signal } = raw.detail;
-    if (!blockId || signal.aborted || (this.pointer && this.pointer.embeddedDocument !== signal)) {
+    if (!blockId || signal.aborted || (this.pointer && this.pointer.iframeDocument !== signal)) {
       return "continue";
     }
     if (phase === "cancel") {
-      this.cancelEmbedded();
+      this.cancelIframeSelection();
       return "continue";
     }
     const hit = this.dom.readBlockIdAtPoint(root, clientX, clientY);
     if (hit === blockId) {
-      this.cancelEmbedded();
+      this.cancelIframeSelection();
       return "continue";
     }
     if (!this.pointer) {
@@ -363,6 +363,8 @@ export class BlockPointerSelection {
         return "continue";
       }
       this.cancel();
+      // Acquire without the root: unlike Page-originated gestures, the source
+      // iframe must keep receiving the physical pointer, so frames stay hit-testable.
       this.releasePointer = this.editor.pointer.acquire();
       if (!this.releasePointer) {
         return "continue";
@@ -372,11 +374,11 @@ export class BlockPointerSelection {
         startX: clientX,
         startY: clientY,
         anchorPosition: { blockId, offset: 0 },
-        embeddedDocument: signal,
+        iframeDocument: signal,
         crossBlock: false,
         wholeBlocks: false,
       };
-      signal.addEventListener("abort", this.cancelEmbedded, { once: true });
+      signal.addEventListener("abort", this.cancelIframeSelection, { once: true });
     }
     if (hit && hit !== this.pointer.selection?.focusBlockId) {
       this.ownsCrossBlockSelection = true;
@@ -393,12 +395,12 @@ export class BlockPointerSelection {
   };
 
   /**
-   * Releases the embedded gesture and clears any provisional whole-block range.
+   * Releases the iframe text gesture and clears any provisional whole-block range.
    *
    * @returns Page no longer owns this gesture; the iframe retains its native text selection.
    */
-  private cancelEmbedded = (): void => {
-    if (this.pointer?.embeddedDocument) {
+  private cancelIframeSelection = (): void => {
+    if (this.pointer?.iframeDocument) {
       this.cancel();
       this.editor.adapter.selection.clear();
     }
@@ -531,7 +533,7 @@ export class BlockPointerSelection {
     this.releasePointer = undefined;
     this.latestPointer = undefined;
     const completed = this.pointer;
-    completed?.embeddedDocument?.removeEventListener("abort", this.cancelEmbedded);
+    completed?.iframeDocument?.removeEventListener("abort", this.cancelIframeSelection);
     const root = completed?.root;
     this.pointer = null;
     if (
@@ -813,7 +815,7 @@ export class BlockPointerSelection {
    * @returns Timers, animation frames, and pointer references are released.
    */
   private cancel = (): void => {
-    this.pointer?.embeddedDocument?.removeEventListener("abort", this.cancelEmbedded);
+    this.pointer?.iframeDocument?.removeEventListener("abort", this.cancelIframeSelection);
     this.stopAutoScroll();
     this.releasePointer?.();
     this.releasePointer = undefined;

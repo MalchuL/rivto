@@ -1,6 +1,6 @@
 ---
 name: rivto-html-extensions
-description: Create or change Rivto HTML/CSS/JavaScript blocks and Edgeless elements, their sandbox bridge, or iframe-based embedded content as extensions. Use alongside rivto-blocks or rivto-elements for the corresponding surface contract.
+description: Create or change Rivto HTML/CSS/JavaScript blocks and Edgeless elements, their sandbox bridge, or other iframe-based content as extensions. Use alongside rivto-blocks or rivto-elements for the corresponding surface contract.
 ---
 
 # Rivto HTML Extensions
@@ -15,13 +15,28 @@ also read [rivto-blocks](../rivto-blocks/SKILL.md),
 
 - [HTML surface documentation](../../../packages/react-rivto-editor/docs/html-surface.md)
   describes the installed extension, script API, interaction markers and unsafe access.
-- `packages/react-rivto-editor/src/extensions/html-surface/extension.tsx` registers
-  both blocks, the element, slots, slash commands and creation tool; its components,
-  hooks, protocol and unsafe bridge live in that extension directory.
-- `packages/react-rivto-editor/src/components/embedded-drag-handles.tsx` and
-  `src/hooks/editor/use-embedded-content-context.ts` provide reusable host targets
-  and presentation context. `packages/rivto-page/src/editor/pointer/` and Page's
-  block-editor CSS own gesture continuity across embedded frames.
+- `packages/react-rivto-editor/src/extensions/html-surface/` is organized by responsibility:
+  - `extension.tsx` registers both blocks, the element, slots, context-menu
+    conversions, slash commands and the creation tool; `index.ts` is the public surface.
+  - `constants.ts` and `types.ts` hold persisted type IDs, node views, widget commands and drafts.
+  - `model/` validates widget JSON and diffs edit-form props (pure functions).
+  - `sandbox/` owns everything that crosses into the iframe: `compose-src-doc.ts`
+    assembles the srcdoc, `frame-messages.ts` types and parses messages in both
+    directions, and `runtime/` holds the iframe-side script fragments (bridge API,
+    drag regions, text-selection relay, unsafe proxies) that share one documented scope.
+  - `frame/` contains `HtmlFrame`, `useHtmlFrame` and `HtmlFrameConnection`, the
+    port-owning connection to one composed document.
+  - `editing/` holds the per-panel editing store, source editor, CodeMirror field,
+    edit button and paste target; `block/`, `element/` and `unsafe/` hold the renderers.
+    Both block types render through `HtmlBlockOccurrence`; `unsafe/unsafe-requests.ts`
+    is the host side of editor access.
+- `frame/html-drag-handles.tsx` draws host targets over widget drag regions and
+  `frame/use-html-widget-context.ts` builds `rivto.context`. They belong to the HTML
+  surface; "embed"/"embedding" in this repo means nested Rivto content (the
+  `embedding` block, `EditorEmbed`), so do not reuse that term for iframes.
+- Page exports `IFRAME_TEXT_SELECTION_EVENT` for relaying native text drags out of
+  an iframe. `packages/rivto-page/src/editor/pointer/` and Page's block-editor CSS
+  own gesture continuity across iframes.
 - `demo/src/extensions/html-surface/` contains host-owned examples;
   `e2e/html-interaction.spec.ts` and `e2e/html-surface.spec.ts` exercise real input,
   editing, iframe controls and both surfaces.
@@ -90,9 +105,8 @@ methods for supported writes. `rivto.subscribe` observes document-data snapshots
 `rivto.subscribeContext` observes presentation changes separately. Neither
 subscription calls its listener immediately. `context.mode`, `selected` and `preview`
 describe the current block or element occurrence, with `selected` representing
-whole-item selection. React renderers can construct the shared presentation state
-with `useEmbeddedContentContext`, using the selection and preview they already own;
-containers pass their existing layout's selection state. Consult the HTML surface
+whole-item selection. The HTML renderers build it with `useHtmlWidgetContext` from
+the selection and preview they already own. Consult the HTML surface
 documentation for the supported methods and missing-value behavior.
 
 For `unsafe-html`, retain host-controlled, occurrence-local and source-specific
@@ -115,7 +129,7 @@ The sandbox additionally prevents direct access to its document. A gesture that
 starts in Page can otherwise lose pointer movement or release over any iframe,
 leaving dragging or selection stuck. Page's pointer owner temporarily disables
 pointer input on frames inside its root during its own gesture and restores it on
-release, cancellation or detach. Keep this generic to embedded frames and keep
+release, cancellation or detach. Keep this generic to iframes and keep
 gesture completion, drop geometry and selection with the existing surface owner.
 Avoid guessed offscreen heights for HTML blocks: activating an offscreen iframe's
 real layout can move another control between pointer-down and release. Check real
@@ -145,9 +159,8 @@ neighbor commits it. Keep this path internal to the bridge. The widget API has
 no need for a command that selects neighboring blocks. The
 [iframe selection test](../../../e2e/html-interaction.spec.ts) exercises all three outcomes.
 
-Other embedded renderers can use `EmbeddedDragHandles` with clipped, viewport-relative
-regions in a positioned box. Set `blockSelectionAnchor` for Page block content.
-An ordinary click in an HTML preview must not select the whole Page block; a
+`HtmlDragHandles` draws clipped, viewport-relative regions in a positioned box;
+`blockSelectionAnchor` is set for Page block content. An ordinary click in an HTML preview must not select the whole Page block; a
 selection modifier can toggle a host region. On canvas, iframe pointer notifications
 use the validated frame path and existing selection operations, group targeting and
 modifier behavior. Preserve the native event so buttons work on the first click and
@@ -169,7 +182,7 @@ references and prune dead entries while preserving controls inside shadow roots.
 Disconnect observers on frame replacement. Verify that controls added or replaced
 later, including in a closed shadow root, still receive clicks.
 
-For an embedded source editor, place `editorControlProps` on the wrapper containing
+For a source editor inside a block or element, place `editorControlProps` on the wrapper containing
 the editable surface so Page recognizes the whole control. Check inherited
 `user-select` styles, especially in a canvas visual host, and preserve the source
 editor's focus, native selection, clipboard and local history.

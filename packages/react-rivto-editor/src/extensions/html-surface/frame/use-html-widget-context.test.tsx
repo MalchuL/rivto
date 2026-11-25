@@ -1,9 +1,9 @@
 /** @jest-environment ../../../jest-browser-environment.mjs */
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import type { EmbeddedContentContext } from "../../components/embedded-content-context";
-import { SurfaceContext } from "../../surfaces/surface";
-import { useEmbeddedContentContext } from "./use-embedded-content-context";
+import type { HtmlWidgetContext } from "../types";
+import { SurfaceContext } from "../../../surfaces/surface";
+import { useHtmlWidgetContext } from "./use-html-widget-context";
 
 /** State supplied to the test renderer by its owner. */
 interface ProbeProps {
@@ -13,15 +13,15 @@ interface ProbeProps {
   readonly preview: boolean;
 }
 
-test("embedded content context follows its surface and keeps stable identity", () => {
+test("widget context follows its surface and keeps stable identity", () => {
   const environment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
   const previous = environment.IS_REACT_ACT_ENVIRONMENT;
   environment.IS_REACT_ACT_ENVIRONMENT = true;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  const snapshots: EmbeddedContentContext[] = [];
+  const snapshots: HtmlWidgetContext[] = [];
   /**
-   * Records the context supplied to an embedded renderer.
+   * Records the context supplied to a widget frame.
    *
    * @param props - Selection and preview state supplied by the owner.
    * @param props.selected - Whole-item selection state.
@@ -29,7 +29,7 @@ test("embedded content context follows its surface and keeps stable identity", (
    * @returns No visible DOM.
    */
   function Probe({ selected, preview }: ProbeProps) {
-    snapshots.push(useEmbeddedContentContext(selected, preview));
+    snapshots.push(useHtmlWidgetContext(selected, preview));
     return null;
   }
   try {

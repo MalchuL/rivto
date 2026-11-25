@@ -1,6 +1,6 @@
 import { ChildrenPanel } from "@chulane/rivto";
-import { createTestCoreEditor } from "../../test-utils";
-import { executeUnsafeHtmlRequest, parseUnsafeHtmlRequest } from "./unsafe-bridge";
+import { createTestCoreEditor } from "../../../test-utils";
+import { executeUnsafeHtmlRequest, parseUnsafeHtmlRequest } from "./unsafe-requests";
 
 test("validates requested operations and applies content through the supplied manager", async () => {
   const editor = await createTestCoreEditor();

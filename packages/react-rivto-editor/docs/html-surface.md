@@ -80,17 +80,12 @@ they are clipped to the iframe and rectangular overflow ancestors. Continuous
 CSS transforms on a marked region are not tracked frame by frame.
 Removing the last marker restores automatic background targets. Placement previews are inert.
 
-React renderers for other embedded blocks, elements or containers can reuse
-`EmbeddedDragHandles` with clipped viewport-relative regions and a positioned
-containing box. Set `blockSelectionAnchor` for block content so Page can start a
-range gesture without selecting the block on a plain click; `className` can style
-the host targets. The surrounding
-surface owns the actual gesture and document mutation. `EmbeddedContentContext`
-describes the shared presentation fields. `useEmbeddedContentContext(selected,
-preview)` combines the actual surface with the caller's existing selection state.
-Block renderers can obtain selection with `useBlockSelected`, while element
-renderers receive `selected` and `preview` in `ElementRenderProps`. Containers
-can pass the selection state owned by their existing layout.
+The host draws these regions as transparent `HtmlDragHandles` targets over the
+iframe. In a Page block they are block-selection anchors, so Page can start a
+range gesture without selecting the block on a plain click. The surrounding
+surface owns the actual gesture and document mutation. `rivto.context` is an
+`HtmlWidgetContext`, combining the actual surface with the block's or element's
+existing selection state.
 
 The sandbox prevents scripts from reading the parent's DOM and origin, but does
 not prevent network requests or form submissions. A form can navigate its iframe;

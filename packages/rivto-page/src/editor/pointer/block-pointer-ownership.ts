@@ -8,7 +8,7 @@ export class BlockPointerOwnership {
    * The gesture owner releases its reservation on completion, cancellation,
    * attachment loss and extension removal. A stale disposer cannot release a later gesture.
    *
-   * @param root - Attached editor root whose embedded frames must not intercept this gesture.
+   * @param root - Attached editor root whose iframes must not intercept this gesture.
    * @returns Idempotent release function, or undefined while another gesture owns input.
    */
   acquire(root?: HTMLElement): (() => void) | undefined {

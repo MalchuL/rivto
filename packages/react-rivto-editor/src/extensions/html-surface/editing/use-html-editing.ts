@@ -29,6 +29,11 @@ export interface HtmlEditingStore {
   set(key: string, active: boolean): void;
 }
 
+/** Props through which the extension hands its editing store to a renderer and its slot. */
+export interface HtmlEditingStoreProps {
+  readonly editingStore: HtmlEditingStore;
+}
+
 /**
  * Creates editing state owned by one extension installation.
  *

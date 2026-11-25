@@ -1124,7 +1124,7 @@ export class EdgelessTransformController {
    * Resolves click or group selection and starts a permitted object move.
    *
    * The original hit target captures the pointer so movement continues across
-   * embedded frames while ordinary click targeting remains on that element.
+   * iframes while ordinary click targeting remains on that element.
    *
    * @param context - Panel-scoped pointer event and mounted surface.
    * @param context.raw - Native pointer event on the canvas object.

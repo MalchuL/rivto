@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { HtmlFrame } from "./html-frame";
-import { HTML_CHANNEL } from "../protocol/protocol";
+import { HTML_CHANNEL } from "../constants";
 
 test("only the authenticated document port receives snapshots, permission decisions and updates", () => {
   const environment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -90,7 +90,7 @@ test("only the authenticated document port receives snapshots, permission decisi
       }),
     );
     let selectionEvents = 0;
-    iframe.addEventListener("rivto-embedded-text-selection", () => {
+    iframe.addEventListener("rivto-iframe-text-selection", () => {
       selectionEvents++;
     });
     port.onmessage!({ data: { selectionKey: token, phase: "move", x: 2, y: 120 } });

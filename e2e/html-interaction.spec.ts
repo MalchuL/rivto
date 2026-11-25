@@ -1,7 +1,7 @@
 import { expect, test, type FrameLocator, type Locator, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import type { ReactEditorApi } from "@chulane/rivto-react";
-import type { EmbeddedContentContext, HtmlNodeView } from "@chulane/rivto-react";
+import type { HtmlWidgetContext, HtmlNodeView } from "@chulane/rivto-react";
 
 interface DemoWindow extends Window {
   __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditorApi };
@@ -26,7 +26,7 @@ interface WidgetWindow extends Window {
      * @param listener - Called with each changed context.
      * @returns A disposer removing the listener.
      */
-    subscribeContext(listener: (context: EmbeddedContentContext) => void): () => void;
+    subscribeContext(listener: (context: HtmlWidgetContext) => void): () => void;
   };
 }
 
@@ -57,7 +57,7 @@ for (const type of ["html", "unsafe-html"] as const) {
         ),
     );
     await expect(block).not.toHaveAttribute("data-block-selected", "true");
-    const background = block.locator("[data-rivto-embedded-drag-handle]").first();
+    const background = block.locator("[data-html-drag-handle]").first();
     await background.click();
     await expect(block).not.toHaveAttribute("data-block-selected", "true");
     await background.click({ modifiers: ["Control"] });
@@ -152,10 +152,7 @@ test("Page selection continues over an HTML frame", async ({ page }) => {
   await expect(target).toHaveAttribute("data-block-selected", "true");
   await page.mouse.up();
   await expect(target).toHaveAttribute("data-block-selected", "true");
-  const background = (await target
-    .locator("[data-rivto-embedded-drag-handle]")
-    .first()
-    .boundingBox())!;
+  const background = (await target.locator("[data-html-drag-handle]").first().boundingBox())!;
   await page.mouse.move(background.x + background.width / 2, background.y + background.height / 2);
   await page.mouse.down();
   await page.mouse.move(text.x + 10, text.y + text.height / 2, { steps: 8 });
@@ -176,7 +173,7 @@ test("Page drag regions keep ordinary click and modifier selection behavior", as
   );
   const block = page.locator(`[data-block-id="${id}"]`);
   await block.scrollIntoViewIfNeeded();
-  const handle = block.locator("[data-rivto-embedded-drag-handle]");
+  const handle = block.locator("[data-html-drag-handle]");
   await handle.click();
   await expect(block).not.toHaveAttribute("data-block-selected", "true");
   const sandbox = page.frame({ name: "Page drag region" });
@@ -231,7 +228,7 @@ test("HTML drag regions retain block interaction inside a container", async ({ p
   });
   const block = page.locator(`[data-block-id="${id}"]`);
   await block.scrollIntoViewIfNeeded();
-  const handle = block.locator("[data-rivto-embedded-drag-handle]");
+  const handle = block.locator("[data-html-drag-handle]");
   await handle.click();
   await expect(block).not.toHaveAttribute("data-block-selected", "true");
   await handle.click({ modifiers: ["Control"] });
@@ -246,7 +243,7 @@ test("dragging the clock inside its iframe moves the canvas element", async ({ p
     has: page.locator('[data-html-label="Clock"]'),
   });
   const frame = host.locator("iframe");
-  await expect(host.locator("[data-rivto-embedded-drag-handle]")).toBeVisible();
+  await expect(host.locator("[data-html-drag-handle]")).toBeVisible();
   const before = await host.boundingBox();
   const box = await frame.boundingBox();
   const id = await host.getAttribute("data-edgeless-object-id");
@@ -343,7 +340,7 @@ test("clock border drag continues across its iframe", async ({ page }) => {
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToHtmlElement(page, "clock");
   const host = page.locator(`[data-edgeless-object-id="${id}"]`);
-  await host.locator("[data-rivto-embedded-drag-handle]").click();
+  await host.locator("[data-html-drag-handle]").click();
   const edge = page.locator(
     `[data-edgeless-controls-for="${id}"] .moveable-edgeDraggable[data-direction="w"]`,
   );
@@ -381,7 +378,7 @@ test("clock drag region moves its selected group and undoes together", async ({ 
   });
   await panToHtmlElement(page, "clock");
   const clock = page.locator(`[data-edgeless-object-id="${ids.clock}"]`);
-  const handle = clock.locator("[data-rivto-embedded-drag-handle]");
+  const handle = clock.locator("[data-html-drag-handle]");
   await expect(handle).toBeVisible();
   const box = await handle.boundingBox();
   const before = {
@@ -417,7 +414,7 @@ test("new HTML elements provide a drag region without covering their text", asyn
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToHtmlElement(page, "starter");
   const host = page.locator(`[data-edgeless-object-id="${id}"]`);
-  const handle = host.locator("[data-rivto-embedded-drag-handle]");
+  const handle = host.locator("[data-html-drag-handle]");
   await expect(handle).toBeVisible();
   const frame = page.frameLocator('iframe[name="Starter"]');
   await expect(frame.getByText("Starter")).toBeVisible();
@@ -462,7 +459,7 @@ test("HTML placement preview exposes preview context without active drag regions
   const preview = page.locator('[data-edgeless-creation-preview="html"]');
   await expect(preview).toBeVisible();
   await expect(preview).toHaveAttribute("inert", "");
-  await expect(preview.locator("[data-rivto-embedded-drag-handle]")).toHaveCount(0);
+  await expect(preview.locator("[data-html-drag-handle]")).toHaveCount(0);
   const frame = page.frameLocator('[data-edgeless-creation-preview="html"] iframe');
   await expect
     .poll(() =>
@@ -569,7 +566,7 @@ test("HTML drag regions coexist with native controls and follow markup changes",
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToHtmlElement(page, "drag-control");
   const host = page.locator(`[data-edgeless-object-id="${id}"]`);
-  const handle = host.locator("[data-rivto-embedded-drag-handle]");
+  const handle = host.locator("[data-html-drag-handle]");
   await expect(handle).toBeVisible();
   const frame = page.frameLocator('iframe[name="Drag control"]');
   await frame.getByRole("button", { name: "Activate" }).click();
@@ -1127,7 +1124,7 @@ test("HTML block source keeps text selection inside an edgeless card", async ({ 
     .poll(() =>
       page
         .frame({ name: "Pomodoro" })
-        ?.evaluate(() => (window as unknown as WidgetWindow).rivto?.context.mode),
+        ?.evaluate(() => (window as unknown as WidgetWindow).rivto?.context?.mode),
     )
     .toBe("edgeless");
   await block.hover();
@@ -1158,7 +1155,7 @@ test("HTML block source keeps text selection inside an edgeless card", async ({ 
       ),
     )
     .toBe("<p>Hello selection world</p>");
-  await block.locator("[data-rivto-embedded-drag-handle]").first().click();
+  await block.locator("[data-html-drag-handle]").first().click();
   await expect(block).not.toHaveAttribute("data-block-selected", "true");
 });
 

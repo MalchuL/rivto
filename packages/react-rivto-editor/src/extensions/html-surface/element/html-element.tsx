@@ -10,33 +10,33 @@ import { resolveEdgelessPointerTarget } from "../../edgeless/edgeless-pointer-ta
 import type { ElementRenderProps } from "../../../managers/elements/types";
 import type { ElementSlotProps } from "../../../managers/surfaces/types";
 import { useReactPanel } from "../../../hooks/editor/use-react-panel";
-import { useEmbeddedContentContext } from "../../../hooks/editor/use-embedded-content-context";
+import { useHtmlWidgetContext } from "../frame/use-html-widget-context";
 import type { EditorElementNode, PanelAPI } from "@chulane/rivto";
 import { useCallback, useMemo } from "react";
-import { useHtmlEditing, type HtmlEditingStore } from "../hooks/use-html-editing";
-import { HtmlSlotEditButton, HtmlSourceEditor } from "./html-chrome";
-import { HtmlFrame } from "./html-frame";
-import {
-  formatWidgetProps,
-  readLabel,
-  type HtmlDraft,
-  type HtmlElementView,
-  type HtmlWidgetCommand,
-} from "../protocol/protocol";
+import { HtmlEditButton } from "../editing/html-edit-button";
+import { HtmlSourceEditor } from "../editing/html-source-editor";
+import { useHtmlEditing, type HtmlEditingStoreProps } from "../editing/use-html-editing";
+import { HtmlFrame } from "../frame/html-frame";
+import { readLabel } from "../model/widget-props";
+import type { HtmlDraft, HtmlElementView, HtmlWidgetCommand } from "../types";
+
+/** Props owned by the canvas rather than the widget's JSON editor. */
+const HOST_OWNED_PROPS = ["html", "rotation"] as const;
 
 /** Panel operations needed to read and update HTML elements. */
 interface HtmlElementPanel {
   readonly elements: Pick<PanelAPI["elements"], "getElementNode" | "updateElement">;
 }
 
+/** Canvas selection operations used when a press inside the iframe selects the element. */
+type HtmlElementSelection = Pick<
+  ElementRenderProps["operations"],
+  "getSelection" | "getParentId" | "select"
+>;
+
 /** Panel operations needed to save an HTML element draft in one history entry. */
 interface HtmlElementDraftPanel extends HtmlElementPanel {
   readonly batchUpdates: PanelAPI["batchUpdates"];
-}
-
-/** Shared editing state supplied by the installed extension. */
-interface HtmlEditingProps {
-  readonly editingStore: HtmlEditingStore;
 }
 
 /**
@@ -53,13 +53,13 @@ interface HtmlEditingProps {
 export function HtmlElementEditSlot({
   element,
   editingStore,
-}: ElementSlotProps & HtmlEditingProps) {
+}: ElementSlotProps & HtmlEditingStoreProps) {
   const reactPanel = useReactPanel();
   const [editing, setEditing] = useHtmlEditing(editingStore, "element", element.id);
   return (
-    <HtmlSlotEditButton
+    <HtmlEditButton
       editing={editing}
-      onToggle={() => setEditing(!editing)}
+      onOpen={() => setEditing(true)}
       onPointerDown={(event) => {
         event.stopPropagation();
         reactPanel.editor.commands.execute("edgeless.selection.set", {
@@ -93,7 +93,7 @@ export function HtmlElement({
   selected,
   operations,
   editingStore,
-}: ElementRenderProps & HtmlEditingProps) {
+}: ElementRenderProps & HtmlEditingStoreProps) {
   const [editing, setEditing] = useHtmlEditing(editingStore, "element", element.id);
   const { node, context } = useHtmlElementView(element, selected, preview);
   const onCommand = useHtmlElementCommand(reactPanel, operations, element.id, preview);
@@ -104,7 +104,8 @@ export function HtmlElement({
       {editing && !preview ? (
         <HtmlSourceEditor
           source={source}
-          propsText={formatWidgetProps(element.props, ["html", "rotation"])}
+          props={element.props}
+          hiddenProps={HOST_OWNED_PROPS}
           onCancel={() => setEditing(false)}
           onSave={(draft) => {
             commitElementDraft(reactPanel, element.id, draft);
@@ -137,7 +138,7 @@ export function HtmlElement({
  */
 function useHtmlElementCommand(
   panel: HtmlElementPanel,
-  operations: Pick<ElementRenderProps["operations"], "getSelection" | "getParentId" | "select">,
+  operations: HtmlElementSelection,
   id: string,
   preview: boolean,
 ): (command: HtmlWidgetCommand) => void {
@@ -146,10 +147,10 @@ function useHtmlElementCommand(
       if (preview) {
         return;
       }
-      if (command.kind === "pointerdown" && panel.elements.getElementNode(id)) {
-        selectHtmlElement(operations, id, command.primary);
-      } else if (command.kind !== "pointerdown") {
+      if (command.kind !== "pointerdown") {
         applyElementCommand(panel, id, command);
+      } else if (panel.elements.getElementNode(id)) {
+        selectHtmlElement(operations, id, command.primary);
       }
     },
     [preview, panel, id, operations],
@@ -165,7 +166,7 @@ function useHtmlElementCommand(
  * @returns Stable document data and separately observed presentation context.
  */
 function useHtmlElementView(element: EditorElementNode, selected: boolean, preview: boolean) {
-  const context = useEmbeddedContentContext(selected, preview);
+  const context = useHtmlWidgetContext(selected, preview);
   const node = useMemo(() => toElementView(element), [element]);
   return { node, context };
 }
@@ -181,11 +182,7 @@ function useHtmlElementView(element: EditorElementNode, selected: boolean, previ
  * @param primary - Whether Control or Meta was held during the gesture.
  * @returns Canvas selection reflects the iframe interaction.
  */
-function selectHtmlElement(
-  operations: Pick<ElementRenderProps["operations"], "getSelection" | "getParentId" | "select">,
-  id: string,
-  primary: boolean,
-): void {
+function selectHtmlElement(operations: HtmlElementSelection, id: string, primary: boolean): void {
   const current = operations.getSelection().items;
   const selectedId = current.length === 1 ? current[0] : undefined;
   const target = resolveEdgelessPointerTarget({
@@ -245,16 +242,15 @@ function applyElementCommand(
   if (!panel.elements.getElementNode(elementId)) {
     return;
   }
-  if (command.kind === "set-prop") {
-    panel.elements.updateElement(elementId, { props: { [command.key]: command.value } });
-    return;
-  }
-  if (command.kind === "set-props") {
-    panel.elements.updateElement(elementId, { props: command.props });
-    return;
-  }
-  if (command.kind === "set-content") {
-    panel.elements.updateElement(elementId, { props: { html: command.content } });
+  switch (command.kind) {
+    case "set-prop":
+      panel.elements.updateElement(elementId, { props: { [command.key]: command.value } });
+      return;
+    case "set-props":
+      panel.elements.updateElement(elementId, { props: command.props });
+      return;
+    case "set-content":
+      panel.elements.updateElement(elementId, { props: { html: command.content } });
   }
 }
 
@@ -275,9 +271,10 @@ function commitElementDraft(
   if (!current) {
     return;
   }
-  const data = { ...draft.props };
-  delete data.html;
-  delete data.rotation;
+  const data = { ...draft.propsPatch };
+  for (const key of HOST_OWNED_PROPS) {
+    delete data[key];
+  }
   if (draft.source !== draft.openingSource) {
     data.html = draft.source;
   }

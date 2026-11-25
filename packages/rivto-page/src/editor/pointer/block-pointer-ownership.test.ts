@@ -14,7 +14,7 @@ it("excludes competing gestures and prevents stale release from cancelling a lat
   expect(pointer.acquire()).toBeDefined();
 });
 
-it("restores embedded frame interaction only when the owning gesture releases", () => {
+it("restores iframe interaction only when the owning gesture releases", () => {
   const pointer = new BlockPointerOwnership();
   const root = document.createElement("div");
   const release = pointer.acquire(root)!;

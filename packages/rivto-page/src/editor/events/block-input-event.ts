@@ -1,5 +1,12 @@
-/** Viewport position reported by an embedded text selection in this occurrence. */
-export interface EmbeddedTextSelectionDetail {
+/**
+ * Event an iframe host dispatches on its iframe to continue a native
+ * text drag into neighboring Page blocks. Page owns block resolution; the
+ * iframe host only relays the pointer position in parent viewport coordinates.
+ */
+export const IFRAME_TEXT_SELECTION_EVENT = "rivto-iframe-text-selection";
+
+/** Parent-viewport position of a native text drag that started inside an iframe. */
+export interface IframeTextSelectionDetail {
   readonly phase: "move" | "end" | "cancel";
   readonly clientX: number;
   readonly clientY: number;
@@ -9,7 +16,7 @@ export interface EmbeddedTextSelectionDetail {
 
 /** Native input names accepted by a Page occurrence, including document lifecycle events. */
 export interface BlockInputEventMap extends GlobalEventHandlersEventMap {
-  "rivto-embedded-text-selection": CustomEvent<EmbeddedTextSelectionDetail>;
+  [IFRAME_TEXT_SELECTION_EVENT]: CustomEvent<IframeTextSelectionDetail>;
   selectionchange: Event;
   visibilitychange: Event;
 }

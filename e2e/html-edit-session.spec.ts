@@ -77,7 +77,7 @@ test("a native disclosure and its relocated button retain pointer input", async 
     '<main style="height:200px"><details><summary style="height:36px;width:200px">Title</summary><p>Details</p></details><button onclick="this.textContent=\'Clicked\'">Action</button></main>',
   );
   const frame = host.locator("iframe").contentFrame();
-  await expect(host.locator("[data-rivto-embedded-drag-handle]").first()).toBeVisible();
+  await expect(host.locator("[data-html-drag-handle]").first()).toBeVisible();
   await frame.locator("summary").click({ position: { x: 180, y: 15 } });
   await expect(frame.locator("details")).toHaveAttribute("open", "");
   await frame.getByRole("button", { name: "Action" }).click();
@@ -91,7 +91,7 @@ test("temporary pointer listeners release their background drag regions", async 
     '<div id="background" style="width:180px;height:80px"></div>',
   );
   const box = host.locator("iframe").contentFrame().locator("#background");
-  const handles = host.locator("[data-rivto-embedded-drag-handle]");
+  const handles = host.locator("[data-html-drag-handle]");
   const bounds = await box.boundingBox();
   if (!bounds) {
     throw new Error("Missing widget background");
@@ -99,7 +99,7 @@ test("temporary pointer listeners release their background drag regions", async 
   const hit = () =>
     page.evaluate(
       ({ x, y }) =>
-        document.elementFromPoint(x + 35, y + 25)?.hasAttribute("data-rivto-embedded-drag-handle"),
+        document.elementFromPoint(x + 35, y + 25)?.hasAttribute("data-html-drag-handle"),
       bounds,
     );
   await expect(handles.first()).toBeVisible();
@@ -174,7 +174,7 @@ test("a navigated widget drops its drag targets and the authored document can re
   await expect(frame.locator("output")).toHaveText("Session widget");
   await frame.locator("output").evaluate(() => location.reload());
   await expect(frame.locator("output")).toHaveText("Session widget");
-  const handles = host.locator("[data-rivto-embedded-drag-handle]");
+  const handles = host.locator("[data-html-drag-handle]");
   await expect(handles.first()).toBeVisible();
   await frame.getByRole("link", { name: "Continue" }).click();
   await expect(frame.locator("p")).toHaveText("Destination");

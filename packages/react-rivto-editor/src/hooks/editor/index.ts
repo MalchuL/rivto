@@ -6,7 +6,6 @@ export type { UseEditorModeResult } from "./use-editor-mode";
 export { useEditorRoot } from "./use-editor-root";
 export type { UseEditorRootResult } from "./use-editor-root";
 export { useEditorSelection } from "./use-editor-selection";
-export { useEmbeddedContentContext } from "./use-embedded-content-context";
 export { useKeyboardEvent } from "./use-keyboard-event";
 
 export { usePanel } from "./use-panel";

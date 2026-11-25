@@ -235,5 +235,5 @@ and avoid suppressing clicks merely because a drag might have occurred. Keep
 selection and pointer handling with the shared owner; test ordinary clicks,
 modifier selection, dragging, and keyboard activation on the rendered surface.
 
-For HTML/CSS/JavaScript blocks and iframe-based embedded content, also read
+For HTML/CSS/JavaScript blocks and other iframe-based content, also read
 [rivto-html-extensions](../rivto-html-extensions/SKILL.md).

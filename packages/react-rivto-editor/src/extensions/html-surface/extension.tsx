@@ -1,153 +1,114 @@
 /**
- * Registers the HTML blocks and the HTML canvas element.
+ * Registers the HTML blocks, the HTML canvas element and their editor chrome.
  *
  * @module
  */
-import { CodeXmlIcon, TriangleAlertIcon } from "lucide-react";
+import { CodeXmlIcon, TriangleAlertIcon, type LucideIcon } from "lucide-react";
+import type { ReactEditorApi } from "../../editor/types";
 import type { BlockRendererProps } from "../../managers/blocks/renderer-types";
 import type { ElementRenderProps } from "../../managers/elements/types";
-import type { BlockSlotProps, ElementSlotProps } from "../../managers/surfaces/types";
-import { createHtmlEditingStore, type HtmlEditingStore } from "./hooks/use-html-editing";
 import type { ReactEditorExtension } from "../../managers/extensions/types";
-import type { ReactEditorApi } from "../../editor/types";
-import { HtmlBlock, HtmlBlockEditSlot } from "./components/html-block";
-import { HtmlElement, HtmlElementEditSlot } from "./components/html-element";
-import { UnsafeHtmlBlock, UNSAFE_HTML_BLOCK_TYPE } from "./components/unsafe-html-block";
-import { HTML_BLOCK_TYPE, HTML_ELEMENT_TYPE, validateHtmlElementProps } from "./protocol/protocol";
+import type { BlockSlotProps, ElementSlotProps } from "../../managers/surfaces/types";
+import { HtmlBlock, HtmlBlockEditSlot } from "./block/html-block";
+import { HTML_BLOCK_TYPE, HTML_ELEMENT_TYPE, UNSAFE_HTML_BLOCK_TYPE } from "./constants";
+import { createHtmlEditingStore, type HtmlEditingStore } from "./editing/use-html-editing";
+import { HtmlElement, HtmlElementEditSlot } from "./element/html-element";
 import { HTML_STARTER } from "./html-starter";
+import { validateHtmlElementProps } from "./model/json-value";
+import { UnsafeHtmlBlock } from "./unsafe/unsafe-html-block";
 
-/** Registration operations borrowed while installing the HTML block. */
-interface HtmlBlockRegistrationEditor {
-  readonly blockTypes: Pick<ReactEditorApi["blockTypes"], "register">;
-  readonly surfaces: Pick<ReactEditorApi["surfaces"], "registerBlockSlot">;
-}
+/** Registries borrowed while installing the extension. */
+type HtmlSurfaceRegistries = Pick<
+  ReactEditorApi,
+  "blockTypes" | "elementTypes" | "surfaces" | "blockContextMenu"
+>;
 
-/** Registration operations borrowed while installing the HTML element. */
-interface HtmlElementRegistrationEditor {
-  readonly elementTypes: Pick<ReactEditorApi["elementTypes"], "register">;
-  readonly surfaces: Pick<ReactEditorApi["surfaces"], "registerElementSlot">;
-}
-
-const htmlIcon = (
-  <svg
-    viewBox="0 0 24 24"
-    width={20}
-    height={20}
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.75}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-    focusable="false"
-    style={{ display: "inline-block", verticalAlign: "middle", pointerEvents: "none" }}
-  >
-    <rect x={3} y={4} width={18} height={16} rx={3} />
-    <path d="M8 9l-2 3 2 3M16 9l2 3-2 3M13 8l-2 8" />
-  </svg>
-);
+/** Default size of a newly placed HTML element, in canvas units. */
+const DEFAULT_ELEMENT_FRAME = { x: 0, y: 0, width: 280, height: 220 };
 
 /**
- * Installs the sandboxed HTML blocks and canvas element.
+ * Exports an HTML block's source as its portable text in every clipboard format.
  *
- * Both blocks are available from the slash menu. The element is a standalone
- * canvas tool. Disposing the extension removes all registrations and leaves
- * any saved widgets in the document. Unsafe block grants are local to the mounted occurrence.
+ * @param context - Clipboard context of the copied block.
+ * @param context.block - Copied block; its content is the authored HTML.
+ * @returns Plain text, Markdown and HTML forms, all equal to the source.
+ */
+function formatHtmlClipboard({ block }: { readonly block: { readonly content: string } }) {
+  return { plain: block.content, markdown: block.content, html: block.content };
+}
+
+/**
+ * Creates the HTML surface extension.
  *
- * @returns Extension installed by the host editor.
+ * Installs:
+ * - the `html` block, with a right-slot edit button and a slash command;
+ * - the `unsafe-html` block, whose script may be granted editor access;
+ * - "Convert to safe/unsafe HTML" block context menu items;
+ * - the `html` canvas element, its edit slot and a placement tool.
+ *
+ * Disposing the extension removes every registration and leaves saved
+ * widgets in the document.
+ *
+ * @returns Extension to pass to the React editor.
  */
 export function htmlSurfaceExtension(): ReactEditorExtension {
   return {
     id: "rivto.html-surface",
     /**
-     * Registers both block renderers and the canvas element together.
+     * Installs all registrations with one editing store shared by renderers and slots.
      *
-     * @param editor - Editor that owns the block and element registries.
-     * @returns Cleanup that removes both block and element registrations.
+     * @param editor - Editor that owns the registries.
+     * @returns Cleanup that removes every registration in reverse order.
      */
     setup(editor) {
       const editingStore = createHtmlEditingStore();
-      const removeBlock = registerHtmlBlock(editor, editingStore);
-      const removeElement = registerHtmlElement(editor, editingStore);
-      const removeUnsafeBlock = registerUnsafeHtmlBlock(editor);
-      for (const [from, to, title, icon] of [
-        [HTML_BLOCK_TYPE, UNSAFE_HTML_BLOCK_TYPE, "Convert to unsafe HTML", TriangleAlertIcon],
-        [UNSAFE_HTML_BLOCK_TYPE, HTML_BLOCK_TYPE, "Convert to safe HTML", CodeXmlIcon],
-      ] as const) {
-        editor.blockContextMenu.register({
-          id: `html-surface.convert-to-${to}`,
-          title,
-          icon,
-          order: 30,
-          /**
-           * Offers this direction only for a selection of matching HTML blocks.
-           *
-           * @param context - The invoking panel and its captured block IDs.
-           * @returns Whether every target currently has the source type.
-           */
-          isAvailable: ({ reactPanel, blockIds }) =>
-            blockIds.every((id) => reactPanel.blocks.getBlockNode(id)?.type === from),
-          /**
-           * Changes the selected blocks in place as one undoable edit.
-           *
-           * @param context - The invoking panel and the targets rechecked by the menu.
-           * @returns The blocks have the destination type. Access grants belong to the renderer.
-           * @throws If a panel block cannot be converted.
-           */
-          execute: ({ reactPanel, blockIds }) =>
-            reactPanel.batchUpdates(() => {
-              for (const id of blockIds) {
-                reactPanel.blocks.setBlockType(id, to);
-              }
-            }),
-        });
-      }
+      const disposers = [
+        registerHtmlBlock(editor, editingStore),
+        registerUnsafeHtmlBlock(editor),
+        registerConversion(
+          editor,
+          HTML_BLOCK_TYPE,
+          UNSAFE_HTML_BLOCK_TYPE,
+          "Convert to unsafe HTML",
+          TriangleAlertIcon,
+        ),
+        registerConversion(
+          editor,
+          UNSAFE_HTML_BLOCK_TYPE,
+          HTML_BLOCK_TYPE,
+          "Convert to safe HTML",
+          CodeXmlIcon,
+        ),
+        registerHtmlElement(editor, editingStore),
+      ];
       return () => {
-        removeUnsafeBlock();
-        removeElement();
-        removeBlock();
+        for (const dispose of disposers.reverse()) {
+          dispose();
+        }
       };
     },
   };
 }
 
 /**
- * Registers the page HTML block, including its slash command and clipboard text.
+ * Registers the `html` block and its right-slot edit button.
  *
- * @param editor - Editor whose block registry receives the type.
- * @param editingStore - State shared by the registered block components.
- * @returns Disposer that removes the block and its right-slot control.
+ * @param editor - Registries to install into.
+ * @param editingStore - Editing state shared by the renderer and its slot.
+ * @returns Disposer that removes both registrations.
  */
-function registerHtmlBlock(editor: HtmlBlockRegistrationEditor, editingStore: HtmlEditingStore) {
+function registerHtmlBlock(editor: HtmlSurfaceRegistries, editingStore: HtmlEditingStore) {
   const removeType = editor.blockTypes.register({
-    definition: {
-      type: HTML_BLOCK_TYPE,
-      title: "HTML",
-      defaultProps: { label: "HTML" },
-    },
+    definition: { type: HTML_BLOCK_TYPE, title: "HTML", defaultProps: { label: "HTML" } },
     render: (props: BlockRendererProps) => <HtmlBlock {...props} editingStore={editingStore} />,
     slashCommand: {
       title: "HTML",
       group: "Turn into",
       keywords: ["html", "css", "javascript", "widget", "embed"],
     },
-    clipboard: {
-      /**
-       * Exports the authored HTML as the portable text of the block.
-       *
-       * @param context - Clipboard context whose block content is the HTML source.
-       * @returns Plain text, Markdown, and HTML forms of that source.
-       */
-      format(context) {
-        return {
-          plain: context.block.content,
-          markdown: context.block.content,
-          html: context.block.content,
-        };
-      },
-    },
+    clipboard: { format: formatHtmlClipboard },
   });
-  const removeEdit = editor.surfaces.registerBlockSlot({
+  const removeSlot = editor.surfaces.registerBlockSlot({
     position: "right",
     component: (props: BlockSlotProps) => (
       <HtmlBlockEditSlot {...props} editingStore={editingStore} />
@@ -155,18 +116,18 @@ function registerHtmlBlock(editor: HtmlBlockRegistrationEditor, editingStore: Ht
     when: ({ block }) => block.type === HTML_BLOCK_TYPE,
   });
   return () => {
-    removeEdit();
+    removeSlot();
     removeType();
   };
 }
 
 /**
- * Registers the opt-in HTML block and its conversion command.
+ * Registers the `unsafe-html` block. Its edit button is rendered inline by the block.
  *
- * @param editor - Editor that owns the block type registry.
- * @returns A disposer that removes the registration.
+ * @param editor - Registries to install into.
+ * @returns Disposer that removes the registration.
  */
-function registerUnsafeHtmlBlock(editor: HtmlBlockRegistrationEditor): () => void {
+function registerUnsafeHtmlBlock(editor: HtmlSurfaceRegistries): () => void {
   return editor.blockTypes.register({
     definition: {
       type: UNSAFE_HTML_BLOCK_TYPE,
@@ -179,52 +140,87 @@ function registerUnsafeHtmlBlock(editor: HtmlBlockRegistrationEditor): () => voi
       group: "Turn into",
       keywords: ["html", "unsafe", "script"],
     },
+    clipboard: { format: formatHtmlClipboard },
   });
 }
 
 /**
- * Registers the canvas HTML element and its placement tool.
+ * Registers a block context menu item that changes selected blocks from one HTML type to another.
  *
- * @param editor - Editor whose element registry receives the type.
- * @param editingStore - State shared by the registered element components.
- * @returns Disposer that removes the element and its right-slot control.
+ * Converting does not carry over any access grant; grants belong to the
+ * mounted Unsafe HTML occurrence.
+ *
+ * @param editor - Registries to install into.
+ * @param from - Type every selected block must have for the item to show.
+ * @param to - Destination type.
+ * @param title - Menu label.
+ * @param icon - Menu icon.
+ * @returns Disposer that removes the menu item.
  */
-function registerHtmlElement(
-  editor: HtmlElementRegistrationEditor,
-  editingStore: HtmlEditingStore,
-) {
+function registerConversion(
+  editor: HtmlSurfaceRegistries,
+  from: string,
+  to: string,
+  title: string,
+  icon: LucideIcon,
+): () => void {
+  return editor.blockContextMenu.register({
+    id: `html-surface.convert-to-${to}`,
+    title,
+    icon,
+    order: 30,
+    /**
+     * Shows the item only when every target currently has the source type.
+     *
+     * @param context - Invoking panel and target block IDs.
+     * @returns Whether the conversion applies.
+     */
+    isAvailable: ({ reactPanel, blockIds }) =>
+      blockIds.every((id) => reactPanel.blocks.getBlockNode(id)?.type === from),
+    /**
+     * Changes every target's type as one undoable edit.
+     *
+     * @param context - Invoking panel and target block IDs.
+     * @returns The targets have the destination type.
+     * @throws If the panel rejects a type change.
+     */
+    execute: ({ reactPanel, blockIds }) =>
+      reactPanel.batchUpdates(() => {
+        for (const id of blockIds) {
+          reactPanel.blocks.setBlockType(id, to);
+        }
+      }),
+  });
+}
+
+/**
+ * Registers the `html` canvas element, its edit slot and its placement tool.
+ *
+ * @param editor - Registries to install into.
+ * @param editingStore - Editing state shared by the renderer and its slot.
+ * @returns Disposer that removes both registrations.
+ */
+function registerHtmlElement(editor: HtmlSurfaceRegistries, editingStore: HtmlEditingStore) {
   const removeType = editor.elementTypes.register({
     title: "HTML",
     definition: {
       type: HTML_ELEMENT_TYPE,
       defaults: { html: HTML_STARTER, label: "HTML" },
-      /**
-       * Requires an HTML string and JSON widget data.
-       *
-       * @param props - Merged element properties.
-       * @returns The same properties when they are valid.
-       * @throws If `html` is missing or a property is not JSON data.
-       */
       validate: validateHtmlElementProps,
     },
     render: (props: ElementRenderProps) => <HtmlElement {...props} editingStore={editingStore} />,
     creation: {
       title: "HTML",
-      icon: htmlIcon,
+      icon: <CodeXmlIcon size={20} strokeWidth={1.75} aria-hidden="true" focusable="false" />,
       /**
-       * Supplies the initial box for a placed HTML element.
+       * Supplies a detached element at the default size; placement replaces its frame.
        *
-       * The placement gesture replaces this box. The factory does not insert a record.
-       *
-       * @returns A detached HTML element at the default size.
+       * @returns The element input to place.
        */
-      create: () => ({
-        type: HTML_ELEMENT_TYPE,
-        frame: { x: 0, y: 0, width: 280, height: 220 },
-      }),
+      create: () => ({ type: HTML_ELEMENT_TYPE, frame: { ...DEFAULT_ELEMENT_FRAME } }),
     },
   });
-  const removeEdit = editor.surfaces.registerElementSlot({
+  const removeSlot = editor.surfaces.registerElementSlot({
     position: "right",
     component: (props: ElementSlotProps) => (
       <HtmlElementEditSlot {...props} editingStore={editingStore} />
@@ -232,7 +228,7 @@ function registerHtmlElement(
     when: ({ element }) => element.type === HTML_ELEMENT_TYPE,
   });
   return () => {
-    removeEdit();
+    removeSlot();
     removeType();
   };
 }
