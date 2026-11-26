@@ -23,15 +23,16 @@ also read [rivto-blocks](../rivto-blocks/SKILL.md),
   - `sandbox/` owns everything that crosses into the iframe: `compose-src-doc.ts`
     assembles the srcdoc, `frame-messages.ts` types and parses messages in both
     directions, and `runtime/` holds the iframe-side script fragments (bridge API,
-    drag regions, text-selection relay, unsafe proxies) that share one documented scope.
+    editor pointer regions, text-selection relay, unsafe proxies) that share one documented scope.
   - `frame/` contains `HtmlFrame`, `useHtmlFrame` and `HtmlFrameConnection`, the
     port-owning connection to one composed document.
   - `editing/` holds the per-panel editing store, source editor, CodeMirror field,
     and edit button; `block/`, `element/` and `unsafe/` hold the renderers.
     Both block types render through `HtmlBlockOccurrence`, which shows
     `HtmlBlockEmpty` while a block has no HTML; `unsafe/unsafe-requests.ts`
-    is the host side of editor access.
-- `frame/html-drag-handles.tsx` draws host targets over widget drag regions and
+    is the editor side of editor access.
+- `frame/html-editor-pointer-targets.tsx` lays transparent targets over the editor pointer regions a widget
+  reports (canvas: select and move; Page: block-selection anchors), and
   `frame/use-html-widget-context.ts` builds `rivto.context`. They belong to the HTML
   surface; "embed"/"embedding" in this repo means nested Rivto content (the
   `embedding` block, `EditorEmbed`), so do not reuse that term for iframes.
@@ -55,7 +56,7 @@ store it in `props.html`. Keep reusable registrations, renderers, hooks, protoco
 styles and editing UI in the package; keep showcase samples in the host demo.
 
 `htmlSurfaceExtension(options)` takes the frame limits `maxBlockHeight` and
-`maxDragRegions` (see `options.ts`). Pass a new limit the same way: add it to
+`maxEditorPointerRegions` (see `options.ts`). Pass a new limit the same way: add it to
 `HtmlSurfaceOptions` with a documented default, validate it in
 `resolveHtmlSurfaceLimits`, and read it from the `limits` the registrations hand
 to renderers. Do not reintroduce module constants for such limits.
@@ -142,7 +143,7 @@ Avoid guessed offscreen heights for HTML blocks: activating an offscreen iframe'
 real layout can move another control between pointer-down and release. Check real
 scroll and pointer behavior before adding content-visibility optimizations.
 
-Use host-side hit targets for gestures that start on the widget background. Unmarked HTML
+Use editor-side hit targets (editor pointer regions) for gestures that start on the widget background. Unmarked HTML
 backgrounds receive automatic targets; text, native controls and recognized
 interactive elements retain their iframe events. Native draggable elements and
 elements with detected `dragstart`, `dragenter`, `dragover` or `drop` listeners
@@ -166,7 +167,7 @@ neighbor commits it. Keep this path internal to the bridge. The widget API has
 no need for a command that selects neighboring blocks. The
 [iframe selection test](../../../e2e/html-interaction.spec.ts) exercises all three outcomes.
 
-`HtmlDragHandles` draws clipped, viewport-relative regions in a positioned box;
+`HtmlEditorPointerTargets` draws clipped, viewport-relative regions in a positioned box;
 `blockSelectionAnchor` is set for Page block content. An ordinary click in an HTML preview must not select the whole Page block; a
 selection modifier can toggle a host region. On canvas, iframe pointer notifications
 use the validated frame path and existing selection operations, group targeting and
@@ -176,7 +177,7 @@ events or use them to authorize moving other objects.
 
 For custom pointer-driven controls, capture the actual pointer on pointer-down and
 release or cancel it with the gesture; capture keeps fast movement owned by the
-widget when the pointer leaves its control. Do not use a host drag marker over
+widget when the pointer leaves its control. Do not put a `data-rivto-drag-handle` marker over
 that control. For a range input, update immediate visual feedback on `input` and
 commit the intended document value on `change` when one undoable change is desired.
 Keep the focused control stable across the widget's own document-update echo;

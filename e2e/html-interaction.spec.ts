@@ -57,7 +57,7 @@ for (const type of ["html", "unsafe-html"] as const) {
         ),
     );
     await expect(block).not.toHaveAttribute("data-block-selected", "true");
-    const background = block.locator("[data-html-drag-handle]").first();
+    const background = block.locator("[data-html-editor-pointer]").first();
     await background.click();
     await expect(block).not.toHaveAttribute("data-block-selected", "true");
     await background.click({ modifiers: ["Control"] });
@@ -152,7 +152,7 @@ test("Page selection continues over an HTML frame", async ({ page }) => {
   await expect(target).toHaveAttribute("data-block-selected", "true");
   await page.mouse.up();
   await expect(target).toHaveAttribute("data-block-selected", "true");
-  const background = (await target.locator("[data-html-drag-handle]").first().boundingBox())!;
+  const background = (await target.locator("[data-html-editor-pointer]").first().boundingBox())!;
   await page.mouse.move(background.x + background.width / 2, background.y + background.height / 2);
   await page.mouse.down();
   await page.mouse.move(text.x + 10, text.y + text.height / 2, { steps: 8 });
@@ -161,24 +161,26 @@ test("Page selection continues over an HTML frame", async ({ page }) => {
   await expect(target).toHaveAttribute("data-block-selected", "true");
 });
 
-test("Page drag regions keep ordinary click and modifier selection behavior", async ({ page }) => {
+test("Page editor pointer regions keep ordinary click and modifier selection behavior", async ({
+  page,
+}) => {
   await page.goto("/");
   const id = await page.evaluate(
     () =>
       (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.insertBlock({
         type: "html",
         content: '<div data-rivto-drag-handle style="height:40px">Handle</div>',
-        props: { label: "Page drag region" },
+        props: { label: "Page editor pointer region" },
       }).id,
   );
   const block = page.locator(`[data-block-id="${id}"]`);
   await block.scrollIntoViewIfNeeded();
-  const handle = block.locator("[data-html-drag-handle]");
+  const handle = block.locator("[data-html-editor-pointer]");
   await handle.click();
   await expect(block).not.toHaveAttribute("data-block-selected", "true");
-  const sandbox = page.frame({ name: "Page drag region" });
+  const sandbox = page.frame({ name: "Page editor pointer region" });
   if (!sandbox) {
-    throw new Error("Missing Page drag region frame");
+    throw new Error("Missing Page editor pointer region frame");
   }
   await sandbox.evaluate(() => {
     const widget = window as unknown as WidgetWindow;
@@ -211,7 +213,9 @@ test("Page drag regions keep ordinary click and modifier selection behavior", as
   await expect(block).toHaveAttribute("data-block-selected", "true");
 });
 
-test("HTML drag regions retain block interaction inside a container", async ({ page }) => {
+test("HTML editor pointer regions retain block interaction inside a container", async ({
+  page,
+}) => {
   await page.goto("/");
   const id = await page.evaluate(() => {
     const board = (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.insertBlock({
@@ -228,7 +232,7 @@ test("HTML drag regions retain block interaction inside a container", async ({ p
   });
   const block = page.locator(`[data-block-id="${id}"]`);
   await block.scrollIntoViewIfNeeded();
-  const handle = block.locator("[data-html-drag-handle]");
+  const handle = block.locator("[data-html-editor-pointer]");
   await handle.click();
   await expect(block).not.toHaveAttribute("data-block-selected", "true");
   await handle.click({ modifiers: ["Control"] });
@@ -243,7 +247,7 @@ test("dragging the clock inside its iframe moves the canvas element", async ({ p
     has: page.locator('[data-html-label="Clock"]'),
   });
   const frame = host.locator("iframe");
-  await expect(host.locator("[data-html-drag-handle]")).toBeVisible();
+  await expect(host.locator("[data-html-editor-pointer]")).toBeVisible();
   const before = await host.boundingBox();
   const box = await frame.boundingBox();
   const id = await host.getAttribute("data-edgeless-object-id");
@@ -340,7 +344,7 @@ test("clock border drag continues across its iframe", async ({ page }) => {
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToHtmlElement(page, "clock");
   const host = page.locator(`[data-edgeless-object-id="${id}"]`);
-  await host.locator("[data-html-drag-handle]").click();
+  await host.locator("[data-html-editor-pointer]").click();
   const edge = page.locator(
     `[data-edgeless-controls-for="${id}"] .moveable-edgeDraggable[data-direction="w"]`,
   );
@@ -361,7 +365,9 @@ test("clock border drag continues across its iframe", async ({ page }) => {
   await expect.poll(() => readElementX(page, id)).toBe(original);
 });
 
-test("clock drag region moves its selected group and undoes together", async ({ page }) => {
+test("clock editor pointer region moves its selected group and undoes together", async ({
+  page,
+}) => {
   await page.goto("/");
   await page.locator('[data-editor-mode="edgeless"]').click();
   const ids = await page.evaluate(() => {
@@ -378,7 +384,7 @@ test("clock drag region moves its selected group and undoes together", async ({ 
   });
   await panToHtmlElement(page, "clock");
   const clock = page.locator(`[data-edgeless-object-id="${ids.clock}"]`);
-  const handle = clock.locator("[data-html-drag-handle]");
+  const handle = clock.locator("[data-html-editor-pointer]");
   await expect(handle).toBeVisible();
   const box = await handle.boundingBox();
   const before = {
@@ -400,7 +406,9 @@ test("clock drag region moves its selected group and undoes together", async ({ 
   await expect.poll(() => readElementX(page, ids.clock)).toBe(before.clock);
 });
 
-test("new HTML elements provide a drag region without covering their text", async ({ page }) => {
+test("new HTML elements provide an editor pointer region without covering their text", async ({
+  page,
+}) => {
   await page.goto("/");
   const id = await page.evaluate(
     () =>
@@ -414,7 +422,7 @@ test("new HTML elements provide a drag region without covering their text", asyn
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToHtmlElement(page, "starter");
   const host = page.locator(`[data-edgeless-object-id="${id}"]`);
-  const handle = host.locator("[data-html-drag-handle]");
+  const handle = host.locator("[data-html-editor-pointer]");
   await expect(handle).toBeVisible();
   const frame = page.frameLocator('iframe[name="Starter"]');
   await expect(frame.getByText("Starter")).toBeVisible();
@@ -432,7 +440,7 @@ test("new HTML elements provide a drag region without covering their text", asyn
   const before = await host.boundingBox();
   const box = await handle.boundingBox();
   if (!before || !box) {
-    throw new Error("Missing starter drag region");
+    throw new Error("Missing starter editor pointer region");
   }
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
@@ -441,7 +449,7 @@ test("new HTML elements provide a drag region without covering their text", asyn
   await expect.poll(async () => (await host.boundingBox())?.x).toBeGreaterThan(before.x + 30);
 });
 
-test("HTML placement preview exposes preview context without active drag regions", async ({
+test("HTML placement preview exposes preview context without active editor pointer regions", async ({
   page,
 }) => {
   await page.goto("/");
@@ -459,7 +467,7 @@ test("HTML placement preview exposes preview context without active drag regions
   const preview = page.locator('[data-edgeless-creation-preview="html"]');
   await expect(preview).toBeVisible();
   await expect(preview).toHaveAttribute("inert", "");
-  await expect(preview.locator("[data-html-drag-handle]")).toHaveCount(0);
+  await expect(preview.locator("[data-html-editor-pointer]")).toHaveCount(0);
   const frame = page.frameLocator('[data-edgeless-creation-preview="html"] iframe');
   await expect
     .poll(() =>
@@ -479,7 +487,7 @@ test("HTML placement preview exposes preview context without active drag regions
 });
 
 /**
- * Inserts a canvas widget with a drag region and a separate native button.
+ * Inserts a canvas widget with an editor pointer region and a separate native button.
  *
  * @param page - Demo page containing the editor.
  * @returns The inserted element's stable ID.
@@ -523,11 +531,14 @@ async function replaceDragControlSource(page: Page, id: string): Promise<void> {
  * @param handle - Host pointer target projected from that region.
  * @returns The restored region is visible again.
  */
-async function checkDragRegionChanges(frame: FrameLocator, handle: Locator): Promise<void> {
+async function checkEditorPointerRegionChanges(
+  frame: FrameLocator,
+  handle: Locator,
+): Promise<void> {
   const grip = frame.locator("#grip");
   const before = await handle.boundingBox();
   if (!before) {
-    throw new Error("Missing initial drag region");
+    throw new Error("Missing initial editor pointer region");
   }
   await grip.evaluate((element) => {
     if (element.parentElement) {
@@ -558,7 +569,7 @@ async function checkDragRegionChanges(frame: FrameLocator, handle: Locator): Pro
   await expect(handle).toBeVisible();
 }
 
-test("HTML drag regions coexist with native controls and follow markup changes", async ({
+test("HTML editor pointer regions coexist with native controls and follow markup changes", async ({
   page,
 }) => {
   await page.goto("/");
@@ -566,7 +577,7 @@ test("HTML drag regions coexist with native controls and follow markup changes",
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToHtmlElement(page, "drag-control");
   const host = page.locator(`[data-edgeless-object-id="${id}"]`);
-  const handle = host.locator("[data-html-drag-handle]");
+  const handle = host.locator("[data-html-editor-pointer]");
   await expect(handle).toBeVisible();
   const frame = page.frameLocator('iframe[name="Drag control"]');
   await frame.getByRole("button", { name: "Activate" }).click();
@@ -585,11 +596,11 @@ test("HTML drag regions coexist with native controls and follow markup changes",
       frame.locator("button").evaluate(() => (window as unknown as WidgetWindow).rivto.props.count),
     )
     .toBe(1);
-  await checkDragRegionChanges(frame, handle);
+  await checkEditorPointerRegionChanges(frame, handle);
   const before = await host.boundingBox();
   const box = await handle.boundingBox();
   if (!before || !box) {
-    throw new Error("Missing HTML drag region geometry");
+    throw new Error("Missing HTML editor pointer region geometry");
   }
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
@@ -1159,7 +1170,7 @@ test("HTML block source keeps text selection inside an edgeless card", async ({ 
       ),
     )
     .toBe("<p>Hello selection world</p>");
-  await block.locator("[data-html-drag-handle]").first().click();
+  await block.locator("[data-html-editor-pointer]").first().click();
   await expect(block).not.toHaveAttribute("data-block-selected", "true");
 });
 

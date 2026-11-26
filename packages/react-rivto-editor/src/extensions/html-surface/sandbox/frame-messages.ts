@@ -10,7 +10,7 @@
 import { HTML_IFRAME_MESSAGE_NAMESPACE } from "../constants";
 import { isJsonRecord, isJsonValue, isWritableKey } from "../model/json-value";
 import type {
-  HtmlDragHandleRegion,
+  HtmlEditorPointerRegion,
   HtmlNodeView,
   HtmlWidgetCommand,
   HtmlWidgetContext,
@@ -27,7 +27,7 @@ import {
  * - Widget commands ({@link HtmlWidgetCommand}): pointer presses and writes.
  * - `ready`: the bridge has started; sent once per page load with the private port.
  * - `resize`: the page's content height, for auto-sized Page blocks.
- * - `drag-handles`: the areas where pressing should move the block or element.
+ * - `editor-pointer-regions`: the areas where pressing should move the block or element.
  * - `unsafe-request`: an Unsafe HTML widget calls `rivto.panel` / `rivto.reactEditor`.
  * - `unsafe-denied`: a widget touched `rivto.panel` while access is off.
  */
@@ -35,7 +35,10 @@ export type HtmlFrameMessage =
   | HtmlWidgetCommand
   | { readonly kind: "ready" }
   | { readonly kind: "resize"; readonly height: number }
-  | { readonly kind: "drag-handles"; readonly handles: readonly HtmlDragHandleRegion[] }
+  | {
+      readonly kind: "editor-pointer-regions";
+      readonly regions: readonly HtmlEditorPointerRegion[];
+    }
   | { readonly kind: "unsafe-request"; readonly request: UnsafeHtmlRequest }
   | { readonly kind: "unsafe-denied" };
 
@@ -73,13 +76,13 @@ export function postHostMessage(port: MessagePort, token: string, message: HtmlH
  *
  * @param data - Handshake from the iframe window or payload from its port.
  * @param token - Secret of the document allowed to send.
- * @param maxDragRegions - Longest drag-region list accepted; longer lists are rejected.
+ * @param maxEditorPointerRegions - Longest editor-pointer-region list accepted; longer lists are rejected.
  * @returns The validated message, or undefined.
  */
 export function parseFrameMessage(
   data: unknown,
   token: string,
-  maxDragRegions: number,
+  maxEditorPointerRegions: number,
 ): HtmlFrameMessage | undefined {
   if (!data || typeof data !== "object") {
     return undefined;
@@ -96,8 +99,8 @@ export function parseFrameMessage(
       return typeof message.height === "number" && Number.isFinite(message.height)
         ? { kind: "resize", height: message.height }
         : undefined;
-    case "drag-handles":
-      return parseDragRegions(message.handles, maxDragRegions);
+    case "editor-pointer-regions":
+      return parseEditorPointerRegions(message.regions, maxEditorPointerRegions);
     case "unsafe-request": {
       const request = parseUnsafeHtmlRequest(message);
       return request && { kind: "unsafe-request", request };
@@ -141,28 +144,31 @@ function parseWidgetCommand(message: Record<string, unknown>): HtmlWidgetCommand
 }
 
 /**
- * Validates drag regions and clips them to the unit viewport.
+ * Validates editor pointer regions and clips them to the unit viewport.
  *
  * @param value - Untrusted region list.
- * @param maxDragRegions - Longest list accepted.
+ * @param maxEditorPointerRegions - Longest list accepted.
  * @returns The clipped regions (empty ones dropped), or undefined if the list is too
  * long or any entry is malformed.
  */
-function parseDragRegions(value: unknown, maxDragRegions: number): HtmlFrameMessage | undefined {
-  if (!Array.isArray(value) || value.length > maxDragRegions) {
+function parseEditorPointerRegions(
+  value: unknown,
+  maxEditorPointerRegions: number,
+): HtmlFrameMessage | undefined {
+  if (!Array.isArray(value) || value.length > maxEditorPointerRegions) {
     return undefined;
   }
-  const handles: HtmlDragHandleRegion[] = [];
+  const regions: HtmlEditorPointerRegion[] = [];
   for (const item of value) {
     const region = parseRegion(item);
     if (region === undefined) {
       return undefined;
     }
     if (region) {
-      handles.push(region);
+      regions.push(region);
     }
   }
-  return { kind: "drag-handles", handles };
+  return { kind: "editor-pointer-regions", regions };
 }
 
 /**
@@ -171,7 +177,7 @@ function parseDragRegions(value: unknown, maxDragRegions: number): HtmlFrameMess
  * @param item - Candidate `{x, y, width, height}` record.
  * @returns The clipped region, null when it is empty after clipping, or undefined when malformed.
  */
-function parseRegion(item: unknown): HtmlDragHandleRegion | null | undefined {
+function parseRegion(item: unknown): HtmlEditorPointerRegion | null | undefined {
   if (!item || typeof item !== "object") {
     return undefined;
   }

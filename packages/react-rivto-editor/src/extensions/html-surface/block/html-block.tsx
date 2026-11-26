@@ -264,7 +264,7 @@ function toBlockView(block: EditorBlockNode): Omit<HtmlBlockView, "context"> {
 /**
  * Applies one widget command to the block.
  *
- * Pointer notifications are ignored: in Page, the drag-handle overlay and the
+ * Pointer notifications are ignored: in Page, the editor pointer targets and the
  * block-selection anchor already handle block selection natively. The block
  * is looked up when the command arrives, so a write for a block deleted in the
  * meantime is dropped instead of recreating it.

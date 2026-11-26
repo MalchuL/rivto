@@ -8,7 +8,7 @@ import type { HtmlSurfaceLimits } from "../options";
 import { composeSrcDoc } from "../sandbox/compose-src-doc";
 import type { HtmlFrameMessage, HtmlHostMessage } from "../sandbox/frame-messages";
 import type {
-  HtmlDragHandleRegion,
+  HtmlEditorPointerRegion,
   HtmlFrameFit,
   HtmlNodeData,
   HtmlWidgetCommand,
@@ -33,10 +33,10 @@ export interface UseHtmlFrameOptions {
   readonly context: HtmlWidgetContext;
   /** `auto` grows with the content (Page); `fill` fills the host box (canvas). Changing it rebuilds the page. */
   readonly fit: HtmlFrameFit;
-  /** Whether widget writes and drag handles are enabled. False for placement previews. */
+  /** Whether widget writes and editor pointer targets are enabled. False for placement previews. */
   readonly interactive: boolean;
   /**
-   * Frame limits of the extension installation. `maxDragRegions` is baked into
+   * Frame limits of the extension installation. `maxEditorPointerRegions` is baked into
    * the page, so changing it rebuilds the page; `maxBlockHeight` caps `auto` frames.
    */
   readonly limits: HtmlSurfaceLimits;
@@ -60,15 +60,15 @@ export interface UseHtmlFrameResult {
   readonly srcDoc: string;
   /** Height for `auto` frames, in CSS pixels. Ignored by `fill` frames. */
   readonly height: number;
-  /** Where to draw drag handles, as reported by the widget. */
-  readonly dragRegions: readonly HtmlDragHandleRegion[];
+  /** Where to lay editor pointer targets, as reported by the widget. */
+  readonly editorPointerRegions: readonly HtmlEditorPointerRegion[];
 }
 
 /**
  * Builds the widget page, connects to it, and keeps it up to date.
  *
  * What rebuilds the page and what does not:
- * - Rebuilt: `source`, `fit`, `limits.maxDragRegions`, the unsafe grant, or
+ * - Rebuilt: `source`, `fit`, `limits.maxEditorPointerRegions`, the unsafe grant, or
  *   whether a text-selection relay is needed. Each rebuild gets new secrets,
  *   which cuts off the old page's connection.
  * - Posted into the running page: `node` and `context`. Widget state such as
@@ -87,7 +87,9 @@ export function useHtmlFrame(options: UseHtmlFrameOptions): UseHtmlFrameResult {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const connectionRef = useRef<HtmlFrameConnection | null>(null);
   const [height, setHeight] = useState(INITIAL_AUTO_HEIGHT);
-  const [dragRegions, setDragRegions] = useState<readonly HtmlDragHandleRegion[]>([]);
+  const [editorPointerRegions, setEditorPointerRegions] = useState<
+    readonly HtmlEditorPointerRegion[]
+  >([]);
 
   // Message handlers outlive renders; they read the newest options through this ref.
   const latest = useRef(options);
@@ -102,11 +104,14 @@ export function useHtmlFrame(options: UseHtmlFrameOptions): UseHtmlFrameResult {
     if (!iframe) {
       return undefined;
     }
-    setDragRegions([]);
+    setEditorPointerRegions([]);
     const connection = new HtmlFrameConnection(iframe, frameDocument, {
       onConnect: () => connection.post(nodeMessage(latest.current)),
       onMessage: (message) =>
-        handleFrameMessage(message, latest.current, connection, { setHeight, setDragRegions }),
+        handleFrameMessage(message, latest.current, connection, {
+          setHeight,
+          setEditorPointerRegions,
+        }),
     });
     connectionRef.current = connection;
     return () => {
@@ -122,7 +127,7 @@ export function useHtmlFrame(options: UseHtmlFrameOptions): UseHtmlFrameResult {
     connectionRef.current?.post({ kind: "context", context });
   }, [context, frameDocument]);
 
-  return { iframeRef, srcDoc: frameDocument.srcDoc, height, dragRegions };
+  return { iframeRef, srcDoc: frameDocument.srcDoc, height, editorPointerRegions };
 }
 
 /** A composed page and the secrets and limits baked into it. */
@@ -138,11 +143,11 @@ interface ComposedFrameDocument extends HtmlFrameDocument {
  * the relay is needed (interactive Page blocks only).
  *
  * @param options - The frame options; only the fields baked into the page are read.
- * @returns The page with its secrets and drag-region limit.
+ * @returns The page with its secrets and editor-pointer-region limit.
  */
 function useFrameDocument(options: UseHtmlFrameOptions): ComposedFrameDocument {
   const { source, fit, interactive } = options;
-  const { maxDragRegions } = options.limits;
+  const { maxEditorPointerRegions } = options.limits;
   const unsafeAccessEnabled = options.unsafeAccess?.enabled;
   const relayTextSelection = interactive && options.node.kind === "block";
   return useMemo(() => {
@@ -152,12 +157,12 @@ function useFrameDocument(options: UseHtmlFrameOptions): ComposedFrameDocument {
       source,
       token,
       fit,
-      maxDragRegions,
+      maxEditorPointerRegions,
       selectionKey,
       unsafeAccessEnabled,
     });
-    return { token, selectionKey, maxDragRegions, srcDoc };
-  }, [source, fit, maxDragRegions, unsafeAccessEnabled, relayTextSelection]);
+    return { token, selectionKey, maxEditorPointerRegions, srcDoc };
+  }, [source, fit, maxEditorPointerRegions, unsafeAccessEnabled, relayTextSelection]);
 }
 
 /**
@@ -182,19 +187,19 @@ interface FrameStateSetters {
    */
   readonly setHeight: (update: (current: number) => number) => void;
   /**
-   * Replaces the drag regions.
+   * Replaces the editor pointer regions.
    *
    * @param regions - Regions reported by the widget.
    * @returns Nothing.
    */
-  readonly setDragRegions: (regions: readonly HtmlDragHandleRegion[]) => void;
+  readonly setEditorPointerRegions: (regions: readonly HtmlEditorPointerRegion[]) => void;
 }
 
 /**
  * Handles one validated message from the widget page.
  *
  * - `resize`: sets the height of `auto` frames, capped at `maxBlockHeight`.
- * - `drag-handles`: replaces the drag regions of interactive occurrences.
+ * - `editor-pointer-regions`: replaces the editor pointer regions of interactive occurrences.
  * - `unsafe-denied` / `unsafe-request`: reports a refused access attempt, or
  *   answers an editor-access request. Only Unsafe HTML blocks handle these.
  * - Anything else is a widget command, passed to `onCommand` when interactive.
@@ -202,7 +207,7 @@ interface FrameStateSetters {
  * @param message - The parsed message. `ready` never arrives here; the connection handles it.
  * @param current - The latest frame options.
  * @param connection - Connection used to answer access requests.
- * @param state - Setters for the frame height and drag regions.
+ * @param state - Setters for the frame height and editor pointer regions.
  * @returns Nothing. The message has been applied, answered or ignored.
  */
 function handleFrameMessage(
@@ -221,9 +226,9 @@ function handleFrameMessage(
       }
       return;
     }
-    case "drag-handles":
+    case "editor-pointer-regions":
       if (current.interactive) {
-        state.setDragRegions(message.handles);
+        state.setEditorPointerRegions(message.regions);
       }
       return;
     case "unsafe-denied":

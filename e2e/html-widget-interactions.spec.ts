@@ -520,7 +520,7 @@ test("copying an HTML block preserves its source and widget data", async ({ page
   const id = await insertWidget(page);
   const block = page.locator(`[data-block-id="${id}"]`);
   await block.evaluate((element) => element.scrollIntoView({ block: "center" }));
-  const backgrounds = block.locator("[data-html-drag-handle]");
+  const backgrounds = block.locator("[data-html-editor-pointer]");
   await expect.poll(() => backgrounds.count()).toBeGreaterThan(1);
   await backgrounds.nth(1).click({ modifiers: ["Control"] });
   await expect(block).toHaveAttribute("data-block-selected", "true");

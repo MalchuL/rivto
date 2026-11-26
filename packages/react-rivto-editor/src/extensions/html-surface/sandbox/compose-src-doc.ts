@@ -12,7 +12,7 @@ import {
   frameHeightScript,
   pointerNotificationScript,
 } from "./runtime/bridge-runtime";
-import { dragRegionScript } from "./runtime/drag-region-runtime";
+import { editorPointerRegionScript } from "./runtime/editor-pointer-region-runtime";
 import { textSelectionScript } from "./runtime/text-selection-runtime";
 import { unsafeAccessScript } from "./runtime/unsafe-runtime";
 
@@ -24,8 +24,8 @@ export interface SrcDocOptions {
   readonly token: string;
   /** `fill` locks the page to the host box; `auto` lets the body grow with its content. */
   readonly fit: HtmlFrameFit;
-  /** Most drag regions the page reports; the editor's parser must use the same limit. */
-  readonly maxDragRegions: number;
+  /** Most editor pointer regions the page reports; the editor's parser must use the same limit. */
+  readonly maxEditorPointerRegions: number;
   /** Secret for text-selection reports. Omit to leave the relay out. */
   readonly selectionKey?: string;
   /** Whether Unsafe HTML access is granted. Omit for ordinary widgets: then `rivto.panel` does not exist at all. */
@@ -101,7 +101,7 @@ function findBridgeInsertionPoint(source: string): { insertAt: number; hasDoctyp
  * 1. `token` and `namespace` are declared first; every piece uses them.
  * 2. The core declares `port` and `send` and defines `window.rivto`.
  * 3. The text-selection relay takes private copies of native APIs before
- *    drag-region tracking wraps `addEventListener`.
+ *    editor-pointer-region tracking wraps `addEventListener`.
  * 4. Teardown registers the last `pagehide` handler, so the others can still
  *    send before the port closes.
  *
@@ -115,7 +115,7 @@ function bridgeScript(options: SrcDocOptions): string {
     bridgeCoreScript(),
     options.selectionKey ? textSelectionScript(options.selectionKey) : "",
     pointerNotificationScript(),
-    dragRegionScript(options.maxDragRegions),
+    editorPointerRegionScript(options.maxEditorPointerRegions),
     frameHeightScript(),
     options.unsafeAccessEnabled === undefined
       ? ""

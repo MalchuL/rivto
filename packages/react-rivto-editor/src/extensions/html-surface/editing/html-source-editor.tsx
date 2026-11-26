@@ -422,6 +422,7 @@ function HtmlEditorActions(props: HtmlEditorActionsProps) {
         <Button
           {...buttonProps}
           variant={showPreview ? "default" : "outline"}
+          className={showPreview ? "border border-transparent" : undefined}
           size="sm"
           aria-pressed={showPreview}
           onMouseDown={(event) => event.preventDefault()}

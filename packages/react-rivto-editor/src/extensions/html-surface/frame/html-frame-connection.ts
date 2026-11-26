@@ -17,8 +17,8 @@ export interface HtmlFrameDocument {
   readonly token: string;
   /** Separate secret for text-selection reports. Present only when the relay is installed. */
   readonly selectionKey?: string;
-  /** Drag-region limit the page's script was built with; the parser enforces the same limit. */
-  readonly maxDragRegions: number;
+  /** Editor-pointer-region limit the page's script was built with; the parser enforces the same limit. */
+  readonly maxEditorPointerRegions: number;
 }
 
 /** Callbacks through which the connection reports to its owner. */
@@ -126,10 +126,10 @@ export class HtmlFrameConnection {
    * @returns True when it comes from this iframe's window and carries this page's token.
    */
   private isReadyFromThisPage(event: MessageEvent): boolean {
-    const { token, maxDragRegions } = this.frameDocument;
+    const { token, maxEditorPointerRegions } = this.frameDocument;
     return (
       event.source === this.iframe.contentWindow &&
-      parseFrameMessage(event.data, token, maxDragRegions)?.kind === "ready"
+      parseFrameMessage(event.data, token, maxEditorPointerRegions)?.kind === "ready"
     );
   }
 
@@ -145,7 +145,7 @@ export class HtmlFrameConnection {
    * @returns A listener that ignores messages once this page is no longer the connected one.
    */
   private createPortListener(port: MessagePort, signal: AbortSignal) {
-    const { token, selectionKey, maxDragRegions } = this.frameDocument;
+    const { token, selectionKey, maxEditorPointerRegions } = this.frameDocument;
     const textSelection = selectionKey
       ? createIframeTextSelectionRelay(this.iframe, selectionKey, signal)
       : undefined;
@@ -161,7 +161,7 @@ export class HtmlFrameConnection {
         }
         return;
       }
-      const message = parseFrameMessage(data, token, maxDragRegions);
+      const message = parseFrameMessage(data, token, maxEditorPointerRegions);
       if (message && message.kind !== "ready") {
         this.handlers.onMessage(message);
       }

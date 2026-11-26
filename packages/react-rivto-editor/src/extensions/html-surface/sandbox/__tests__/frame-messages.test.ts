@@ -5,14 +5,14 @@ import { DEFAULT_HTML_SURFACE_LIMITS } from "../../options";
 import { parseFrameMessage } from "../frame-messages";
 
 /**
- * Parses a message with the default drag-region limit.
+ * Parses a message with the default editor-pointer-region limit.
  *
  * @param data - Untrusted message.
  * @param token - Expected document token.
  * @returns The parsed message, or undefined.
  */
 function parse(data: unknown, token: string) {
-  return parseFrameMessage(data, token, DEFAULT_HTML_SURFACE_LIMITS.maxDragRegions);
+  return parseFrameMessage(data, token, DEFAULT_HTML_SURFACE_LIMITS.maxEditorPointerRegions);
 }
 
 test("rejects unsafe or non-JSON values in sandbox messages and edited props", () => {
@@ -98,16 +98,16 @@ test("accepts only boolean modifier state for iframe pointer messages", () => {
   ).toBeUndefined();
 });
 
-test("clips widget drag regions and rejects malformed frame messages", () => {
-  const message = (handles: unknown) => ({
+test("clips widget editor pointer regions and rejects malformed frame messages", () => {
+  const message = (regions: unknown) => ({
     namespace: HTML_IFRAME_MESSAGE_NAMESPACE,
     token: "frame",
-    kind: "drag-handles",
-    handles,
+    kind: "editor-pointer-regions",
+    regions,
   });
   expect(parse(message([{ x: -0.25, y: 0.5, width: 0.5, height: 1 }]), "frame")).toEqual({
-    kind: "drag-handles",
-    handles: [{ x: 0, y: 0.5, width: 0.25, height: 0.5 }],
+    kind: "editor-pointer-regions",
+    regions: [{ x: 0, y: 0.5, width: 0.25, height: 0.5 }],
   });
   expect(parse(message([{ x: 0, y: 0, width: Infinity, height: 1 }]), "frame")).toBeUndefined();
   expect(parse(message(Array.from({ length: 65 }, () => ({}))), "frame")).toBeUndefined();
@@ -158,13 +158,13 @@ test("frame messages accept JSON writes for this token only", () => {
   ).toBeUndefined();
 });
 
-test("a configured drag-region limit rejects longer lists", () => {
+test("a configured editor-pointer-region limit rejects longer lists", () => {
   const message = {
     namespace: HTML_IFRAME_MESSAGE_NAMESPACE,
     token: "frame",
-    kind: "drag-handles",
-    handles: Array.from({ length: 3 }, () => ({ x: 0, y: 0, width: 0.1, height: 0.1 })),
+    kind: "editor-pointer-regions",
+    regions: Array.from({ length: 3 }, () => ({ x: 0, y: 0, width: 0.1, height: 0.1 })),
   };
   expect(parseFrameMessage(message, "frame", 2)).toBeUndefined();
-  expect(parseFrameMessage(message, "frame", 3)?.kind).toBe("drag-handles");
+  expect(parseFrameMessage(message, "frame", 3)?.kind).toBe("editor-pointer-regions");
 });

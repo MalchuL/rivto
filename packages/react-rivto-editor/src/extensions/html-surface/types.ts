@@ -24,8 +24,15 @@ export interface HtmlWidgetContext {
   readonly preview: boolean;
 }
 
-/** One area where pressing moves the block or element instead of reaching the widget. */
-export interface HtmlDragHandleRegion {
+/**
+ * One area of a widget where a press goes to the editor surface instead of the widget.
+ *
+ * The widget page measures these regions and reports them; the editor lays a
+ * transparent target over each one (see `frame/html-editor-pointer-targets.tsx`).
+ * On the canvas, a press there selects and drags the element; in Page it acts
+ * as a block-selection anchor. Widgets mark them with `data-rivto-drag-handle`.
+ */
+export interface HtmlEditorPointerRegion {
   /** Left edge, as a fraction of the iframe viewport width (0 to 1). */
   readonly x: number;
   /** Top edge, as a fraction of the iframe viewport height (0 to 1). */
@@ -36,7 +43,17 @@ export interface HtmlDragHandleRegion {
   readonly height: number;
 }
 
-/** `auto`: the iframe grows with its content (Page blocks). `fill`: it fills the host box (canvas elements). */
+/**
+ * Determines how the editor sizes an HTML widget iframe.
+ *
+ * - `auto` is used for Page blocks. The iframe takes the available width, and
+ *   the editor sizes its height from the content height reported by the widget.
+ *   The height is capped at `maxBlockHeight` (720 CSS pixels by default).
+ *   Taller content can scroll inside the iframe.
+ * - `fill` is used for canvas elements. The iframe fills the width and height
+ *   of the element's frame. The editor ignores reported content heights in
+ *   this mode.
+ */
 export type HtmlFrameFit = "auto" | "fill";
 
 /** What a widget in a Page block sees as `rivto.node`. */

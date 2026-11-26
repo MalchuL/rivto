@@ -4,7 +4,7 @@ import { htmlSurfaceExtension } from "../extension";
 test("omitted options take the documented defaults", () => {
   expect(resolveHtmlSurfaceLimits()).toEqual({
     maxBlockHeight: 720,
-    maxDragRegions: 64,
+    maxEditorPointerRegions: 64,
     previewDelayMs: 400,
   });
   expect(resolveHtmlSurfaceLimits({ maxBlockHeight: 1200 })).toEqual({
@@ -20,9 +20,9 @@ test.each([
   { maxBlockHeight: Number.NaN },
   { previewDelayMs: -1 },
   { previewDelayMs: 2 ** 31 },
-  { maxDragRegions: 0 },
-  { maxDragRegions: 2.5 },
-  { maxDragRegions: Number.POSITIVE_INFINITY },
+  { maxEditorPointerRegions: 0 },
+  { maxEditorPointerRegions: 2.5 },
+  { maxEditorPointerRegions: Number.POSITIVE_INFINITY },
 ])("rejects out-of-range options when the extension is created: %p", (options) => {
   expect(() => htmlSurfaceExtension(options)).toThrow(RangeError);
 });

@@ -32,7 +32,7 @@ for (const mode of ["block", "edgeless"]) {
       await showCanvasCard(page, [htmlId!, unsafeId!, bentoId!]);
     }
     const html = page.locator(blockIdSelector(htmlId!));
-    await html.locator("[data-html-drag-handle]").click({ modifiers: ["Control"] });
+    await html.locator("[data-html-editor-pointer]").click({ modifiers: ["Control"] });
     await expect(html).toHaveAttribute("data-block-selected", "true");
     await expect(html).toHaveCSS("outline-style", "solid");
     const bento = page.locator(blockIdSelector(bentoId!)).locator(".rivto-bento-tiles");

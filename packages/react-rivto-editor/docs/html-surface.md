@@ -10,11 +10,11 @@ types. Uninstalling the extension removes its registrations, not document data.
 validated when the extension is created; an out-of-range value throws a
 `RangeError`. `DEFAULT_HTML_SURFACE_LIMITS` exports the defaults.
 
-| Option           | Default | Meaning                                                                                                                                        |
-| ---------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `maxBlockHeight` | `720`   | Maximum height of a Page block iframe in CSS pixels. Taller content scrolls inside the frame. Canvas elements ignore it. Positive, finite.     |
-| `maxDragRegions` | `64`    | Maximum number of drag regions one widget reports. The widget runtime stops at this count and the host rejects longer lists. Positive integer. |
-| `previewDelayMs` | `400`   | Idle time after typing before the source editor updates Preview, in milliseconds. Integer from 0 to 2147483647.                                |
+| Option                    | Default | Meaning                                                                                                                                                    |
+| ------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `maxBlockHeight`          | `720`   | Maximum height of a Page block iframe in CSS pixels. Taller content scrolls inside the frame. Canvas elements ignore it. Positive, finite.                 |
+| `maxEditorPointerRegions` | `64`    | Maximum number of editor pointer regions one widget reports. The widget runtime stops at this count and the editor rejects longer lists. Positive integer. |
+| `previewDelayMs`          | `400`   | Idle time after typing before the source editor updates Preview, in milliseconds. Integer from 0 to 2147483647.                                            |
 
 The source editor's **Preview** toggle runs the current draft inline or beside the fields in a wide fullscreen editor. Invalid Props JSON pauses updates. Changing HTML restarts the sandbox, while changing only Props updates the running widget. The preview has local DOM interaction and exposes `rivto.context.preview` as true. Widget commands and unsafe editor access are disabled there. **Done** saves the draft and **Close** discards it.
 
@@ -81,13 +81,16 @@ HTML classes and DOM layout APIs regardless of which surface hosts it:
 </script>
 ```
 
-`data-rivto-drag-handle` marks a noninteractive region that the surrounding
-surface may use for its normal drag and selection gestures. The host projects a
-native hit target over the region; it never converts iframe messages into pointer
+`data-rivto-drag-handle` marks a noninteractive region whose presses go to the
+surrounding surface instead of the widget: an editor pointer region. On the
+canvas a press there selects the element and a drag moves it. In Page it acts as
+a block-selection anchor: a modifier click toggles block selection and a drag
+starts a range block selection; the block itself is moved with its gutter handle.
+The editor lays a native hit target over the region; it never converts iframe messages into pointer
 events or trusts them as permission to edit another object. Mark only regions
 that do not contain buttons, links, editable fields or text that must be selected:
-the host target receives their pointer input. Without a marker, background areas
-are used as drag targets while text, native controls, draggable elements and
+the editor's target receives their pointer input. Without a marker, background areas
+become editor pointer regions while text, native controls, draggable elements and
 elements with recognized click, pointer or drag-and-drop listeners retain iframe
 interaction. Mark custom interactive content with
 `data-rivto-interactive` when its interaction is delegated to the document or window,
@@ -96,7 +99,7 @@ they are clipped to the iframe and rectangular overflow ancestors. Continuous
 CSS transforms on a marked region are not tracked frame by frame.
 Removing the last marker restores automatic background targets. Placement previews are inert.
 
-The host draws these regions as transparent `HtmlDragHandles` targets over the
+The host draws these regions as transparent `HtmlEditorPointerTargets` targets over the
 iframe. In a Page block they are block-selection anchors, so Page can start a
 range gesture without selecting the block on a plain click. The surrounding
 surface owns the actual gesture and document mutation. `rivto.context` is an

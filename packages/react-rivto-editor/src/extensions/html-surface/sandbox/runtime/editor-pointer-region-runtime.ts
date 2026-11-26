@@ -1,11 +1,12 @@
 /**
- * Page-side measurement of a widget's drag regions: the areas where pressing
- * should move the block or element instead of interacting with the widget.
+ * Page-side measurement of a widget's editor pointer regions: the areas where
+ * a press should go to the editor surface (to select, move or range-select the
+ * block or element) instead of interacting with the widget.
  *
  * An iframe swallows pointer events, so the editor cannot tell on its own
  * whether a press landed on a button or on empty background. The page script
- * measures the regions and reports them; the editor lays transparent drag
- * handles over them (see `frame/html-drag-handles.tsx`).
+ * measures the regions and reports them; the editor lays transparent
+ * targets over them (see `frame/html-editor-pointer-targets.tsx`).
  *
  * There are two modes:
  * - Explicit: if the widget marks elements with `data-rivto-drag-handle`,
@@ -46,7 +47,7 @@ const INTERACTIVE_SELECTOR = [
   "[data-rivto-interactive]",
 ].join(", ");
 
-/** Attributes whose change can add, remove or move a drag region. */
+/** Attributes whose change can add, remove or move an editor pointer region. */
 const OBSERVED_ATTRIBUTES = [
   "open",
   "hidden",
@@ -70,18 +71,18 @@ const OBSERVED_ATTRIBUTES = [
 ];
 
 /**
- * Builds the script that measures drag regions and reports them to the editor.
+ * Builds the script that measures editor pointer regions and reports them to the editor.
  *
- * The script sends a `drag-handles` message with the regions, as fractions of
+ * The script sends an `editor-pointer-regions` message with the regions, as fractions of
  * the viewport, whenever they change, and an empty list when the page unloads.
  * Measurements are batched: any number of changes within one animation frame
  * cause a single measurement.
  *
- * @param maxDragRegions - Most regions the script measures or reports. Must
+ * @param maxEditorPointerRegions - Most regions the script measures or reports. Must
  * equal the limit the editor's message parser enforces for this page.
  * @returns ES5 source; uses `send`.
  */
-export function dragRegionScript(maxDragRegions: number): string {
+export function editorPointerRegionScript(maxEditorPointerRegions: number): string {
   return `
   var sizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleMeasurement) : null;
   /** Elements the ResizeObserver currently watches. */
@@ -147,7 +148,7 @@ export function dragRegionScript(maxDragRegions: number): string {
    *
    * Each rectangle that overlaps the hole is split into up to four pieces
    * around it (above, below, left, right). The result is capped at
-   * ${maxDragRegions} rectangles, so a busy widget loses its smallest leftovers.
+   * ${maxEditorPointerRegions} rectangles, so a busy widget loses its smallest leftovers.
    *
    * @param regions - Rectangles to cut, as viewport fractions.
    * @param hole - The rectangle to remove, as viewport fractions.
@@ -174,7 +175,7 @@ export function dragRegionScript(maxDragRegions: number): string {
         result.push({ x: overlapRight, y: overlapTop, width: regionRight - overlapRight, height: overlapBottom - overlapTop });
       }
     });
-    return result.slice(0, ${maxDragRegions});
+    return result.slice(0, ${maxEditorPointerRegions});
   }
 
   /**
@@ -253,7 +254,7 @@ export function dragRegionScript(maxDragRegions: number): string {
   /** Measures the regions and sends them to the editor if they changed. */
   function measureAndReport() {
     pendingFrame = 0;
-    var markers = Array.from(document.querySelectorAll("[data-rivto-drag-handle]")).slice(0, ${maxDragRegions});
+    var markers = Array.from(document.querySelectorAll("[data-rivto-drag-handle]")).slice(0, ${maxEditorPointerRegions});
     observeRelevantSizes(markers);
     var width = window.innerWidth, height = window.innerHeight;
     var regions = [];
@@ -265,7 +266,7 @@ export function dragRegionScript(maxDragRegions: number): string {
     var serialized = JSON.stringify(regions);
     if (serialized !== lastSentRegions) {
       lastSentRegions = serialized;
-      send({ kind: "drag-handles", handles: regions });
+      send({ kind: "editor-pointer-regions", regions: regions });
     }
   }
 
@@ -283,7 +284,7 @@ export function dragRegionScript(maxDragRegions: number): string {
   window.addEventListener("resize", scheduleMeasurement);
   window.addEventListener("scroll", scheduleMeasurement, true);
   window.addEventListener("DOMContentLoaded", scheduleMeasurement);
-  window.addEventListener("pagehide", function () { send({ kind: "drag-handles", handles: [] }); });
+  window.addEventListener("pagehide", function () { send({ kind: "editor-pointer-regions", regions: [] }); });
 ${listenerTrackingScript()}
 `;
 }
@@ -295,7 +296,7 @@ ${listenerTrackingScript()}
  * leave those elements to the widget. Registrations are matched the way the
  * browser matches them (event type, callback, capture flag). A registration
  * also ends when a `once` listener fires or its `AbortSignal` aborts; when an
- * element's last registration ends, its area becomes draggable again.
+ * element's last registration ends, its area goes back to the editor.
  *
  * @returns ES5 source; uses `listenerElements`, `listenerEntries` and `scheduleMeasurement`.
  */

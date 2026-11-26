@@ -197,7 +197,7 @@ export function frameHeightScript(): string {
  * Closes the connection when the page unloads.
  *
  * Must be the last piece: the other pieces register their own `pagehide`
- * handlers (for example, to clear drag regions), and those must still be able
+ * handlers (for example, to clear editor pointer regions), and those must still be able
  * to send before the port closes.
  *
  * @returns ES5 source; uses `port`.

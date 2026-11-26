@@ -3,7 +3,7 @@
  *
  * @module
  */
-import { HtmlDragHandles } from "./html-drag-handles";
+import { HtmlEditorPointerTargets } from "./html-editor-pointer-targets";
 import { useHtmlFrame, type UseHtmlFrameOptions } from "./use-html-frame";
 
 /** Props for {@link HtmlFrame}: the frame name plus everything {@link useHtmlFrame} needs. */
@@ -23,10 +23,10 @@ export interface HtmlFrameProps extends UseHtmlFrameOptions {
  * are posted into the running page, so widget state such as a running timer
  * is not reset.
  *
- * For interactive occurrences, transparent drag handles are laid over the
- * iframe where the widget reports background areas, so pressing there moves
- * the block or element. In a Page block they also act as block-selection
- * anchors.
+ * For interactive occurrences, transparent targets are laid over the iframe
+ * where the widget reports editor pointer regions, so pressing there reaches
+ * the surface: on the canvas it selects and moves the element; in a Page block
+ * the targets act as block-selection anchors.
  *
  * @param props - Frame name plus the {@link useHtmlFrame} options.
  * @param props.frameName - Accessible title and window name of the iframe.
@@ -35,13 +35,13 @@ export interface HtmlFrameProps extends UseHtmlFrameOptions {
  * @param props.context - Presentation posted to the widget as `rivto.context`.
  * @param props.fit - `auto` grows with the content (Page); `fill` fills the host box (canvas).
  * @param props.limits - Frame limits of the extension installation.
- * @param props.interactive - Whether widget writes and drag handles are enabled.
+ * @param props.interactive - Whether widget writes and editor pointer targets are enabled.
  * @param props.unsafeAccess - Editor access for an Unsafe HTML block, if any.
  * @param props.onCommand - Receives validated pointer notifications and writes.
- * @returns The iframe and its drag handles inside a positioned container.
+ * @returns The iframe and its editor pointer targets inside a positioned container.
  */
 export function HtmlFrame({ frameName, ...options }: HtmlFrameProps) {
-  const { iframeRef, srcDoc, height, dragRegions } = useHtmlFrame(options);
+  const { iframeRef, srcDoc, height, editorPointerRegions } = useHtmlFrame(options);
   const fill = options.fit === "fill";
   return (
     <div
@@ -58,8 +58,8 @@ export function HtmlFrame({ frameName, ...options }: HtmlFrameProps) {
         style={fill ? undefined : { height }}
       />
       {options.interactive && (
-        <HtmlDragHandles
-          regions={dragRegions}
+        <HtmlEditorPointerTargets
+          regions={editorPointerRegions}
           blockSelectionAnchor={options.node.kind === "block"}
         />
       )}
