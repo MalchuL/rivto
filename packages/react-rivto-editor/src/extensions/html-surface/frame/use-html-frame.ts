@@ -49,7 +49,7 @@ export interface UseHtmlFrameOptions {
    * @param command - The command.
    * @returns Nothing. The owner has applied the command.
    */
-  readonly onCommand: (command: HtmlWidgetCommand) => void;
+  readonly onCommand?: (command: HtmlWidgetCommand) => void;
 }
 
 /** What {@link HtmlFrame} needs to render. */
@@ -238,7 +238,7 @@ function handleFrameMessage(
       return;
     default:
       if (current.interactive) {
-        current.onCommand(message);
+        current.onCommand?.(message);
       }
   }
 }

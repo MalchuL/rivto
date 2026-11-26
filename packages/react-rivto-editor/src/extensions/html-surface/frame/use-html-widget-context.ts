@@ -18,7 +18,7 @@ import type { HtmlWidgetContext } from "../types";
  * context update whenever the identity changes, so this avoids redundant posts.
  *
  * @param selected - Whether the whole owning block or element is selected.
- * @param preview - Whether this is a placement preview. Defaults to false.
+ * @param preview - Whether this is a placement or source editing preview. Defaults to false.
  * @returns The context, memoized.
  */
 export function useHtmlWidgetContext(selected: boolean, preview = false): HtmlWidgetContext {

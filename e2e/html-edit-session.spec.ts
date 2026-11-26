@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Locator } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
 interface DemoWindow extends Window {
@@ -180,3 +180,89 @@ test("a navigated widget drops its drag targets and the authored document can re
   await expect(frame.locator("p")).toHaveText("Destination");
   await expect(handles).toHaveCount(0);
 });
+
+/**
+ * Checks the draft in both fullscreen layouts, hides its frame and discards the edit.
+ *
+ * @param page - Demo page containing the source dialog.
+ * @param host - Block with an open inline preview and updated properties.
+ * @returns Once the fullscreen session has closed.
+ */
+async function checkFullscreenPreview(page: Page, host: Locator) {
+  await host.getByRole("button", { name: "Expand HTML editor" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.locator("iframe").contentFrame().locator("output")).toHaveText("Updated");
+  const fields = dialog.locator(".html-code-fields");
+  const pane = dialog.getByRole("region", { name: "HTML preview" });
+  expect((await pane.boundingBox())!.x).toBeGreaterThan((await fields.boundingBox())!.x);
+  await page.setViewportSize({ width: 680, height: 800 });
+  await expect
+    .poll(
+      async () =>
+        (await pane.boundingBox())!.y >=
+        (await fields.boundingBox())!.y + (await fields.boundingBox())!.height,
+    )
+    .toBe(true);
+  const toggle = dialog.getByRole("button", { name: "Preview", exact: true });
+  const done = dialog.getByRole("button", { name: "Done", exact: true });
+  const primary = await done.evaluate((button) => getComputedStyle(button).backgroundColor);
+  await page.mouse.move(0, 0);
+  await expect(toggle).toHaveCSS("background-color", primary);
+  await toggle.click();
+  await page.mouse.move(0, 0);
+  await expect(toggle).not.toHaveCSS("background-color", primary);
+  await expect(dialog.locator("iframe")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+}
+
+for (const repeat of [0, 200]) {
+  test(`draft preview coalesces typing and isolates widget commands, repeat=${repeat}`, async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    await page.goto(`/?repeat=${repeat}`);
+    const { host, id } = await insertWidget(page, "<p>Original</p>");
+    await host.hover();
+    await host.getByRole("button", { name: "Edit HTML" }).click();
+    const source = host.getByRole("textbox", { name: "HTML source" });
+    await source.focus();
+    const toggle = host.getByRole("button", { name: "Preview", exact: true });
+    await toggle.click();
+    const frame = host.locator("iframe").contentFrame();
+    await expect(frame.locator("p")).toHaveText("Original");
+    await expect(source).toBeFocused();
+    let navigations = 0;
+    page.on("framenavigated", (item) => {
+      if (item.name() === "HTML draft preview") {
+        navigations += 1;
+      }
+    });
+    await source.fill(
+      "<button onclick=\"this.textContent='Clicked';rivto.setProp('write',true)\">Try</button><output></output><script>rivto.subscribe(n => document.querySelector(\"output\").textContent=n.props.label)</script>",
+    );
+    await source.press("ControlOrMeta+End");
+    await page.keyboard.type("draft");
+    await expect(frame.locator("body")).toContainText("draft");
+    await expect(source).toBeFocused();
+    await frame.getByRole("button", { name: "Try" }).click();
+    const props = host.getByRole("textbox", { name: "Widget props" });
+    await props.press("ControlOrMeta+a");
+    await page.keyboard.insertText("invalid");
+    await expect(props).toHaveText("invalid");
+    await expect(host.getByRole("alert")).toContainText("Preview paused");
+    await expect(frame.locator("output")).toHaveText("Session widget");
+    await props.press("ControlOrMeta+a");
+    await page.keyboard.insertText('{"label":"Updated"}');
+    await expect(frame.locator("output")).toHaveText("Updated");
+    await expect(frame.locator("button")).toHaveText("Clicked");
+    expect(navigations).toBe(1);
+    await checkFullscreenPreview(page, host);
+    const saved = await page.evaluate(
+      (blockId) =>
+        (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.getBlockNode(blockId),
+      id,
+    );
+    expect(saved?.content).toBe("<p>Original</p>");
+    expect(saved?.props).toEqual({ label: "Session widget" });
+  });
+}

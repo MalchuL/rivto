@@ -193,8 +193,9 @@ function HtmlBlockBody({
     return (
       <HtmlSourceEditor
         source={block.content}
-        props={block.props}
-        listProps={block.listProps}
+        node={node}
+        selected={context.selected}
+        limits={limits}
         onCancel={onCloseEditor}
         onSave={saveDraft}
       >

@@ -15,19 +15,21 @@ import { Separator } from "../../../components/ui/separator";
 import { editorControlProps } from "../../../constants";
 import { HTML_EDIT_HINT } from "../constants";
 import { changedPropPatch, formatWidgetProps, parseWidgetProps } from "../model/widget-props";
-import type { HtmlDraft } from "../types";
+import type { HtmlSurfaceLimitsProps } from "../options";
+import { useDraftPreview } from "./use-draft-preview";
+import type { HtmlDraft, HtmlNodeData } from "../types";
 import { HtmlCodeField, type HtmlCodeFieldStates } from "./html-code-field";
 
 /** Props for {@link HtmlSourceEditor}. */
-export interface HtmlSourceEditorProps {
+export interface HtmlSourceEditorProps extends HtmlSurfaceLimitsProps {
   /** HTML source when the editor opens. */
   readonly source: string;
-  /** Persisted widget props when the editor opens. */
-  readonly props: Record<string, unknown>;
+  /** Current owner snapshot, including its widget properties. */
+  readonly node: HtmlNodeData;
+  /** Whether the owning occurrence is selected. */
+  readonly selected: boolean;
   /** Prop keys managed elsewhere and hidden from the JSON field, such as an element's `html`. */
   readonly hiddenProps?: readonly string[];
-  /** Block list props, shown read-only. Omitted for canvas elements, which have none. */
-  readonly listProps?: Record<string, unknown>;
   /** Extra controls shown above the fields in both layouts, such as the access checkbox. */
   readonly children?: ReactNode;
   /**
@@ -64,34 +66,33 @@ export interface HtmlSourceEditorProps {
  *
  * @param props - Opening values, optional extra controls and callbacks.
  * @param props.source - HTML source when the editor opens.
- * @param props.props - Widget props when the editor opens.
+ * @param props.node - Widget snapshot used to seed the fields and supply preview metadata.
+ * @param props.selected - Selection context exposed to the preview.
+ * @param props.limits - Frame bounds and preview refresh delay.
  * @param props.hiddenProps - Prop keys hidden from the JSON field.
- * @param props.listProps - Block list props, shown read-only; omitted for elements.
  * @param props.children - Extra controls shown above the fields.
  * @param props.onSave - Receives the draft when Done is pressed.
  * @param props.onCancel - Closes the editor without saving.
  * @returns The inline editor, or a placeholder plus the fullscreen dialog while expanded.
  */
-export function HtmlSourceEditor({
-  source,
-  props,
-  hiddenProps,
-  listProps,
-  children,
-  onSave,
-  onCancel,
-}: HtmlSourceEditorProps) {
+export function HtmlSourceEditor(props: HtmlSourceEditorProps) {
+  const { source, node, hiddenProps, children, onSave, onCancel } = props;
   const inline = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
-  const draft = useSourceDraft(source, props, hiddenProps, onSave);
+  const draft = useSourceDraft(source, node.props, hiddenProps, onSave);
+  const [showPreview, setShowPreview] = useState(false);
+  const listProps = node.kind === "block" ? node.listProps : undefined;
   const listPropsText = useMemo(() => listProps && JSON.stringify(listProps, null, 2), [listProps]);
-
-  const renderPane = (fullscreen: boolean) => (
+  const preview = useDraftPreview(showPreview, draft, props);
+  const pane = (
     <HtmlEditorPane
-      fullscreen={fullscreen}
+      preview={preview}
+      showPreview={showPreview}
+      onTogglePreview={() => setShowPreview(!showPreview)}
+      fullscreen={expanded}
       draft={draft}
       listPropsText={listPropsText}
-      onToggleExpanded={() => setExpanded(!fullscreen)}
+      onToggleExpanded={() => setExpanded(!expanded)}
       onCancel={onCancel}
     >
       {children}
@@ -99,7 +100,6 @@ export function HtmlSourceEditor({
   );
   const focusExpandButton = () =>
     inline.current?.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.focus();
-
   return (
     <div
       {...editorControlProps}
@@ -108,7 +108,7 @@ export function HtmlSourceEditor({
       data-edgeless-ui="true"
       onPointerDown={(event) => event.stopPropagation()}
     >
-      {!expanded && renderPane(false)}
+      {!expanded && pane}
       <BlockModalDialog
         expanded={expanded}
         title="HTML source"
@@ -116,7 +116,7 @@ export function HtmlSourceEditor({
         restoreFocus={focusExpandButton}
       >
         <div className="html-source-editor html-source-editor-fullscreen" {...editorControlProps}>
-          {renderPane(true)}
+          {pane}
         </div>
       </BlockModalDialog>
     </div>
@@ -124,7 +124,13 @@ export function HtmlSourceEditor({
 }
 
 /** Props for {@link HtmlEditorPane}. */
-interface HtmlEditorPaneProps {
+interface HtmlEditorPaneProps extends Pick<
+  HtmlEditorActionsProps,
+  "showPreview" | "onTogglePreview"
+> {
+  /** Draft preview content when enabled. */
+  readonly preview: ReactNode;
+
   /** Whether the pane is shown in the fullscreen dialog. */
   readonly fullscreen: boolean;
   /** The editing session's text and actions. */
@@ -153,6 +159,9 @@ interface HtmlEditorPaneProps {
  * The same pane is rendered inline or inside the fullscreen dialog.
  *
  * @param props - Layout, draft and actions.
+ * @param props.preview - Preview pane while enabled.
+ * @param props.showPreview - Whether the preview is visible.
+ * @param props.onTogglePreview - Opens or closes the preview.
  * @param props.fullscreen - Whether the pane is in the fullscreen dialog.
  * @param props.draft - The editing session's text and actions.
  * @param props.listPropsText - Read-only list props JSON; omitted for elements.
@@ -162,6 +171,9 @@ interface HtmlEditorPaneProps {
  * @returns The pane content.
  */
 function HtmlEditorPane({
+  preview,
+  showPreview,
+  onTogglePreview,
   fullscreen,
   draft,
   listPropsText,
@@ -172,6 +184,8 @@ function HtmlEditorPane({
   return (
     <>
       <HtmlEditorActions
+        showPreview={showPreview}
+        onTogglePreview={onTogglePreview}
         expanded={fullscreen}
         onToggleExpanded={onToggleExpanded}
         onSave={draft.save}
@@ -179,7 +193,10 @@ function HtmlEditorPane({
       />
       <Separator />
       {children}
-      <HtmlEditorFields draft={draft} listPropsText={listPropsText} fill={fullscreen} />
+      <div className="html-editor-workspace">
+        <HtmlEditorFields draft={draft} listPropsText={listPropsText} fill={fullscreen} />
+        {preview}
+      </div>
       {draft.error ? <p role="alert">{draft.error}</p> : <p>{HTML_EDIT_HINT}</p>}
     </>
   );
@@ -349,6 +366,14 @@ function CodeFieldLabel({
 
 /** Props for {@link HtmlEditorActions}. */
 interface HtmlEditorActionsProps {
+  /** Whether the preview pane is visible. */
+  readonly showPreview: boolean;
+  /**
+   * Toggles the preview for the current editing session.
+   *
+   * @returns The pane is opened or closed without saving the draft.
+   */
+  readonly onTogglePreview: () => void;
   /** Whether the editor is currently shown in the fullscreen dialog. */
   readonly expanded: boolean;
   /**
@@ -375,18 +400,16 @@ interface HtmlEditorActionsProps {
  * Renders the title row with the expand/collapse, Close and Done buttons.
  *
  * @param props - Layout state and actions.
+ * @param props.showPreview - Whether the preview is visible.
+ * @param props.onTogglePreview - Opens or closes the preview.
  * @param props.expanded - Whether the editor is in the fullscreen dialog.
  * @param props.onToggleExpanded - Switches between inline and fullscreen.
  * @param props.onSave - Saves the draft.
  * @param props.onCancel - Discards the draft and closes the editor.
  * @returns The action row.
  */
-function HtmlEditorActions({
-  expanded,
-  onToggleExpanded,
-  onSave,
-  onCancel,
-}: HtmlEditorActionsProps) {
+function HtmlEditorActions(props: HtmlEditorActionsProps) {
+  const { expanded, showPreview, onTogglePreview, onToggleExpanded, onCancel, onSave } = props;
   const expandLabel = expanded ? "Collapse HTML editor" : "Expand HTML editor";
   const buttonProps = { ...editorControlProps, type: "button" } as const;
   return (
@@ -396,6 +419,16 @@ function HtmlEditorActions({
         HTML source
       </span>
       <ButtonGroup aria-label="HTML editor actions">
+        <Button
+          {...buttonProps}
+          variant={showPreview ? "default" : "outline"}
+          size="sm"
+          aria-pressed={showPreview}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onTogglePreview}
+        >
+          Preview
+        </Button>
         <Button
           {...buttonProps}
           variant="outline"
@@ -417,13 +450,7 @@ function HtmlEditorActions({
         >
           <XIcon aria-hidden="true" />
         </Button>
-        <Button
-          {...buttonProps}
-          variant="default"
-          size="sm"
-          title="Done"
-          onClick={onSave}
-        >
+        <Button {...buttonProps} variant="default" size="sm" title="Done" onClick={onSave}>
           <CheckIcon aria-hidden="true" />
           Done
         </Button>

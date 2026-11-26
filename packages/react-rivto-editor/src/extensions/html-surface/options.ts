@@ -6,6 +6,8 @@
 
 /** Options accepted by `htmlSurfaceExtension`. Omitted fields use {@link DEFAULT_HTML_SURFACE_LIMITS}. */
 export interface HtmlSurfaceOptions {
+  /** Quiet time after the last draft edit before refreshing Preview, in milliseconds. Defaults to 400. */
+  readonly previewDelayMs?: number;
   /**
    * Maximum height of an auto-sized Page block iframe, in CSS pixels.
    *
@@ -38,6 +40,7 @@ export interface HtmlSurfaceLimitsProps {
 
 /** Limits used for options the host application leaves out. */
 export const DEFAULT_HTML_SURFACE_LIMITS: HtmlSurfaceLimits = Object.freeze({
+  previewDelayMs: 400,
   maxBlockHeight: 720,
   maxDragRegions: 64,
 });
@@ -48,7 +51,7 @@ export const DEFAULT_HTML_SURFACE_LIMITS: HtmlSurfaceLimits = Object.freeze({
  * @param options - Options passed by the host application; omitted fields take their defaults.
  * @returns Frozen limits for one installation.
  * @throws RangeError if `maxBlockHeight` is not a positive finite number or
- * `maxDragRegions` is not a positive integer.
+ * `maxDragRegions` is not a positive integer, or the delay is outside the browser timer range.
  */
 export function resolveHtmlSurfaceLimits(options: HtmlSurfaceOptions = {}): HtmlSurfaceLimits {
   const maxBlockHeight = options.maxBlockHeight ?? DEFAULT_HTML_SURFACE_LIMITS.maxBlockHeight;
@@ -59,5 +62,9 @@ export function resolveHtmlSurfaceLimits(options: HtmlSurfaceOptions = {}): Html
   if (!Number.isInteger(maxDragRegions) || maxDragRegions <= 0) {
     throw new RangeError(`maxDragRegions must be a positive integer, got ${maxDragRegions}`);
   }
-  return Object.freeze({ maxBlockHeight, maxDragRegions });
+  const previewDelayMs = options.previewDelayMs ?? DEFAULT_HTML_SURFACE_LIMITS.previewDelayMs;
+  if (!Number.isInteger(previewDelayMs) || previewDelayMs < 0 || previewDelayMs > 2_147_483_647) {
+    throw new RangeError("previewDelayMs must be an integer between 0 and 2147483647");
+  }
+  return Object.freeze({ maxBlockHeight, maxDragRegions, previewDelayMs });
 }

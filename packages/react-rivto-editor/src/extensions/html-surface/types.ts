@@ -20,7 +20,7 @@ export interface HtmlWidgetContext {
   readonly mode: EditorMode;
   /** Whether the whole block or element is selected. Text selection inside the widget does not count. */
   readonly selected: boolean;
-  /** Whether this is the ghost shown while placing a new canvas element. Previews cannot write. */
+  /** Whether this occurrence previews an editing draft or placement of a new canvas element. Previews cannot write. */
   readonly preview: boolean;
 }
 

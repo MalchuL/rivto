@@ -901,6 +901,10 @@ test("clicking an HTML canvas element selects it and its source supports text se
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("Hello");
   await page.keyboard.insertText("Changed");
   await expect(source).toContainText("Changed selection world");
+  await host.getByRole("button", { name: "Preview", exact: true }).click();
+  const preview = host.locator('iframe[name="HTML draft preview"]');
+  await expect(preview.contentFrame().locator("p")).toHaveText("Changed selection world");
+  expect(await readElementSource(page, "circle")).toBe(originalSource);
   await host.getByRole("button", { name: "Done" }).click();
   await expect.poll(() => readElementSource(page, "circle")).toBe("<p>Changed selection world</p>");
   await page.getByRole("button", { name: "Undo", exact: true }).click();

@@ -188,6 +188,7 @@
 
 .html-source-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
@@ -377,4 +378,30 @@ button[data-html-access] [role="alert"] {
 
 .html-unsafe-permission label {
   cursor: pointer;
+}
+
+.html-editor-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.html-draft-preview {
+  min-width: 0;
+  overflow: auto;
+}
+
+.html-draft-preview .html-frame-container-fill {
+  height: 100%;
+}
+
+.html-source-editor-fullscreen {
+  container-type: inline-size;
+}
+
+@container (min-width: 680px) {
+  .html-source-editor-fullscreen .html-editor-workspace:has(.html-draft-preview) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

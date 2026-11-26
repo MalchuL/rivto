@@ -93,28 +93,24 @@ export function HtmlElementEditSlot({
  * @param props.limits - Frame limits of this extension installation.
  * @returns The editor or the widget, filling the element box.
  */
-export function HtmlElement({
-  element,
-  reactPanel,
-  preview,
-  selected,
-  operations,
-  editingStore,
-  limits,
-}: ElementRenderProps & HtmlEditingStoreProps & HtmlSurfaceLimitsProps) {
+export function HtmlElement(
+  props: ElementRenderProps & HtmlEditingStoreProps & HtmlSurfaceLimitsProps,
+) {
+  const { element, reactPanel, preview, selected, operations, editingStore, limits } = props;
   const [editing, setEditing] = useHtmlEditing(editingStore, "element", element.id);
   const context = useHtmlWidgetContext(selected, preview);
   const node = useMemo(() => toElementView(element), [element]);
   const onCommand = useHtmlElementCommand(reactPanel, operations, element.id, preview);
   const label = readLabel(element.props, "HTML");
   const source = typeof element.props.html === "string" ? element.props.html : "";
-
   let body;
   if (editing && !preview) {
     body = (
       <HtmlSourceEditor
         source={source}
-        props={element.props}
+        node={node}
+        selected={selected}
+        limits={limits}
         hiddenProps={HOST_OWNED_PROPS}
         onCancel={() => setEditing(false)}
         onSave={(draft) => {

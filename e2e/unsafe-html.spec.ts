@@ -329,7 +329,7 @@ test("long unsafe HTML lines scroll inside the inline and fullscreen code fields
   await host.getByRole("textbox", { name: "HTML source" }).fill("x".repeat(3000));
   for (const pane of [host, page.getByRole("dialog")]) {
     const actions = pane.getByRole("group", { name: "HTML editor actions" });
-    await expect(actions.getByRole("button")).toHaveCount(3);
+    await expect(actions.getByRole("button")).toHaveCount(4);
     await expect(actions.getByRole("button", { name: "Close", exact: true })).toHaveCSS(
       "border-radius",
       "0px",
@@ -390,4 +390,22 @@ test("fullscreen JSON editors stay top-aligned when one document grows", async (
   expect(shorter.x).toBeGreaterThanOrEqual(taller.x + taller.width);
   expect(shorter.y).toBeCloseTo(taller.y, 0);
   expect(shorter.height).toBeCloseTo(before!.height, 2);
+});
+
+test("draft preview has no editor access even for an approved widget", async ({ page }) => {
+  await page.goto("/");
+  const host = page.locator('[data-html-label="Unsafe panel example"]');
+  await setAccess(host, true);
+  await host.getByRole("button", { name: "Edit Unsafe HTML" }).click();
+  await expect(host.getByRole("checkbox")).toBeChecked();
+  await host.getByRole("button", { name: "Preview", exact: true }).click();
+  const frame = await unsafeFrame(page, "HTML draft preview");
+  expect(
+    await frame.evaluate(() => {
+      const { rivto } = window as unknown as {
+        rivto: { context: { preview: boolean } };
+      };
+      return [rivto.context.preview, "panel" in rivto, "reactEditor" in rivto];
+    }),
+  ).toEqual([true, false, false]);
 });
