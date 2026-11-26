@@ -142,7 +142,11 @@
   max-width: 100%;
 }
 
-.edgeless-card[data-auto-height="true"] .edgeless-card-content {
+/* Keep the content at its natural height so observeCardHeight can read scrollHeight
+   directly. Temporarily changing each shell's height before that read forced layout
+   as new cards mounted during a pan. */
+.edgeless-card[data-auto-height="true"] > .edgeless-card-content {
+  flex: none;
   overflow-y: visible;
 }
 
@@ -179,4 +183,11 @@
 
 .edgeless-viewport[data-transforming] {
   user-select: none;
+}
+
+/* A mounted auto-height card needs real text layout even when only its tail
+   intersects the viewport or its stale frame is pinned for measurement. */
+.edgeless-card[data-auto-height="true"]
+  :is(.markdown-content, .rivto-todo-name, .rivto-todo-description) {
+  content-visibility: visible;
 }

@@ -123,7 +123,7 @@ export const EdgelessBlockElement = memo(EdgelessBlockElementView, sameEdgelessB
  *
  * @param panel - Borrowed receiving panel's card update and transaction operations.
  * @param element - Captured card identity and geometry for this observation.
- * @param host - Mounted card shell whose explicit height is temporarily unlocked.
+ * @param host - Mounted card shell whose geometry lock marks a live transform.
  * @param content - Mounted content whose scroll height supplies the card height.
  * @returns Cleanup disconnecting observation and withdrawing the pending measurement.
  * @throws Propagates layout measurement or observer registration failures.
@@ -138,9 +138,10 @@ function observeCardHeight(
   /**
    * Queues content-driven height for a shared transaction when it drifted.
    *
-   * Temporarily unlocks CSS height so `scrollHeight` reflects content, then
-   * restores the previous inline height. Geometry-lock skips the read during
-   * live resize. Measurements from sibling cards finish before their queued
+   * Auto-height content uses its natural flex basis, so its scroll height can
+   * be read without changing the shell height or forcing a second layout.
+   * Geometry-lock skips the read during live resize. Measurements from sibling
+   * cards finish before their queued
    * document writes, avoiding repeated scene refreshes inside the same commit.
    *
    * @returns A changed content height is queued for the shared card update batch.
@@ -151,10 +152,7 @@ function observeCardHeight(
     }
     cancelHeight?.();
     cancelHeight = undefined;
-    const previousHeight = host.style.height;
-    host.style.height = "auto";
     const height = Math.max(MIN_CARD_HEIGHT, Math.ceil(content.scrollHeight + 2));
-    host.style.height = previousHeight;
     if (Math.abs(element.frame.height - height) < 1) {
       return;
     }
