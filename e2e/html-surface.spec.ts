@@ -1,11 +1,55 @@
 import { expect, test, type Frame, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+import { blockIdSelector } from "./dom-markers";
+import { showCanvasCard } from "./fixtures/canvas-card";
 
 interface DemoWindow extends Window {
   __rivtoDemo: { editor: DocumentEditorAPI };
   resizeDocumentUpdates: number;
   resizeTiming: { sync: number; frames: number } | null;
   stopResizeObservation: () => void;
+}
+
+for (const mode of ["block", "edgeless"]) {
+  test(`HTML widgets align with Bento and the structural selection outline in ${mode}`, async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const [htmlId, unsafeId, bentoId] = await page.evaluate(() => {
+      const { editor } = (window as unknown as DemoWindow).__rivtoDemo;
+      const snapshot = editor.dump();
+      editor.load({ ...snapshot, blocks: [], elements: [], rootElementIds: [] });
+      return ["html", "unsafe-html", "bento"].map(
+        (type) =>
+          editor.blocks.insertBlock({
+            type,
+            content:
+              type === "bento" ? "" : '<div data-rivto-drag-handle style="height:40px"></div>',
+          }).id,
+      );
+    });
+    if (mode === "edgeless") {
+      await showCanvasCard(page, [htmlId!, unsafeId!, bentoId!]);
+    }
+    const html = page.locator(blockIdSelector(htmlId!));
+    await html.locator("[data-html-drag-handle]").click({ modifiers: ["Control"] });
+    await expect(html).toHaveAttribute("data-block-selected", "true");
+    await expect(html).toHaveCSS("outline-style", "solid");
+    const bento = page.locator(blockIdSelector(bentoId!)).locator(".rivto-bento-tiles");
+    await expect(bento).toBeVisible();
+    const board = (await bento.boundingBox())!;
+    for (const id of [htmlId!, unsafeId!]) {
+      const block = page.locator(blockIdSelector(id));
+      const frame = block.locator("iframe");
+      await expect(frame).toBeVisible();
+      const shell = (await block.boundingBox())!;
+      const widget = (await frame.boundingBox())!;
+      expect(widget.x).toBeCloseTo(shell.x, 0);
+      expect(widget.width).toBeCloseTo(shell.width, 0);
+      expect(widget.x).toBeCloseTo(board.x, 0);
+      expect(widget.width).toBeCloseTo(board.width, 0);
+    }
+  });
 }
 
 test("HTML previews leave the border radius to the widget", async ({ page }) => {

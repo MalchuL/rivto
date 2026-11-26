@@ -7,9 +7,22 @@
   box-sizing: border-box;
 }
 
+/* Match the selection shell's inline edges when controls sit outside the row.
+ * Empty inline slots would still add flex gaps on either side of the widget. */
+:is([data-block-type="html"], [data-block-type="unsafe-html"])
+  > .rivto-block-row:not([data-controls-placement="inside"]) {
+  padding-inline: 0;
+}
+
+:is([data-block-type="html"], [data-block-type="unsafe-html"])
+  > .rivto-block-row:not([data-controls-placement="inside"])
+  > .rivto-block-slot:is([data-slot-position="start"], [data-slot-position="end"]):empty {
+  display: none;
+}
+
 /* The edit control sits inside the block or element, not on a surrounding frame. */
 [data-block-type="html"] > .rivto-block-row > .rivto-block-slot[data-slot-position="right"] {
-  /* Inset past the row padding so the control sits on the widget, not in the gutter. */
+  /* Inset from the row edges so the control sits on the widget even in rows with inline controls. */
   top: 22px;
   right: 24px;
   bottom: auto;
