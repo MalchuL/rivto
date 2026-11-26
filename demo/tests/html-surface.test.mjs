@@ -22,6 +22,6 @@ test("seeded widgets keep their props beside the html source", () => {
   const circle = HTML_ELEMENT_SAMPLES.find((sample) => sample.sample === "circle");
   assert.equal(circle.props.speed, 6);
   assert.match(circle.html, /data-ring="true"/);
-  assert.equal(HTML_BLOCK_SAMPLES.length, 7);
+  assert.equal(HTML_BLOCK_SAMPLES.length, 8);
   assert.equal(HTML_ELEMENT_SAMPLES.length, 7);
 });

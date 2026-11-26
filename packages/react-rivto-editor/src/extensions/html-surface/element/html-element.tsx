@@ -267,15 +267,17 @@ function applyElementCommand(
 /**
  * Writes a source-editor draft to the element as one undo step.
  *
- * Like blocks, only the session's edits are written, so a collaborator's
- * concurrent changes survive. Host-owned props are removed from the patch
- * (the JSON field cannot set `html` or `rotation`), and `html` is set only
- * if the HTML field itself was edited.
+ * Applies the session's patch to the current element, preserving props outside
+ * the patch. The JSON field cannot write host-owned `html` or `rotation`. The
+ * save handler adds `props.html` to the patch when the submitted source differs
+ * from the opening source. A props-only edit therefore keeps the current HTML.
+ * A missing element or an empty patch results in no write.
  *
  * @param panel - Panel that owns the element.
  * @param elementId - ID of the HTML element.
  * @param draft - Draft produced by the source editor.
- * @returns Nothing. The draft is applied when there is something to write.
+ * @returns The edited fields have been applied if the element still exists and the patch is nonempty.
+ * @throws If the panel rejects the update or the history batch fails.
  */
 function commitElementDraft(panel: HtmlElementPanel, elementId: string, draft: HtmlDraft): void {
   if (!panel.elements.getElementNode(elementId)) {

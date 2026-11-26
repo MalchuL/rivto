@@ -53,10 +53,11 @@ export function parseWidgetProps(text: string): Record<string, unknown> {
 /**
  * Computes the top-level property edits a user made during one editing session.
  *
- * Diffing against the opening snapshot (rather than the current document)
- * preserves keys that a collaborator added or changed while the editor was
- * open. Each top-level property is one CRDT value; a removed key is reported
- * as `undefined` so the manager deletes it.
+ * The opening snapshot is the comparison baseline. A key unchanged by this
+ * session is omitted from the patch, so applying it preserves the key's latest
+ * value in the document. A removed key is reported as `undefined` so the manager
+ * deletes it. Each top-level property is one CRDT value, so an edit to a nested
+ * field replaces the full value of its top-level key.
  *
  * @param opening - Properties displayed when the editor opened.
  * @param next - Properties submitted by the user.

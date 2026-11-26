@@ -300,15 +300,17 @@ function applyBlockCommand(
 /**
  * Writes a source-editor draft to the block as one undo step.
  *
- * Only what the user changed in this session is written. Content is written
- * only if the source was edited; props receive only the session's patch.
- * That way, changes a collaborator made while the editor was open survive.
+ * Writes `content` when the submitted HTML differs from the opening source and
+ * applies the property patch to the current block. For a props-only edit, the
+ * block keeps its current HTML, even if it changed while the form was open.
+ * Properties outside the patch retain their current values.
  * Nothing is written for an unchanged draft or a block deleted in the meantime.
  *
  * @param panel - Panel that owns the block.
  * @param blockId - ID of the HTML block.
  * @param draft - Draft produced by the source editor.
- * @returns Nothing. The draft is applied when there is something to write.
+ * @returns The edited fields have been applied if the block still exists and the draft changed.
+ * @throws If the panel rejects the update or the history batch fails.
  */
 function commitBlockDraft(panel: HtmlBlockPanel, blockId: string, draft: HtmlDraft): void {
   const sourceChanged = draft.source !== draft.openingSource;

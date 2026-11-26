@@ -120,15 +120,26 @@ export type HtmlWidgetCommand =
   | { readonly kind: "set-list-props"; readonly listProps: Record<string, unknown> }
   | { readonly kind: "set-content"; readonly content: string };
 
-/** What the source editor produces when the user presses Done. */
+/**
+ * Describes the edits submitted when the user presses Done in the HTML source editor.
+ *
+ * The form compares the submitted HTML and widget props with the values shown
+ * when it opened. Save handlers apply only the fields edited during the session
+ * to the current node. For example, changing only `label` updates that prop while
+ * preserving the current HTML and any other props changed while the form was open.
+ * When the user edits the HTML, a block stores it in `content` and a canvas element
+ * stores it in `props.html`.
+ */
 export interface HtmlDraft {
-  /** Source when the editor opened. Compared with `source` to tell whether the HTML was edited. */
+  /** HTML captured when the editor opened, used as the baseline for detecting a source edit. */
   readonly openingSource: string;
-  /** Source when Done was pressed. */
+  /** Full HTML text at submission. The save handler writes it when it differs from `openingSource`. */
   readonly source: string;
   /**
-   * Props the user added, changed or removed during this session. A removed
-   * prop has the value `undefined`. Props the user did not touch are absent.
+   * Top-level widget props the user added, changed or removed during this session.
+   * A removed prop has the value `undefined` so the manager deletes it. An omitted
+   * key leaves its current value intact. Editing a nested value replaces the value
+   * of its top-level key as a whole.
    */
   readonly propsPatch: Record<string, unknown>;
 }

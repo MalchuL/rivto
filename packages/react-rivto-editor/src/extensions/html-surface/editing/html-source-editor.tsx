@@ -238,13 +238,16 @@ interface SourceDraft {
 /**
  * Holds the editable text of one editing session.
  *
- * The opening source and props are captured (and the props formatted as
- * JSON) on the first render only; the draft is compared against them when saving.
+ * The opening source and props are captured on the first render, when the props
+ * are formatted as JSON. On Done, the form parses the opening and submitted JSON
+ * to build a patch of edited top-level keys. It sends both HTML strings so the
+ * save handler can tell whether the user edited the source field. Later changes
+ * to the document do not reset the opening values or the text in the form.
  *
  * @param source - HTML source when the editor opens.
  * @param props - Widget props when the editor opens.
  * @param hiddenProps - Prop keys left out of the JSON text.
- * @param onSave - Receives a valid draft.
+ * @param onSave - Receives the submitted HTML, its opening value, and the property patch after JSON validation.
  * @returns The current text, its setters and the save action.
  */
 function useSourceDraft(

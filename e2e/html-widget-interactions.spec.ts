@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
 interface DemoWindow extends Window {
@@ -748,4 +748,141 @@ test("the same priority board works as an HTML canvas element", async ({ page })
       id,
     ),
   ).toEqual(before);
+});
+
+/**
+ * Observes the first visible displacement after the next paddle drag.
+ *
+ * @param paddle - Lower paddle at the center of a fresh court.
+ * @returns A one-shot listener is installed to report displacement and elapsed milliseconds.
+ */
+async function recordFirstPaddleMove(paddle: Locator) {
+  await paddle.evaluate((button) => {
+    button.addEventListener(
+      "pointermove",
+      () => {
+        const start = performance.now();
+        const observer = new MutationObserver(() => {
+          const left = Number.parseFloat(button.style.left);
+          if (left !== 50 && Number.isFinite(left)) {
+            observer.disconnect();
+            button.dataset.firstMove = String(50 - left);
+            button.dataset.firstMoveMs = String(performance.now() - start);
+          }
+        });
+        observer.observe(button, { attributes: true, attributeFilter: ["style"] });
+      },
+      { capture: true, once: true },
+    );
+  });
+}
+
+for (const repeat of [0, 200]) {
+  test(`ping-pong starts on drag and limits paddle speed, repeat=${repeat}`, async ({ page }) => {
+    await page.goto(`/?repeat=${repeat}`);
+    const iframe = page.locator('iframe[name="Ping-pong"]');
+    await iframe.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    const frame = iframe.contentFrame();
+    const paddle = frame.getByRole("button", { name: "Your paddle" });
+    const status = frame.locator("#status");
+    await paddle.click();
+    await expect(status).toHaveText(/Drag the lower paddle/);
+    await paddle.hover();
+    const court = (await frame.locator("#court").boundingBox())!;
+    const rect = (await paddle.boundingBox())!;
+    await page.mouse.down();
+    await recordFirstPaddleMove(paddle);
+    await page.mouse.move(court.x, rect.y + rect.height / 2);
+    await expect(status).toHaveText("Rally in play");
+    await expect(paddle).toHaveAttribute("data-first-move", /.+/);
+    const displacement = Number(await paddle.getAttribute("data-first-move"));
+    expect(displacement).toBeGreaterThan(0);
+    // A rendered frame advances at most 32ms at 340 of the 480 court units per second.
+    expect(displacement).toBeLessThanOrEqual(((340 * 0.032) / 480) * 100 + 0.001);
+    console.log(
+      JSON.stringify({
+        interaction: "ping-pong-first-movement",
+        repeat,
+        elapsed: Number(await paddle.getAttribute("data-first-move-ms")),
+      }),
+    );
+    await expect
+      .poll(() => paddle.evaluate((button) => Number.parseFloat(button.style.left)))
+      .toBeCloseTo((44 / 480) * 100);
+    await page.mouse.up();
+    await expect(frame.locator("#score")).toHaveText("You 0 · 1 CPU");
+    await expect(status).toHaveText("CPU scored. Drag to serve again.");
+    await paddle.focus();
+    await page.keyboard.down("ArrowRight");
+    await expect(status).toHaveText("Rally in play");
+    await expect
+      .poll(() => paddle.evaluate((button) => Number.parseFloat(button.style.left)))
+      .toBeGreaterThan(10);
+    await page.keyboard.up("ArrowRight");
+  });
+}
+
+test("ping-pong can be played inside its Edgeless block card", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 2500 });
+  await page.goto("/");
+  const cardId = await page.evaluate(() => {
+    const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
+    return editor.elements.getElementNodes().find((item) => {
+      const start = item.props.startBlockId;
+      return (
+        typeof start === "string" &&
+        editor.blocks.getBlockNode(start)?.content === "## HTML widgets"
+      );
+    })?.id;
+  });
+  expect(cardId).toBeDefined();
+  await page.locator('[data-editor-mode="edgeless"]').click();
+  await panToElement(page, cardId!);
+  const before = await readElementFrame(page, cardId!);
+  const frame = page.frameLocator('iframe[name="Ping-pong"]');
+  const paddle = frame.getByRole("button", { name: "Your paddle" });
+  await paddle.hover();
+  const rect = (await paddle.boundingBox())!;
+  await page.mouse.down();
+  await page.mouse.move(rect.x + rect.width, rect.y + rect.height / 2);
+  await expect(frame.locator("#status")).toHaveText("Rally in play");
+  await expect
+    .poll(() => paddle.evaluate((button) => Number.parseFloat(button.style.left)))
+    .toBeGreaterThan(51);
+  await page.mouse.up();
+  expect(await readElementFrame(page, cardId!)).toEqual(before);
+});
+
+test("ping-pong returns the ball from the lower paddle", async ({ page }) => {
+  await page.goto("/");
+  const iframe = page.locator('iframe[name="Ping-pong"]');
+  await iframe.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  const frame = iframe.contentFrame();
+  const paddle = frame.getByRole("button", { name: "Your paddle" });
+  const ball = frame.locator("#ball");
+  await ball.evaluate((element) => {
+    let previous = 50;
+    const observer = new MutationObserver(() => {
+      const top = Number.parseFloat(element.style.top);
+      // An upward step near the lower paddle records the bounce even between test polls.
+      if (top > 79 && top < previous) {
+        observer.disconnect();
+        element.dataset.returned = "true";
+      }
+      previous = top;
+    });
+    observer.observe(element, { attributes: true, attributeFilter: ["style"] });
+  });
+  await paddle.hover();
+  const court = (await frame.locator("#court").boundingBox())!;
+  const rect = (await paddle.boundingBox())!;
+  await page.mouse.down();
+  await page.mouse.move(court.x + court.width * 0.625, rect.y + rect.height / 2);
+  await expect
+    .poll(() => paddle.evaluate((button) => Number.parseFloat(button.style.left)))
+    .toBeGreaterThan(61);
+  await page.mouse.up();
+  await expect(ball).toHaveAttribute("data-returned", "true");
+  await expect(frame.locator("#status")).toHaveText("Rally in play");
+  await expect(frame.locator("#score")).toHaveText("You 0 · 0 CPU");
 });

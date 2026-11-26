@@ -9,6 +9,7 @@
 
 import { ORBIT_HTML, WEEKLY_PROGRESS_HTML } from "./animated-samples.ts";
 import { MIXER_HTML, PRIORITY_BOARD_HTML } from "./interactive-samples.ts";
+import { PING_PONG_HTML } from "./ping-pong.ts";
 
 /** One pasted block stored as HTML content plus JSON props. */
 export interface HtmlBlockSample {
@@ -565,6 +566,11 @@ export const HTML_BLOCK_SAMPLES: readonly HtmlBlockSample[] = [
     html: MOOD_HTML,
     props: { sample: "mood", label: "Mood", mood: "calm" },
     listProps: { tone: "soft" },
+  },
+  {
+    sample: "ping-pong",
+    html: PING_PONG_HTML,
+    props: { sample: "ping-pong", label: "Ping-pong" },
   },
 ];
 
