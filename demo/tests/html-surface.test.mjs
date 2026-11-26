@@ -7,9 +7,12 @@ import {
 
 test("seeded widgets keep their props beside the html source", () => {
   const pomodoro = HTML_BLOCK_SAMPLES.find((sample) => sample.sample === "pomodoro");
-  assert.equal(pomodoro.props.start, false);
+  assert.equal(pomodoro.props.startedAt, null);
   assert.equal(pomodoro.props.timer, 25);
-  assert.match(pomodoro.html, /rivto\.setProp\("start"/);
+  assert.match(
+    pomodoro.html,
+    /rivto\.setProps\(\{ timer: minutesInput.valueAsNumber, startedAt: Date.now\(\) \}/,
+  );
   assert.match(pomodoro.html, /props\.timer/);
 
   const mood = HTML_BLOCK_SAMPLES.find((sample) => sample.sample === "mood");

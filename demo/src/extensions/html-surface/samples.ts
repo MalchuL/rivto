@@ -86,73 +86,123 @@ const POMODORO_HTML = `<style>
     font-weight: 650;
     cursor: pointer;
   }
-  button:focus-visible { outline: 2px solid #4a1d16; outline-offset: 3px; }
-  .meta { margin: 0; font-size: 13px; color: #8a5348; }
+  button:focus-visible, input:focus-visible {
+    outline: 2px solid #4a1d16;
+    outline-offset: 3px;
+  }
+  button:disabled { opacity: 0.45; cursor: default; }
+  .controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .duration { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .duration input {
+    width: 4em;
+    padding: 4px 6px;
+    border: 1px solid #d8a99f;
+    border-radius: 6px;
+    background: #fff8f6;
+    color: inherit;
+    font: inherit;
+  }
 </style>
 <div class="card">
-  <div class="face" id="face"><div class="well"><div class="time" id="time">25:00</div></div></div>
-  <p class="meta" id="meta">25 minute focus</p>
-  <button type="button" id="toggle">Start</button>
+  <div class="face" id="face"><div class="well"><div class="time" id="time" role="timer">25:00</div></div></div>
+  <label class="duration">Minutes
+    <input id="minutes" type="number" min="1" max="99" step="1" value="25" required disabled>
+  </label>
+  <div class="controls">
+    <button type="button" id="start" disabled>Start</button>
+    <button type="button" id="stop" disabled>Stop</button>
+  </div>
 </div>
 <script>
   rivto.ready().then(function (node) {
     var timerId = 0;
     var duration = 0;
-    var endsAt = 0;
-    var running = false;
+    var startedAt = null;
     var time = document.getElementById("time");
     var face = document.getElementById("face");
-    var meta = document.getElementById("meta");
-    var toggle = document.getElementById("toggle");
-    function paint(left) {
-      var seconds = Math.max(0, Math.ceil(left / 1000));
+    var minutesInput = document.getElementById("minutes");
+    var start = document.getElementById("start");
+    var stop = document.getElementById("stop");
+
+    /**
+     * Recomputes the visible countdown from the persisted start time and the wall clock.
+     *
+     * @returns Whether the countdown is active. Idle timers show their full duration,
+     * and completed timers show zero until restarted or edited.
+     */
+    function paint() {
+      var elapsed = startedAt === null ? 0 : Math.max(0, Date.now() - startedAt);
+      var left = Math.max(0, duration - elapsed);
+      var seconds = Math.ceil(left / 1000);
       var minutes = Math.floor(seconds / 60);
       var remain = seconds % 60;
-      time.textContent = String(minutes).padStart(2, "0") + ":" + String(remain).padStart(2, "0");
-      var progress = duration ? Math.max(0, Math.min(1, left / duration)) : 0;
-      face.style.setProperty("--progress", progress * 360 + "deg");
+      var display = String(minutes).padStart(2, "0") + ":" + String(remain).padStart(2, "0");
+      if (time.textContent !== display) {
+        time.textContent = display;
+      }
+      face.style.setProperty("--progress", (left / duration) * 360 + "deg");
+      return startedAt !== null && left > 0;
     }
-    function stop() {
-      window.clearInterval(timerId);
-      timerId = 0;
-    }
+
+    /**
+     * Refreshes the countdown and releases its interval once the run ends.
+     *
+     * @returns Whether another tick is needed. Action availability follows the
+     * countdown, including when the iframe first opens after expiry.
+     */
     function tick() {
-      var left = endsAt - Date.now();
-      paint(Math.max(0, left));
-      if (left > 0) return;
-      stop();
-      running = false;
-      toggle.textContent = "Start";
-      paint(duration);
-      rivto.setProp("start", false);
+      var running = paint();
+      if (start.disabled !== running || stop.disabled === running) {
+        minutesInput.disabled = running;
+        start.disabled = running;
+        stop.disabled = !running;
+      }
+      if (!running) {
+        window.clearInterval(timerId);
+        timerId = 0;
+      }
+      return running;
     }
+
+    /**
+     * Applies an authoritative block snapshot after mounting or a document update.
+     *
+     * @param next - Detached node snapshot containing minutes and an epoch timestamp in milliseconds.
+     * @returns The timer is rendered and at most one interval refreshes the active run.
+     */
     function apply(next) {
       var minutes = Number(next.props.timer);
-      var safeMinutes = Number.isFinite(minutes) && minutes > 0 ? minutes : 25;
-      var nextDuration = safeMinutes * 60000;
-      var nextRunning = next.props.start === true;
-      var wasRunning = running;
-      if (nextDuration !== duration) {
-        duration = nextDuration;
-        if (!nextRunning) paint(duration);
+      if (!Number.isInteger(minutes) || minutes < Number(minutesInput.min) || minutes > Number(minutesInput.max)) {
+        minutes = Number(minutesInput.defaultValue);
       }
-      meta.textContent = safeMinutes + " minute focus";
-      if (nextRunning && !wasRunning) endsAt = Date.now() + duration;
-      running = nextRunning;
-      toggle.textContent = running ? "Pause" : "Start";
-      if (!running) {
-        stop();
-        paint(duration);
-        return;
+      var nextDuration = minutes * 60000;
+      var savedStart = next.props.startedAt;
+      var nextStartedAt = Number.isSafeInteger(savedStart) && savedStart > 0 ? savedStart : null;
+      if (nextDuration !== duration || nextStartedAt !== startedAt) {
+        minutesInput.value = String(minutes);
       }
-      if (wasRunning) return;
-      stop();
-      tick();
-      timerId = window.setInterval(tick, 200);
+      duration = nextDuration;
+      startedAt = nextStartedAt;
+      if (tick() && !timerId) {
+        timerId = window.setInterval(tick, 200);
+      }
     }
+
     apply(node);
     rivto.subscribe(apply);
-    toggle.addEventListener("click", function () { rivto.setProp("start", !running); });
+    minutesInput.addEventListener("change", function () {
+      if (minutesInput.reportValidity() && minutesInput.valueAsNumber * 60000 !== duration) {
+        rivto.setProps({ timer: minutesInput.valueAsNumber, startedAt: null });
+      }
+    });
+    start.addEventListener("click", function () {
+      if (minutesInput.reportValidity()) {
+        rivto.setProps({ timer: minutesInput.valueAsNumber, startedAt: Date.now() });
+      }
+    });
+    stop.addEventListener("click", function () {
+      rivto.setProp("startedAt", null);
+    });
   });
 </script>`;
 
@@ -467,12 +517,18 @@ const SIGNAL_HTML = `<style>
   });
 </script>`;
 
-/** Page widgets seeded ahead of the notebook. Pomodoro's timer lives in props. */
+/**
+ * Page widgets seeded ahead of the notebook.
+ *
+ * Pomodoro keeps the configured minutes and the run's start time in props.
+ * A null start time means idle. A completed run retains its start time so a
+ * new iframe can still show zero after the deadline.
+ */
 export const HTML_BLOCK_SAMPLES: readonly HtmlBlockSample[] = [
   {
     sample: "pomodoro",
     html: POMODORO_HTML,
-    props: { sample: "pomodoro", label: "Pomodoro", start: false, timer: 25 },
+    props: { sample: "pomodoro", label: "Pomodoro", timer: 25, startedAt: null },
   },
   {
     sample: "goal",

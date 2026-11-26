@@ -144,7 +144,7 @@ test("html blocks expose the node and render pasted markup", async ({ page }) =>
   );
   expect(node.kind).toBe("block");
   expect(node).toMatchObject({
-    props: { start: false, timer: 25, label: "Pomodoro" },
+    props: { startedAt: null, timer: 25, label: "Pomodoro" },
     listProps: {},
   });
   expect(Array.isArray(node.childIds)).toBe(true);
@@ -153,14 +153,14 @@ test("html blocks expose the node and render pasted markup", async ({ page }) =>
 
   const started = Date.now();
   await pomodoro.getByRole("button", { name: "Start" }).click();
-  await expect(pomodoro.getByRole("button", { name: "Pause" })).toBeVisible();
+  await expect(pomodoro.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
   const elapsed = Date.now() - started;
   console.log(JSON.stringify({ interaction: "pomodoro-start", repeat: 0, elapsed }));
   expect(elapsed).toBeLessThan(1500);
-  expect(await blockProp(page, "pomodoro", "start")).toBe(true);
+  expect(await blockProp(page, "pomodoro", "startedAt")).toEqual(expect.any(Number));
   await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(pomodoro.getByRole("button", { name: "Start" })).toBeVisible();
-  expect(await blockProp(page, "pomodoro", "start")).toBe(false);
+  await expect(pomodoro.getByRole("button", { name: "Start" })).toBeEnabled();
+  expect(await blockProp(page, "pomodoro", "startedAt")).toBeNull();
 
   const pomodoroBlock = page.locator('[data-block-type="html"]').filter({ has: pomodoroHost });
   await pomodoroBlock.hover();
@@ -172,7 +172,7 @@ test("html blocks expose the node and render pasted markup", async ({ page }) =>
   await props.click();
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.insertText(
-    JSON.stringify({ sample: "pomodoro", label: "Pomodoro", start: false, timer: 5 }, null, 2),
+    JSON.stringify({ sample: "pomodoro", label: "Pomodoro", startedAt: null, timer: 5 }, null, 2),
   );
   await page.getByRole("button", { name: "Done", exact: true }).click();
   const edited = await widgetFrame(page, "Pomodoro");
@@ -245,11 +245,11 @@ test("pomodoro still answers in a repeated notebook", async ({ page }) => {
   const pomodoro = await widgetFrame(page, "Pomodoro");
   const started = Date.now();
   await pomodoro.getByRole("button", { name: "Start" }).click();
-  await expect(pomodoro.getByRole("button", { name: "Pause" })).toBeVisible();
+  await expect(pomodoro.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
   const elapsed = Date.now() - started;
   console.log(JSON.stringify({ interaction: "pomodoro-start", repeat: 200, elapsed }));
   expect(elapsed).toBeLessThan(1500);
-  expect(await blockProp(page, "pomodoro", "start")).toBe(true);
+  expect(await blockProp(page, "pomodoro", "startedAt")).toEqual(expect.any(Number));
 });
 
 for (const repeat of [0, 200]) {

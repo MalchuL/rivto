@@ -12,10 +12,10 @@ import {
 interface JournalSeedEditor {
   /** Creates canvas visuals through registered editor commands. */
   readonly commands: Pick<DocumentEditorAPI["commands"], "execute">;
-  /** Inserts blocks at the end of the current root sequence. */
+  /** Inserts notebook blocks and observes the seeded Pomodoro for browser persistence. */
   readonly blocks: Pick<
     DocumentEditorAPI["blocks"],
-    "insertBlock" | "getInsertionDestinationAfter"
+    "insertBlock" | "getInsertionDestinationAfter" | "getBlockNode" | "subscribeBlockNode"
   >;
   /** Creates canvas cards referencing notebook sections. */
   readonly elements: Pick<DocumentEditorAPI["elements"], "insertElement">;

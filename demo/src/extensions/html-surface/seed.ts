@@ -13,10 +13,10 @@ import { UNSAFE_HTML_SAMPLES } from "./unsafe-samples";
 interface HtmlSeedEditor {
   /** Creates the canvas label beside the HTML elements. */
   readonly commands: Pick<DocumentEditorAPI["commands"], "execute">;
-  /** Inserts the HTML blocks at the start of the page. */
+  /** Inserts HTML blocks and observes changes to the seeded Pomodoro. */
   readonly blocks: Pick<
     DocumentEditorAPI["blocks"],
-    "insertBlock" | "getInsertionDestinationAfter"
+    "insertBlock" | "getInsertionDestinationAfter" | "getBlockNode" | "subscribeBlockNode"
   >;
   /** Inserts the block card and the HTML elements. */
   readonly elements: Pick<DocumentEditorAPI["elements"], "insertElement">;
@@ -25,6 +25,64 @@ interface HtmlSeedEditor {
 /** Canvas card that holds the HTML section without covering the weekend plan. */
 const HTML_BLOCK_CARD_FRAME = { x: 60, y: 980, width: 560, height: 1600 };
 
+/** Browser storage key for the timer in the demo notebook, which is reseeded on each open. */
+const POMODORO_STORAGE_KEY = "rivto-demo:journal:pomodoro";
+
+/**
+ * Reads the timer props saved by the demo host on this browser origin.
+ *
+ * @returns The stored duration and start time, or undefined when storage or the saved fields are unavailable.
+ */
+function readPomodoroProps() {
+  try {
+    const saved: unknown = JSON.parse(window.localStorage.getItem(POMODORO_STORAGE_KEY) ?? "null");
+    if (
+      saved &&
+      typeof saved === "object" &&
+      "timer" in saved &&
+      typeof saved.timer === "number" &&
+      "startedAt" in saved &&
+      (saved.startedAt === null || typeof saved.startedAt === "number")
+    ) {
+      return { timer: saved.timer, startedAt: saved.startedAt };
+    }
+  } catch {
+    // The notebook still opens when browser storage is unavailable or malformed.
+  }
+  return undefined;
+}
+
+/**
+ * Saves changes to the seeded timer so the demo can restore them on its next open.
+ *
+ * The core block manager releases this subscription when the demo editor is destroyed.
+ *
+ * @param blocks - Borrowed block reads and subscriptions from the demo editor.
+ * @param blockId - ID of the seeded Pomodoro in this document instance.
+ * @returns A subscription is attached to the timer node; storage is written only when timer props change.
+ */
+function persistPomodoroProps(
+  blocks: Pick<HtmlSeedEditor["blocks"], "getBlockNode" | "subscribeBlockNode">,
+  blockId: string,
+): void {
+  let previous = blocks.getBlockNode(blockId)?.props;
+  blocks.subscribeBlockNode(blockId, () => {
+    const props = blocks.getBlockNode(blockId)?.props;
+    if (!props || (previous?.timer === props.timer && previous?.startedAt === props.startedAt)) {
+      return;
+    }
+    previous = props;
+    try {
+      window.localStorage.setItem(
+        POMODORO_STORAGE_KEY,
+        JSON.stringify({ timer: props.timer, startedAt: props.startedAt ?? null }),
+      );
+    } catch {
+      // The live timer remains usable when the browser blocks storage.
+    }
+  });
+}
+
 /**
  * Inserts the HTML heading, widgets, and their canvas card before the notebook.
  *
@@ -32,6 +90,7 @@ const HTML_BLOCK_CARD_FRAME = { x: 60, y: 980, width: 560, height: 1600 };
  * blocks first because they are the first root blocks.
  *
  * The section ends with a separator so the notebook cards stay independent.
+ * The seeded Pomodoro restores and saves its timer props through the demo host.
  *
  * @param editor - Editor whose document receives the section.
  * @returns Id of the separator after the HTML blocks.
@@ -44,15 +103,19 @@ export function appendHtmlBlockSection(editor: HtmlSeedEditor): string {
   });
   let afterId = heading.id;
   for (const sample of HTML_BLOCK_SAMPLES) {
+    const isPomodoro = sample.sample === "pomodoro";
     const created = editor.blocks.insertBlock(
       {
         type: HTML_BLOCK_TYPE,
         content: sample.html,
-        props: sample.props,
+        props: isPomodoro ? { ...sample.props, ...readPomodoroProps() } : sample.props,
         ...(sample.listProps ? { listProps: sample.listProps } : {}),
       },
       editor.blocks.getInsertionDestinationAfter(afterId),
     );
+    if (isPomodoro) {
+      persistPomodoroProps(editor.blocks, created.id);
+    }
     afterId = created.id;
   }
   afterId = appendUnsafeHtmlSamples(editor, afterId);
