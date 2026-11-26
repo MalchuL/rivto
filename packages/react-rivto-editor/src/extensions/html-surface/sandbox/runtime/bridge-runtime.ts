@@ -17,6 +17,9 @@
  * The scripts are strings, so TypeScript does not check them. Their behavior
  * is covered by the browser tests in `e2e/html-*.spec.ts`.
  *
+ * Keep `./reference/bridge-runtime.js` in sync with the emitted script.
+ * `iframe-runtime.test.ts` checks that both copies match.
+ *
  * @module
  */
 

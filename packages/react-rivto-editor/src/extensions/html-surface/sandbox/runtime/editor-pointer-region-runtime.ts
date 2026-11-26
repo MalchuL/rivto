@@ -19,6 +19,9 @@
  * widget script runs. Elements are tracked through weak references, so a
  * removed element can still be garbage-collected.
  *
+ * Keep `./reference/editor-pointer-region-runtime.js` in sync with the emitted script.
+ * `iframe-runtime.test.ts` checks that both copies match.
+ *
  * @module
  */
 

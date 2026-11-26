@@ -2,6 +2,9 @@
  * Page side of Unsafe HTML editor access: the `rivto.panel` and
  * `rivto.reactEditor` objects a widget script calls.
  *
+ * Keep `./reference/unsafe-runtime.js` in sync with the emitted script.
+ * `iframe-runtime.test.ts` checks that both copies match.
+ *
  * @module
  */
 import { UNSAFE_HTML_METHODS } from "../../unsafe/unsafe-requests";

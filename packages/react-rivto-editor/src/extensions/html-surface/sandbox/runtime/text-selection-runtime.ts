@@ -9,6 +9,9 @@
  * editor, which lets Page select whole blocks (see `frame/iframe-text-selection.ts`).
  * Moving back into the iframe returns to an ordinary text selection.
  *
+ * Keep `./reference/text-selection-runtime.js` in sync with the emitted script.
+ * `iframe-runtime.test.ts` checks that both copies match.
+ *
  * @module
  */
 

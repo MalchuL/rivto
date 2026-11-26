@@ -421,8 +421,8 @@ function HtmlEditorActions(props: HtmlEditorActionsProps) {
       <ButtonGroup aria-label="HTML editor actions">
         <Button
           {...buttonProps}
-          variant={showPreview ? "default" : "outline"}
-          className={showPreview ? "border border-transparent" : undefined}
+          variant="outline"
+          className="aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/90 dark:aria-pressed:bg-primary dark:aria-pressed:hover:bg-primary/90"
           size="sm"
           aria-pressed={showPreview}
           onMouseDown={(event) => event.preventDefault()}
