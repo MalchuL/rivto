@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { HtmlFrame } from "../html-frame";
-import { HTML_CHANNEL } from "../../constants";
+import { HTML_IFRAME_MESSAGE_NAMESPACE } from "../../constants";
 import { DEFAULT_HTML_SURFACE_LIMITS } from "../../options";
 
 test("only the authenticated document port receives snapshots, permission decisions and updates", () => {
@@ -81,7 +81,7 @@ test("only the authenticated document port receives snapshots, permission decisi
       windowPosts++;
     };
     const token = JSON.parse(/var token = ("[^"]+")/.exec(iframe.srcdoc)![1]!);
-    const data = { channel: HTML_CHANNEL, kind: "ready", token };
+    const data = { namespace: HTML_IFRAME_MESSAGE_NAMESPACE, kind: "ready", token };
     window.dispatchEvent(
       Object.assign(new Event("message"), { data, source: iframe.contentWindow, ports: [port] }),
     );
@@ -166,7 +166,7 @@ test("an auto-sized frame grows with its document up to the configured maxBlockH
     );
     const iframe = host.querySelector("iframe")!;
     const token = JSON.parse(/var token = ("[^"]+")/.exec(iframe.srcdoc)![1]!);
-    const envelope = { channel: HTML_CHANNEL, token };
+    const envelope = { namespace: HTML_IFRAME_MESSAGE_NAMESPACE, token };
     window.dispatchEvent(
       Object.assign(new Event("message"), {
         data: { ...envelope, kind: "ready" },

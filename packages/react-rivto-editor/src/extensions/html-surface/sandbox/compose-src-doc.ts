@@ -4,7 +4,7 @@
  *
  * @module
  */
-import { HTML_CHANNEL } from "../constants";
+import { HTML_IFRAME_MESSAGE_NAMESPACE } from "../constants";
 import type { HtmlFrameFit } from "../types";
 import {
   bridgeCoreScript,
@@ -98,7 +98,7 @@ function findBridgeInsertionPoint(source: string): { insertAt: number; hasDoctyp
  * Joins the page script pieces into one function, in the order they depend on each other.
  *
  * The order matters:
- * 1. `token` and `channel` are declared first; every piece uses them.
+ * 1. `token` and `namespace` are declared first; every piece uses them.
  * 2. The core declares `port` and `send` and defines `window.rivto`.
  * 3. The text-selection relay takes private copies of native APIs before
  *    drag-region tracking wraps `addEventListener`.
@@ -111,7 +111,7 @@ function findBridgeInsertionPoint(source: string): { insertAt: number; hasDoctyp
 function bridgeScript(options: SrcDocOptions): string {
   const pieces = [
     `var token = ${JSON.stringify(options.token)};`,
-    `var channel = ${JSON.stringify(HTML_CHANNEL)};`,
+    `var namespace = ${JSON.stringify(HTML_IFRAME_MESSAGE_NAMESPACE)};`,
     bridgeCoreScript(),
     options.selectionKey ? textSelectionScript(options.selectionKey) : "",
     pointerNotificationScript(),

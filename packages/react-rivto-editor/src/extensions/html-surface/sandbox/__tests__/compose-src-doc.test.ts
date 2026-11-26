@@ -1,4 +1,4 @@
-import { HTML_CHANNEL } from "../../constants";
+import { HTML_IFRAME_MESSAGE_NAMESPACE } from "../../constants";
 import { composeSrcDoc } from "../compose-src-doc";
 
 test("html documents keep authored markup and install the node bridge", () => {
@@ -31,7 +31,7 @@ test("html documents keep authored markup and install the node bridge", () => {
   expect(document.indexOf("window.rivto")).toBeLessThan(document.indexOf("</head>"));
   expect(document.match(/<!DOCTYPE/gi)).toHaveLength(1);
   expect(document).toMatch(/<title>T<\/title>/);
-  expect(document.includes(HTML_CHANNEL)).toBe(true);
+  expect(document.includes(HTML_IFRAME_MESSAGE_NAMESPACE)).toBe(true);
 });
 
 test("the bridge is installed before body content even when head is omitted", () => {

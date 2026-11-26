@@ -1,4 +1,4 @@
-import { HTML_CHANNEL } from "../../constants";
+import { HTML_IFRAME_MESSAGE_NAMESPACE } from "../../constants";
 import { isJsonValue } from "../../model/json-value";
 import { parseWidgetProps } from "../../model/widget-props";
 import { DEFAULT_HTML_SURFACE_LIMITS } from "../../options";
@@ -22,12 +22,25 @@ test("rejects unsafe or non-JSON values in sandbox messages and edited props", (
   expect(() => parseWidgetProps('{"nested":{"constructor":1}}')).toThrow();
   expect(
     parse(
-      { channel: HTML_CHANNEL, token: "frame", kind: "set-props", props: { value: cyclic } },
+      {
+        namespace: HTML_IFRAME_MESSAGE_NAMESPACE,
+        token: "frame",
+        kind: "set-props",
+        props: { value: cyclic },
+      },
       "frame",
     ),
   ).toBeUndefined();
   expect(
-    parse({ channel: HTML_CHANNEL, token: "frame", kind: "resize", height: Infinity }, "frame"),
+    parse(
+      {
+        namespace: HTML_IFRAME_MESSAGE_NAMESPACE,
+        token: "frame",
+        kind: "resize",
+        height: Infinity,
+      },
+      "frame",
+    ),
   ).toBeUndefined();
 });
 
@@ -36,7 +49,13 @@ test("rejects structured-clone objects that are not JSON records", () => {
     expect(isJsonValue(value)).toBe(false);
     expect(
       parse(
-        { channel: HTML_CHANNEL, token: "frame", kind: "set-prop", key: "value", value },
+        {
+          namespace: HTML_IFRAME_MESSAGE_NAMESPACE,
+          token: "frame",
+          kind: "set-prop",
+          key: "value",
+          value,
+        },
         "frame",
       ),
     ).toBeUndefined();
@@ -45,19 +64,43 @@ test("rejects structured-clone objects that are not JSON records", () => {
 
 test("accepts only boolean modifier state for iframe pointer messages", () => {
   expect(
-    parse({ channel: HTML_CHANNEL, token: "frame", kind: "pointerdown", primary: true }, "frame"),
+    parse(
+      {
+        namespace: HTML_IFRAME_MESSAGE_NAMESPACE,
+        token: "frame",
+        kind: "pointerdown",
+        primary: true,
+      },
+      "frame",
+    ),
   ).toEqual({ kind: "pointerdown", primary: true });
   expect(
-    parse({ channel: HTML_CHANNEL, token: "frame", kind: "pointerdown", primary: "yes" }, "frame"),
+    parse(
+      {
+        namespace: HTML_IFRAME_MESSAGE_NAMESPACE,
+        token: "frame",
+        kind: "pointerdown",
+        primary: "yes",
+      },
+      "frame",
+    ),
   ).toBeUndefined();
   expect(
-    parse({ channel: HTML_CHANNEL, token: "other", kind: "pointerdown", primary: true }, "frame"),
+    parse(
+      {
+        namespace: HTML_IFRAME_MESSAGE_NAMESPACE,
+        token: "other",
+        kind: "pointerdown",
+        primary: true,
+      },
+      "frame",
+    ),
   ).toBeUndefined();
 });
 
 test("clips widget drag regions and rejects malformed frame messages", () => {
   const message = (handles: unknown) => ({
-    channel: HTML_CHANNEL,
+    namespace: HTML_IFRAME_MESSAGE_NAMESPACE,
     token: "frame",
     kind: "drag-handles",
     handles,
@@ -72,7 +115,7 @@ test("clips widget drag regions and rejects malformed frame messages", () => {
 });
 
 test("routes unsafe requests and denials through the same envelope check", () => {
-  const envelope = { channel: HTML_CHANNEL, token: "frame" };
+  const envelope = { namespace: HTML_IFRAME_MESSAGE_NAMESPACE, token: "frame" };
   expect(
     parse(
       {
@@ -99,7 +142,7 @@ test("routes unsafe requests and denials through the same envelope check", () =>
 });
 
 test("frame messages accept JSON writes for this token only", () => {
-  const envelope = { channel: HTML_CHANNEL, token: "token" };
+  const envelope = { namespace: HTML_IFRAME_MESSAGE_NAMESPACE, token: "token" };
   expect(parse({ ...envelope, token: "nope", kind: "ready" }, "token")).toBeUndefined();
   expect(parse({ ...envelope, kind: "ready" }, "token")).toEqual({ kind: "ready" });
   expect(parse({ ...envelope, kind: "set-prop", key: "start", value: true }, "token")).toEqual({
@@ -117,7 +160,7 @@ test("frame messages accept JSON writes for this token only", () => {
 
 test("a configured drag-region limit rejects longer lists", () => {
   const message = {
-    channel: HTML_CHANNEL,
+    namespace: HTML_IFRAME_MESSAGE_NAMESPACE,
     token: "frame",
     kind: "drag-handles",
     handles: Array.from({ length: 3 }, () => ({ x: 0, y: 0, width: 0.1, height: 0.1 })),

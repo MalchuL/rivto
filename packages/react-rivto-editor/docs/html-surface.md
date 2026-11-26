@@ -14,7 +14,7 @@ validated when the extension is created; an out-of-range value throws a
 | ---------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `maxBlockHeight` | `720`   | Maximum height of a Page block iframe in CSS pixels. Taller content scrolls inside the frame. Canvas elements ignore it. Positive, finite.     |
 | `maxDragRegions` | `64`    | Maximum number of drag regions one widget reports. The widget runtime stops at this count and the host rejects longer lists. Positive integer. |
-| `previewDelayMs` | `400` | Idle time after typing before the source editor updates Preview, in milliseconds. Integer from 0 to 2147483647. |
+| `previewDelayMs` | `400`   | Idle time after typing before the source editor updates Preview, in milliseconds. Integer from 0 to 2147483647.                                |
 
 The source editor's **Preview** toggle runs the current draft inline or beside the fields in a wide fullscreen editor. Invalid Props JSON pauses updates. Changing HTML restarts the sandbox, while changing only Props updates the running widget. The preview has local DOM interaction and exposes `rivto.context.preview` as true. Widget commands and unsafe editor access are disabled there. **Done** saves the draft and **Close** discards it.
 

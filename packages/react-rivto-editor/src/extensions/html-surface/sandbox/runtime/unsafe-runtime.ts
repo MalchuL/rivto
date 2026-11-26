@@ -21,7 +21,7 @@ import { UNSAFE_HTML_METHODS } from "../../unsafe/unsafe-requests";
  * connects.
  *
  * @param enabled - Whether access was granted when this page was built.
- * @returns ES5 source; uses `port`, `send`, `channel` and `token`.
+ * @returns ES5 source; uses `port`, `send`, `namespace` and `token`.
  */
 export function unsafeAccessScript(enabled: boolean): string {
   return `
@@ -48,7 +48,7 @@ export function unsafeAccessScript(enabled: boolean): string {
     }
     port.addEventListener("message", function (event) {
       var data = event.data;
-      if (!data || data.channel !== channel || data.token !== token || data.kind !== "unsafe-result") { return; }
+      if (!data || data.namespace !== namespace || data.token !== token || data.kind !== "unsafe-result") { return; }
       var entry = pending.get(data.id);
       if (!entry) { return; }
       pending.delete(data.id);

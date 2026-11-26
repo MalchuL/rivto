@@ -82,7 +82,7 @@ export class HtmlFrameConnection {
   /**
    * Sends a message to the connected page.
    *
-   * @param message - Message body; the channel and token are added.
+   * @param message - Message body; the namespace and token are added.
    * @returns Nothing. The message is queued on the port, or dropped if no page is connected yet.
    */
   post(message: HtmlHostMessage): void {

@@ -1,13 +1,13 @@
 /**
  * The message protocol between a widget page and the editor, in both directions.
  *
- * Every message carries `{channel: HTML_CHANNEL, token}`. Incoming messages
+ * Every message carries `{namespace: HTML_IFRAME_MESSAGE_NAMESPACE, token}`. Incoming messages
  * are untrusted and validated here before anything acts on them; outgoing
  * messages are built here so their shape is defined in one place.
  *
  * @module
  */
-import { HTML_CHANNEL } from "../constants";
+import { HTML_IFRAME_MESSAGE_NAMESPACE } from "../constants";
 import { isJsonRecord, isJsonValue, isWritableKey } from "../model/json-value";
 import type {
   HtmlDragHandleRegion,
@@ -54,7 +54,7 @@ export type HtmlHostMessage =
   | ({ readonly kind: "unsafe-result" } & UnsafeHtmlResult);
 
 /**
- * Posts an editor message to a widget page's port, adding the channel and token.
+ * Posts an editor message to a widget page's port, adding the namespace and token.
  *
  * @param port - The document's connected endpoint.
  * @param token - The document's secret.
@@ -62,13 +62,13 @@ export type HtmlHostMessage =
  * @returns The message has been queued on the port.
  */
 export function postHostMessage(port: MessagePort, token: string, message: HtmlHostMessage): void {
-  port.postMessage({ channel: HTML_CHANNEL, token, ...message });
+  port.postMessage({ namespace: HTML_IFRAME_MESSAGE_NAMESPACE, token, ...message });
 }
 
 /**
  * Parses one untrusted message when it belongs to the given document.
  *
- * Messages for another channel or token, unknown kinds, and malformed payloads
+ * Messages with another namespace or token, unknown kinds, and malformed payloads
  * (including non-JSON values and prototype keys in writes) yield `undefined`.
  *
  * @param data - Handshake from the iframe window or payload from its port.
@@ -85,7 +85,7 @@ export function parseFrameMessage(
     return undefined;
   }
   const message = data as Record<string, unknown>;
-  if (message.channel !== HTML_CHANNEL || message.token !== token) {
+  if (message.namespace !== HTML_IFRAME_MESSAGE_NAMESPACE || message.token !== token) {
     return undefined;
   }
   switch (message.kind) {

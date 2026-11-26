@@ -6,10 +6,10 @@
  * returns plain ES5 source text. `composeSrcDoc` joins the pieces into one
  * function that runs before any widget script. The pieces share these names:
  *
- * - `token`   – the page's secret; every message carries it. Declared by the composer.
- * - `channel` – {@link HTML_CHANNEL}; every message carries it. Declared by the composer.
- * - `port`    – the page's end of the private `MessageChannel` to the editor.
- * - `send(message)` – posts `{channel, token, ...message}` through `port`.
+ * - `token`     – the page's secret; every message carries it. Declared by the composer.
+ * - `namespace` – {@link HTML_IFRAME_MESSAGE_NAMESPACE}; every message carries it. Declared by the composer.
+ * - `port`      – the page's end of the private `MessageChannel` to the editor.
+ * - `send(message)` – posts `{namespace, token, ...message}` through `port`.
  *
  * The editor answers only through `port`, so if a link or form navigates the
  * iframe to another page, that page cannot receive messages meant for the widget.
@@ -44,10 +44,10 @@ export function bridgeCoreScript(): string {
   /**
    * Posts a message to the editor through the private port.
    *
-   * @param message - Message body; the channel and token are added.
+   * @param message - Message body; the namespace and token are added.
    */
   function send(message) {
-    port.postMessage(Object.assign({ channel: channel, token: token }, message));
+    port.postMessage(Object.assign({ namespace: namespace, token: token }, message));
   }
 
   /**
@@ -120,7 +120,7 @@ export function bridgeCoreScript(): string {
 
   port.addEventListener("message", function (event) {
     var data = event.data;
-    if (!data || data.channel !== channel || data.token !== token) { return; }
+    if (!data || data.namespace !== namespace || data.token !== token) { return; }
     if (data.kind === "node") { publishNode(data.node); }
     else if (data.kind === "context") { publishContext(data.context); }
     else if (data.kind === "clear-text-selection") { window.getSelection()?.removeAllRanges(); }
@@ -143,7 +143,7 @@ export function bridgeCoreScript(): string {
   };
 
   port.start();
-  parent.postMessage({ channel: channel, token: token, kind: "ready" }, "*", [connection.port2]);
+  parent.postMessage({ namespace: namespace, token: token, kind: "ready" }, "*", [connection.port2]);
 `;
 }
 
