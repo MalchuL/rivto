@@ -27,8 +27,9 @@ also read [rivto-blocks](../rivto-blocks/SKILL.md),
   - `frame/` contains `HtmlFrame`, `useHtmlFrame` and `HtmlFrameConnection`, the
     port-owning connection to one composed document.
   - `editing/` holds the per-panel editing store, source editor, CodeMirror field,
-    edit button and paste target; `block/`, `element/` and `unsafe/` hold the renderers.
-    Both block types render through `HtmlBlockOccurrence`; `unsafe/unsafe-requests.ts`
+    and edit button; `block/`, `element/` and `unsafe/` hold the renderers.
+    Both block types render through `HtmlBlockOccurrence`, which shows
+    `HtmlBlockEmpty` while a block has no HTML; `unsafe/unsafe-requests.ts`
     is the host side of editor access.
 - `frame/html-drag-handles.tsx` draws host targets over widget drag regions and
   `frame/use-html-widget-context.ts` builds `rivto.context`. They belong to the HTML

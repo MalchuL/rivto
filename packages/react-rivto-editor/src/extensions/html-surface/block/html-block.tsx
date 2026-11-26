@@ -15,7 +15,6 @@ import { useBlockSelectionAnchor } from "../../../hooks/blocks/use-block-selecti
 import { usePanel } from "../../../hooks/editor/use-panel";
 import type { BlockSlotProps } from "../../../managers/surfaces/types";
 import { HtmlEditButton } from "../editing/html-edit-button";
-import { HtmlPasteTarget } from "../editing/html-paste-target";
 import { HtmlSourceEditor } from "../editing/html-source-editor";
 import { useHtmlEditing, type HtmlEditingStoreProps } from "../editing/use-html-editing";
 import { HtmlFrame } from "../frame/html-frame";
@@ -24,6 +23,7 @@ import { readLabel } from "../model/widget-props";
 import type { HtmlSurfaceLimits, HtmlSurfaceLimitsProps } from "../options";
 import type { HtmlBlockView, HtmlDraft, HtmlWidgetCommand } from "../types";
 import type { UnsafeHtmlFrameAccess } from "../unsafe/unsafe-requests";
+import { HtmlBlockEmpty } from "./html-block-empty";
 
 /** The panel operations an HTML block reads and writes through. */
 type HtmlBlockPanel = {
@@ -120,7 +120,7 @@ export interface HtmlBlockOccurrenceProps {
  *
  * Shows one of three bodies:
  * - the source editor while `editing` is true;
- * - a paste box while the block has no HTML yet;
+ * - the empty state ({@link HtmlBlockEmpty}) while the block has no HTML yet;
  * - otherwise the sandboxed widget.
  *
  * Every write goes through the current panel, so it stays inside the panel's
@@ -158,7 +158,7 @@ export function HtmlBlockOccurrence(props: HtmlBlockOccurrenceProps) {
 }
 
 /**
- * Chooses and renders the body of a block occurrence: editor, paste box or widget.
+ * Chooses and renders the body of a block occurrence: editor, empty state or widget.
  *
  * @param props - Occurrence props plus the resolved label.
  * @param props.block - Current snapshot of the block.
@@ -205,7 +205,7 @@ function HtmlBlockBody({
   }
   if (!block.content.trim()) {
     const storeSource = (source: string) => panel.blocks.updateBlock(block.id, { content: source });
-    return <HtmlPasteTarget onCommit={storeSource} />;
+    return <HtmlBlockEmpty onCommit={storeSource} />;
   }
   return (
     <HtmlFrame

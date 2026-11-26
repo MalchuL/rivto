@@ -6,7 +6,7 @@ interface DemoWindow extends Window {
 }
 
 /**
- * Inserts a widget in the current demo and brings its editor controls into view.
+ * Inserts a widget at the start of the current demo and brings its editor controls into view.
  *
  * @param page - Page displaying the notebook.
  * @param content - Authored markup for the block.
@@ -15,11 +15,10 @@ interface DemoWindow extends Window {
 async function insertWidget(page: Page, content: string) {
   const id = await page.evaluate((source) => {
     const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
-    return editor.blocks.insertBlock({
-      type: "html",
-      content: source,
-      props: { label: "Session widget" },
-    }).id;
+    return editor.blocks.insertBlock(
+      { type: "html", content: source, props: { label: "Session widget" } },
+      { parentId: null, beforeId: editor.blocks.getRootIds()[0] },
+    ).id;
   }, content);
   const host = page.locator(`[data-block-id="${id}"]`);
   await host.scrollIntoViewIfNeeded();
@@ -228,6 +227,7 @@ for (const repeat of [0, 200]) {
     await source.focus();
     const toggle = host.getByRole("button", { name: "Preview", exact: true });
     await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
     const frame = host.locator("iframe").contentFrame();
     await expect(frame.locator("p")).toHaveText("Original");
     await expect(source).toBeFocused();
@@ -237,11 +237,18 @@ for (const repeat of [0, 200]) {
         navigations += 1;
       }
     });
+    const time = new Date();
+    await page.clock.install({ time });
+    await page.clock.pauseAt(new Date(time.getTime() + 60_000));
     await source.fill(
       "<button onclick=\"this.textContent='Clicked';rivto.setProp('write',true)\">Try</button><output></output><script>rivto.subscribe(n => document.querySelector(\"output\").textContent=n.props.label)</script>",
     );
+    await page.clock.runFor(200);
     await source.press("ControlOrMeta+End");
     await page.keyboard.type("draft");
+    await page.clock.runFor(399);
+    await expect(frame.locator("p")).toHaveText("Original");
+    await page.clock.resume();
     await expect(frame.locator("body")).toContainText("draft");
     await expect(source).toBeFocused();
     await frame.getByRole("button", { name: "Try" }).click();

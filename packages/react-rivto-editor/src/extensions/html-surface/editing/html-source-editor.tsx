@@ -13,12 +13,12 @@ import { Button } from "../../../components/ui/button";
 import { ButtonGroup } from "../../../components/ui/button-group";
 import { Separator } from "../../../components/ui/separator";
 import { editorControlProps } from "../../../constants";
-import { HTML_EDIT_HINT } from "../constants";
 import { changedPropPatch, formatWidgetProps, parseWidgetProps } from "../model/widget-props";
 import type { HtmlSurfaceLimitsProps } from "../options";
 import { useDraftPreview } from "./use-draft-preview";
 import type { HtmlDraft, HtmlNodeData } from "../types";
 import { HtmlCodeField, type HtmlCodeFieldStates } from "./html-code-field";
+import { HtmlWidgetApiHint } from "./html-widget-api-hint";
 
 /** Props for {@link HtmlSourceEditor}. */
 export interface HtmlSourceEditorProps extends HtmlSurfaceLimitsProps {
@@ -197,7 +197,7 @@ function HtmlEditorPane({
         <HtmlEditorFields draft={draft} listPropsText={listPropsText} fill={fullscreen} />
         {preview}
       </div>
-      {draft.error ? <p role="alert">{draft.error}</p> : <p>{HTML_EDIT_HINT}</p>}
+      {draft.error ? <p role="alert">{draft.error}</p> : <HtmlWidgetApiHint />}
     </>
   );
 }

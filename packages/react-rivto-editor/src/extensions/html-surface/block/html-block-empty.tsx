@@ -1,5 +1,5 @@
 /**
- * The input shown by a block that has no HTML yet.
+ * Empty state of an HTML block: the form shown while the block has no HTML yet.
  *
  * @module
  */
@@ -7,10 +7,10 @@ import { useState, type ClipboardEvent } from "react";
 import { Button } from "../../../components/ui/button";
 import { Textarea } from "../../../components/ui/textarea";
 import { editorControlProps } from "../../../constants";
-import { HTML_EDIT_HINT } from "../constants";
+import { HtmlWidgetApiHint } from "../editing/html-widget-api-hint";
 
-/** Props for {@link HtmlPasteTarget}. */
-export interface HtmlPasteTargetProps {
+/** Props for {@link HtmlBlockEmpty}. */
+export interface HtmlBlockEmptyProps {
   /**
    * Receives the HTML when the user pastes it or presses Render. Blank text is never passed.
    *
@@ -21,7 +21,7 @@ export interface HtmlPasteTargetProps {
 }
 
 /**
- * Renders a text box that turns pasted HTML into a widget immediately.
+ * Renders the empty state of an HTML block: a text box that turns pasted HTML into a widget immediately.
  *
  * Pasting text stores it right away; there is no need to press Render.
  * Typed text stays local until Render is pressed. A paste without text,
@@ -31,7 +31,7 @@ export interface HtmlPasteTargetProps {
  * @param props.onCommit - Receives the HTML to store.
  * @returns The text box and the Render button.
  */
-export function HtmlPasteTarget({ onCommit }: HtmlPasteTargetProps) {
+export function HtmlBlockEmpty({ onCommit }: HtmlBlockEmptyProps) {
   const [text, setText] = useState("");
   const commit = (source: string) => {
     if (source.trim()) {
@@ -50,13 +50,13 @@ export function HtmlPasteTarget({ onCommit }: HtmlPasteTargetProps) {
   };
   return (
     <form
-      className="html-surface-paste"
+      className="html-surface-empty"
       onSubmit={(event) => {
         event.preventDefault();
         commit(text);
       }}
     >
-      <p>{HTML_EDIT_HINT}</p>
+      <HtmlWidgetApiHint />
       <Textarea
         {...editorControlProps}
         aria-label="HTML source"

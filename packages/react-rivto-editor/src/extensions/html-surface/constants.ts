@@ -16,7 +16,3 @@ export const HTML_ELEMENT_TYPE = "html";
  * per-page token is what proves who sent a message.
  */
 export const HTML_IFRAME_MESSAGE_NAMESPACE = "rivto-html";
-
-/** Short reference for the widget script API, shown next to source fields. */
-export const HTML_EDIT_HINT =
-  "Scripts call rivto.ready() for this node. Blocks expose props, listProps, content, pluginData, and childIds. Elements expose props, frame, zIndex, and childIds. rivto.setProp(key, value) writes one property.";

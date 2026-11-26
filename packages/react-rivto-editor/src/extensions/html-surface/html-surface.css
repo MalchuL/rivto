@@ -1,6 +1,6 @@
 .html-surface-block,
 .html-surface-canvas,
-.html-surface-paste,
+.html-surface-empty,
 .html-source-editor,
 .html-source-editor textarea,
 .html-code-field {
@@ -94,7 +94,7 @@
   flex-direction: column;
 }
 
-.html-surface-paste button {
+.html-surface-empty button {
   justify-self: start;
 }
 
@@ -121,7 +121,7 @@
   flex: 1;
 }
 
-.html-surface-paste,
+.html-surface-empty,
 .html-source-editor {
   display: grid;
   gap: 8px;
@@ -150,7 +150,7 @@
   overflow: auto;
 }
 
-.html-surface-paste p,
+.html-surface-empty p,
 .html-source-editor p {
   margin: 0;
   font-size: 12px;
@@ -158,7 +158,13 @@
   color: var(--rivto-muted-foreground);
 }
 
-.html-surface-paste textarea,
+.html-widget-api-hint code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--rivto-foreground);
+}
+
+.html-surface-empty textarea,
 .html-source-editor textarea {
   width: 100%;
   min-height: 88px;
