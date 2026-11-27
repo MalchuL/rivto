@@ -178,16 +178,6 @@ export class BlockPointerSelection {
       }
       if (feature === "click") {
         // Clear previous coverage before the browser starts a fresh text selection.
-        events.register(
-          "selection.click",
-          {
-            type: "click",
-            capture: true,
-            scope: "block",
-            priority: BLOCK_SELECTION_INPUT_PRIORITY,
-          },
-          this.onClick,
-        );
         events.observe(
           "selection.clear",
           {
@@ -252,7 +242,7 @@ export class BlockPointerSelection {
   }
 
   /**
-   * Releases existing coverage before a plain pointer enters text or page whitespace.
+   * Releases existing coverage before a plain pointer enters text, a structural block region, or page whitespace.
    *
    * Controls retain coverage for their commands. Modifier gestures keep their
    * existing anchor, and native ranges are cleared before delayed selectionchange.
@@ -675,54 +665,6 @@ export class BlockPointerSelection {
   };
 
   /**
-   * Selects a structural anchor on a plain click and consumes clicks suppressed after a structural drag.
-   *
-   * @param input - Click event with the occurrence root, native input, and optional block ID.
-   * @returns "handled" for a consumed structural click; otherwise "continue".
-   */
-  private onClick = ({ raw: event, blockId, root }: BlockInputEvent<"click">): BlockInputResult => {
-    if (this.editor.adapter.selection.canStartSelection?.(event) === false) {
-      return "continue";
-    }
-    if (!blockId) {
-      return "continue";
-    }
-    if (blockId === this.suppressClickBlockId) {
-      // A control may still receive `click` after its pointer gesture became a
-      // structural drag. Claim that click so controls respecting
-      // `defaultPrevented` do not perform their normal action.
-      this.suppressClickBlockId = undefined;
-      return "handled";
-    }
-    if (
-      event.button !== 0 ||
-      (this.features.has("toggle") && this.bindingHeld(this.bindings.toggle)) ||
-      (this.features.has("range") && this.bindingHeld(this.bindings.range)) ||
-      !this.isElement(event.target) ||
-      this.isExcluded(event.target)
-    ) {
-      return "continue";
-    }
-    const anchor = event.target.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR);
-    if (!anchor || anchor.isContentEditable || !root.contains(anchor)) {
-      return "continue";
-    }
-
-    const selection = this.dom.createVisibleStructuralSelection(
-      this.editor.adapter.selection.getSelectableBlockIds(),
-      blockId,
-      blockId,
-    );
-    if (selection) {
-      this.editor.adapter.selection.set(selection);
-    }
-    root.ownerDocument.getSelection()?.removeAllRanges();
-    root.focus({ preventScroll: true });
-    event.preventDefault();
-    return "handled";
-  };
-
-  /**
    * Cancels a gesture and delayed restoration without changing host coverage.
    *
    * @returns Timers, animation frames, and pointer references are released.
@@ -765,7 +707,7 @@ export class BlockPointerSelection {
   }
 
   /**
-   * Protects controls from structural click and range behavior.
+   * Protects controls and text content from structural drag and range behavior.
    *
    * @param target - Deepest native event element.
    * @returns Whether a control or editable ancestor owns normal interaction.

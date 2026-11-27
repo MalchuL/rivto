@@ -71,7 +71,7 @@ test("moves a selected group including an unmounted source from another parent",
   await page.goto("/?example=kanban&repeat=200&virtual");
   const first = "board-1-item-1-child-1";
   const last = "board-200-item-1-child-1";
-  await page.locator(`[data-block-id="${first}"] strong`).click();
+  await page.locator(`[data-block-id="${first}"] strong`).click({ modifiers: ["Control"] });
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
   const middle = await page.locator("[data-virtual-block-id]").evaluateAll((roots) => {
     const visible = roots.find((element) => {
@@ -144,7 +144,7 @@ for (const example of ["outline", "kanban"]) {
       await page.goto(`/?example=${example}&repeat=${repeat}${virtual ? "&virtual" : ""}`);
       const source = example === "outline" ? "block-2" : "board-1-item-1-child-1";
       const second = example === "outline" ? "block-3" : "board-1-item-1-child-2";
-      await page.locator(`[data-block-id="${source}"] strong`).click();
+      await page.locator(`[data-block-id="${source}"] strong`).click({ modifiers: ["Control"] });
       await page.keyboard.down("Control");
       await page.locator(`[data-block-id="${second}"] strong`).click();
       await page.keyboard.up("Control");

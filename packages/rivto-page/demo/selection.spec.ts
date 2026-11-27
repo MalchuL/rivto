@@ -62,7 +62,7 @@ test("selects structural anchors, dynamically rebinds toggle, and disables it in
   await openSelection(page);
   const first = page.locator('[data-block-id="block-1"] > .rivto-block-row strong').first();
   const second = page.locator('[data-block-id="block-2"] > .rivto-block-row strong').first();
-  await first.click();
+  await first.click({ modifiers: ["Control"] });
   await expect
     .poll(async () => (await selection(page))?.blocks)
     .toEqual([{ id: "block-1", start: 0, end: -1 }]);
@@ -81,13 +81,16 @@ test("selects structural anchors, dynamically rebinds toggle, and disables it in
   await page.keyboard.up("a");
   await expect
     .poll(async () => (await selection(page))?.blocks.map((block) => block.id))
-    .toEqual(["block-1"]);
+    .toBeUndefined();
 });
 
 test("extends structural ranges and excludes collapsed descendants", async ({ page }) => {
   await openSelection(page);
   await page.getByRole("checkbox", { name: "Collapsed block-1", exact: true }).check();
-  await page.locator('[data-block-id="block-1"] strong').first().click();
+  await page
+    .locator('[data-block-id="block-1"] strong')
+    .first()
+    .click({ modifiers: ["Control"] });
   await page.keyboard.down("Shift");
   await page.locator('[data-block-id="block-2"] strong').first().click();
   await page.keyboard.up("Shift");

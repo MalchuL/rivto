@@ -81,10 +81,10 @@ function CounterBlock({ blockId }: { blockId: string }) {
 ```
 
 Put `attributes` on the region from which whole-block pointer selection should
-begin. A plain click on its non-interactive space selects the complete block;
-dragging may extend that selection. Using an outer block-level `<div>` lets
-empty space around the compact button select the block while the button keeps
-its own action. Putting the attributes directly on an interactive control keeps
+begin. A plain click on its non-interactive space clears structural selection.
+Ctrl-click (Cmd-click on macOS) toggles the block. Using an outer block-level
+`<div>` lets a drag start in the empty space around the compact button while
+the button keeps its own action. Putting the attributes directly on an interactive control keeps
 that control's native click instead of turning the click into block selection.
 
 Both hooks provide `data-block-selection-anchor`. With `useBlockSelectionAnchor`, the
