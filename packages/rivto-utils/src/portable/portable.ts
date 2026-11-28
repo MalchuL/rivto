@@ -55,6 +55,8 @@ export function isDangerousKey(key: string): boolean {
  * @param value - Candidate value to inspect.
  * @returns True when every nested value is portable and acyclic.
  */
+export function isPortableValue(value: PortableValue): value is PortableValue;
+export function isPortableValue(value: unknown): value is PortableValue;
 export function isPortableValue(value: unknown): value is PortableValue {
   try {
     assertPortableValue(value);
@@ -74,6 +76,10 @@ export function isPortableValue(value: unknown): value is PortableValue {
  * @returns True when the value is a non-array object whose every nested value
  * is portable and acyclic.
  */
+export function isPortableRecord(
+  value: Record<string, PortableValue>,
+): value is Record<string, PortableValue>;
+export function isPortableRecord(value: unknown): value is Record<string, PortableValue>;
 export function isPortableRecord(value: unknown): value is Record<string, PortableValue> {
   return (
     typeof value === "object" && value !== null && !Array.isArray(value) && isPortableValue(value)
@@ -89,6 +95,11 @@ export function isPortableRecord(value: unknown): value is Record<string, Portab
  * @throws {TypeError} When the value is non-portable, cyclic, or uses a
  * dangerous own key.
  */
+export function assertPortableValue(
+  value: PortableValue,
+  label?: string,
+): asserts value is PortableValue;
+export function assertPortableValue(value: unknown, label?: string): asserts value is PortableValue;
 export function assertPortableValue(
   value: unknown,
   label = "value",
@@ -137,6 +148,14 @@ export function assertPortableValue(
  * @returns No value.
  * @throws {TypeError} When the value is not a portable plain record.
  */
+export function assertPortableRecord(
+  value: Record<string, PortableValue>,
+  label?: string,
+): asserts value is Record<string, PortableValue>;
+export function assertPortableRecord(
+  value: unknown,
+  label?: string,
+): asserts value is Record<string, PortableValue>;
 export function assertPortableRecord(
   value: unknown,
   label = "value",

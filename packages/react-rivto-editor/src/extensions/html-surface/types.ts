@@ -8,6 +8,7 @@
  * @module
  */
 import type { EditorMode } from "@chulane/rivto";
+import type { PortableValue } from "@chulane/rivto-utils";
 
 /**
  * Presentation of the block or element showing a widget.
@@ -115,9 +116,9 @@ export type HtmlNodeData = Omit<HtmlBlockView, "context"> | Omit<HtmlElementView
  */
 export type HtmlWidgetCommand =
   | { readonly kind: "pointerdown"; readonly primary: boolean }
-  | { readonly kind: "set-prop"; readonly key: string; readonly value: unknown }
-  | { readonly kind: "set-props"; readonly props: Record<string, unknown> }
-  | { readonly kind: "set-list-props"; readonly listProps: Record<string, unknown> }
+  | { readonly kind: "set-prop"; readonly key: string; readonly value: PortableValue }
+  | { readonly kind: "set-props"; readonly props: Record<string, PortableValue> }
+  | { readonly kind: "set-list-props"; readonly listProps: Record<string, PortableValue> }
   | { readonly kind: "set-content"; readonly content: string };
 
 /**

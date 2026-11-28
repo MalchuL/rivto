@@ -4,7 +4,10 @@
  *
  * @module
  */
-import { isDangerousKey, isPortableValue } from "@chulane/rivto-utils";
+import { isDangerousKey, isPortableValue, type PortableValue } from "@chulane/rivto-utils";
+
+/** Expected merged props, including optional keys being removed by a patch. */
+type HtmlElementProps = Record<string, PortableValue | undefined> & { readonly html: string };
 
 /**
  * Validates the merged property bag of an HTML canvas element.
@@ -18,6 +21,8 @@ import { isDangerousKey, isPortableValue } from "@chulane/rivto-utils";
  * @returns The same property record when it is valid.
  * @throws If `html` is missing or any property is not portable data.
  */
+export function validateHtmlElementProps<Props extends HtmlElementProps>(props: Props): Props;
+export function validateHtmlElementProps(props: Record<string, unknown>): Record<string, unknown>;
 export function validateHtmlElementProps(props: Record<string, unknown>): Record<string, unknown> {
   if (typeof props.html !== "string") {
     throw new Error("HTML element requires an html string");

@@ -21,6 +21,9 @@ interface TextSelectionReport {
   readonly y: number;
 }
 
+/** Expected report fields sent over the iframe port, including its selection key. */
+type TextSelectionReportInput = TextSelectionReport & { readonly selectionKey: string };
+
 /** The relay for one iframe and one connected page. */
 export interface IframeTextSelectionRelay {
   /**
@@ -29,7 +32,7 @@ export interface IframeTextSelectionRelay {
    * @param data - Raw port message.
    * @returns True for any message with a `selectionKey` field, valid or not.
    */
-  isReport(data: unknown): boolean;
+  isReport(data: unknown): data is { readonly selectionKey: unknown };
   /**
    * Validates a report and passes it to Page in editor coordinates.
    *
@@ -37,7 +40,10 @@ export interface IframeTextSelectionRelay {
    * @returns True when Page turned the drag into a block selection, in which case
    * the widget should clear its own text highlight.
    */
-  relay(data: unknown): boolean;
+  relay: {
+    (data: TextSelectionReportInput): boolean;
+    (data: unknown): boolean;
+  };
 }
 
 /**
@@ -163,6 +169,8 @@ function createLazyOriginMarker(frame: HTMLIFrameElement) {
  * @param key - The secret the report must carry.
  * @returns The report, or undefined when the key is wrong or any field is malformed.
  */
+function parseReport(data: TextSelectionReportInput, key: string): TextSelectionReport | undefined;
+function parseReport(data: unknown, key: string): TextSelectionReport | undefined;
 function parseReport(data: unknown, key: string): TextSelectionReport | undefined {
   if (!data || typeof data !== "object") {
     return undefined;

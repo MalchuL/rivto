@@ -33,8 +33,19 @@ export interface UnsafeHtmlRequest {
   /** Requested operation name; unsupported names produce a null result. */
   readonly method: string;
   /** Untrusted operation arguments, validated per method. */
-  readonly args: unknown[];
+  readonly args: readonly unknown[];
 }
+
+/** Expected request fields for each operation exposed by the widget proxy. */
+export type UnsafeHtmlRequestInput = Pick<UnsafeHtmlRequest, "id" | "target"> &
+  (
+    | { readonly method: "getRootIds"; readonly args: readonly [] }
+    | {
+        readonly method: "getParentId" | "getChildIds" | "getBlockNode";
+        readonly args: readonly [blockId: string];
+      }
+    | { readonly method: "setContent"; readonly args: readonly [blockId: string, content: string] }
+  );
 
 /** Host-controlled capabilities for one mounted Unsafe HTML occurrence. */
 export interface UnsafeHtmlFrameAccess {
@@ -58,12 +69,20 @@ export interface UnsafeHtmlFrameAccess {
   readonly onDenied: () => void;
 }
 
+/** Detached block data, a completed write, or a missing or refused operation. */
+type UnsafeHtmlOperationResult =
+  | readonly string[]
+  | string
+  | NonNullable<ReturnType<UnsafeHtmlBlocks["getBlockNode"]>>
+  | true
+  | null;
+
 /** Reply delivered to the widget's pending promise. */
 export interface UnsafeHtmlResult {
   /** ID of the request being answered. */
   readonly id: number;
   /** Detached result of the operation; null when refused, failed or invalid. */
-  readonly value: unknown;
+  readonly value: UnsafeHtmlOperationResult;
   /** Why the request failed or was refused; absent on success. */
   readonly error?: string;
 }
@@ -74,6 +93,10 @@ export interface UnsafeHtmlResult {
  * @param value - Message received on the authenticated port.
  * @returns A request with well-typed fields, or undefined for malformed input.
  */
+export function parseUnsafeHtmlRequest(
+  value: UnsafeHtmlRequestInput,
+): UnsafeHtmlRequest | undefined;
+export function parseUnsafeHtmlRequest(value: unknown): UnsafeHtmlRequest | undefined;
 export function parseUnsafeHtmlRequest(value: unknown): UnsafeHtmlRequest | undefined {
   if (!value || typeof value !== "object") {
     return undefined;
@@ -101,8 +124,16 @@ export function parseUnsafeHtmlRequest(value: unknown): UnsafeHtmlRequest | unde
  */
 export function executeUnsafeHtmlRequest(
   blocks: UnsafeHtmlBlocks,
+  request: UnsafeHtmlRequestInput,
+): UnsafeHtmlOperationResult;
+export function executeUnsafeHtmlRequest(
+  blocks: UnsafeHtmlBlocks,
   request: UnsafeHtmlRequest,
-): unknown {
+): UnsafeHtmlOperationResult;
+export function executeUnsafeHtmlRequest(
+  blocks: UnsafeHtmlBlocks,
+  request: UnsafeHtmlRequest,
+): UnsafeHtmlOperationResult {
   const { method, args } = request;
   if (method === "getRootIds" && args.length === 0) {
     return blocks.getRootIds();

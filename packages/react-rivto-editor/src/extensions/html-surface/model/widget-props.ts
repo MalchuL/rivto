@@ -3,7 +3,7 @@
  *
  * @module
  */
-import { isPortableRecord } from "@chulane/rivto-utils";
+import { isPortableRecord, type PortableValue } from "@chulane/rivto-utils";
 
 /**
  * Formats widget props as JSON for the source editor, leaving out keys managed elsewhere.
@@ -27,7 +27,7 @@ export function formatWidgetProps(
  * @returns The parsed object.
  * @throws If the text is not valid JSON or is not an object of portable values.
  */
-export function parseWidgetProps(text: string): Record<string, unknown> {
+export function parseWidgetProps(text: string): Record<string, PortableValue> {
   const parsed = JSON.parse(text.trim() ? text : "{}") as unknown;
   if (!isPortableRecord(parsed)) {
     throw new Error("Props must be a JSON object");
@@ -74,6 +74,8 @@ export function changedPropPatch(
  * @param b - Second value.
  * @returns Whether both represent the same JSON value.
  */
+function sameJsonValue(a: PortableValue, b: PortableValue): boolean;
+function sameJsonValue(a: unknown, b: unknown): boolean;
 function sameJsonValue(a: unknown, b: unknown): boolean {
   if (a === b) {
     return true;

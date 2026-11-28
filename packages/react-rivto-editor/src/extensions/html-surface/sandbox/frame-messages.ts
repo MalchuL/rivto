@@ -18,6 +18,7 @@ import type {
 import {
   parseUnsafeHtmlRequest,
   type UnsafeHtmlRequest,
+  type UnsafeHtmlRequestInput,
   type UnsafeHtmlResult,
 } from "../unsafe/unsafe-requests";
 
@@ -41,6 +42,24 @@ export type HtmlFrameMessage =
     }
   | { readonly kind: "unsafe-request"; readonly request: UnsafeHtmlRequest }
   | { readonly kind: "unsafe-denied" };
+
+/**
+ * Expected fields of a bridge message before the editor validates it.
+ *
+ * Unsafe requests carry their fields alongside `kind`. Region reports may
+ * include empty rectangles, which the parser drops after clipping.
+ */
+type HtmlFrameMessageInput = {
+  readonly namespace: typeof HTML_IFRAME_MESSAGE_NAMESPACE;
+  readonly token: string;
+} & (
+  | Exclude<HtmlFrameMessage, { kind: "editor-pointer-regions" | "unsafe-request" }>
+  | {
+      readonly kind: "editor-pointer-regions";
+      readonly regions: readonly HtmlEditorPointerRegion[];
+    }
+  | ({ readonly kind: "unsafe-request" } & UnsafeHtmlRequestInput)
+);
 
 /**
  * Every message the editor sends to a widget page.
@@ -80,6 +99,16 @@ export function postHostMessage(port: MessagePort, token: string, message: HtmlH
  * @returns The validated message, or undefined.
  */
 export function parseFrameMessage(
+  data: HtmlFrameMessageInput,
+  token: string,
+  maxEditorPointerRegions: number,
+): HtmlFrameMessage | undefined;
+export function parseFrameMessage(
+  data: unknown,
+  token: string,
+  maxEditorPointerRegions: number,
+): HtmlFrameMessage | undefined;
+export function parseFrameMessage(
   data: unknown,
   token: string,
   maxEditorPointerRegions: number,
@@ -116,6 +145,8 @@ export function parseFrameMessage(
  * @param message - Message that already matched this document's envelope.
  * @returns The command, or undefined for an unknown kind or invalid payload.
  */
+function parseWidgetCommand(message: HtmlWidgetCommand): HtmlWidgetCommand | undefined;
+function parseWidgetCommand(message: Record<string, unknown>): HtmlWidgetCommand | undefined;
 function parseWidgetCommand(message: Record<string, unknown>): HtmlWidgetCommand | undefined {
   switch (message.kind) {
     case "pointerdown":
@@ -154,6 +185,14 @@ function parseWidgetCommand(message: Record<string, unknown>): HtmlWidgetCommand
  * long or any entry is malformed.
  */
 function parseEditorPointerRegions(
+  value: readonly HtmlEditorPointerRegion[],
+  maxEditorPointerRegions: number,
+): HtmlFrameMessage | undefined;
+function parseEditorPointerRegions(
+  value: unknown,
+  maxEditorPointerRegions: number,
+): HtmlFrameMessage | undefined;
+function parseEditorPointerRegions(
   value: unknown,
   maxEditorPointerRegions: number,
 ): HtmlFrameMessage | undefined {
@@ -179,6 +218,8 @@ function parseEditorPointerRegions(
  * @param item - Candidate `{x, y, width, height}` record.
  * @returns The clipped region, null when it is empty after clipping, or undefined when malformed.
  */
+function parseRegion(item: HtmlEditorPointerRegion): HtmlEditorPointerRegion | null | undefined;
+function parseRegion(item: unknown): HtmlEditorPointerRegion | null | undefined;
 function parseRegion(item: unknown): HtmlEditorPointerRegion | null | undefined {
   if (!item || typeof item !== "object") {
     return undefined;
