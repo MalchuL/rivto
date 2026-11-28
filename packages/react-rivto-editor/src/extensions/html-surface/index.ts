@@ -7,3 +7,4 @@ export {
   type HtmlSurfaceOptions,
 } from "./options";
 export type { HtmlBlockView, HtmlElementView, HtmlNodeView, HtmlWidgetContext } from "./types";
+export * from "./unsafe/permissions";

@@ -7,8 +7,8 @@
  *
  * @module
  */
+import { isDangerousKey, isPortableRecord, isPortableValue } from "@chulane/rivto-utils";
 import { HTML_IFRAME_MESSAGE_NAMESPACE } from "../constants";
-import { isJsonRecord, isJsonValue, isWritableKey } from "../model/json-value";
 import type {
   HtmlEditorPointerRegion,
   HtmlNodeView,
@@ -124,14 +124,16 @@ function parseWidgetCommand(message: Record<string, unknown>): HtmlWidgetCommand
         : undefined;
     case "set-prop":
       return typeof message.key === "string" &&
-        isWritableKey(message.key) &&
-        isJsonValue(message.value)
+        isWidgetPropKey(message.key) &&
+        isPortableValue(message.value)
         ? { kind: "set-prop", key: message.key, value: message.value }
         : undefined;
     case "set-props":
-      return isJsonRecord(message.props) ? { kind: "set-props", props: message.props } : undefined;
+      return isPortableRecord(message.props)
+        ? { kind: "set-props", props: message.props }
+        : undefined;
     case "set-list-props":
-      return isJsonRecord(message.listProps)
+      return isPortableRecord(message.listProps)
         ? { kind: "set-list-props", listProps: message.listProps }
         : undefined;
     case "set-content":
@@ -200,4 +202,15 @@ function parseRegion(item: unknown): HtmlEditorPointerRegion | null | undefined 
     return null;
   }
   return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/**
+ * Reports whether a widget may write a property with this name.
+ *
+ * @param key - Property name from a `set-prop` message.
+ * @returns True for a nonempty name that is not `__proto__`, `constructor` or
+ * `prototype`, which could pollute an object's prototype chain.
+ */
+function isWidgetPropKey(key: string): boolean {
+  return key.length > 0 && !isDangerousKey(key);
 }

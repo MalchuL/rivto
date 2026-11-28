@@ -3,7 +3,7 @@
  *
  * @module
  */
-import { isJsonRecord } from "./json-value";
+import { isPortableRecord } from "@chulane/rivto-utils";
 
 /**
  * Reads the visible name stored on a widget, falling back when it is blank.
@@ -44,7 +44,7 @@ export function formatWidgetProps(
  */
 export function parseWidgetProps(text: string): Record<string, unknown> {
   const parsed = JSON.parse(text.trim() ? text : "{}") as unknown;
-  if (!isJsonRecord(parsed)) {
+  if (!isPortableRecord(parsed)) {
     throw new Error("Props must be a JSON object");
   }
   return parsed;

@@ -19,7 +19,8 @@ also read [rivto-blocks](../rivto-blocks/SKILL.md),
   - `extension.tsx` registers both blocks, the element, slots, context-menu
     conversions, slash commands and the creation tool; `index.ts` is the public surface.
   - `constants.ts` and `types.ts` hold persisted type IDs, node views, widget commands and drafts.
-  - `model/` validates widget JSON and diffs edit-form props (pure functions).
+  - `model/` converts and diffs edit-form props (pure functions). Portable-value
+    checks come from `@chulane/rivto-utils`; do not add a local copy of them.
   - `sandbox/` owns everything that crosses into the iframe: `compose-src-doc.ts`
     assembles the srcdoc, `frame-messages.ts` types and parses messages in both
     directions, and `runtime/` holds the iframe-side script fragments (bridge API,
@@ -117,7 +118,7 @@ whole-item selection. The HTML renderers build it with `useHtmlWidgetContext` fr
 the selection and preview they already own. Consult the HTML surface
 documentation for the supported methods and missing-value behavior.
 
-For `unsafe-html`, retain host-controlled, occurrence-local and source-specific
+For `unsafe-html`, retain host-controlled, document- and block-scoped, source-specific individual
 opt-in, disabled by default. `rivto.panel` and `rivto.reactEditor` are `null`
 when disabled; when enabled they expose bounded asynchronous operations, not live
 objects. Recheck the current grant and source on each request, keep panel-local

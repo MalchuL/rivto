@@ -1,5 +1,4 @@
 import { HTML_IFRAME_MESSAGE_NAMESPACE } from "../../constants";
-import { isJsonValue } from "../../model/json-value";
 import { parseWidgetProps } from "../../model/widget-props";
 import { DEFAULT_HTML_SURFACE_LIMITS } from "../../options";
 import { parseFrameMessage } from "../frame-messages";
@@ -18,7 +17,6 @@ function parse(data: unknown, token: string) {
 test("rejects unsafe or non-JSON values in sandbox messages and edited props", () => {
   const cyclic: { self?: unknown } = {};
   cyclic.self = cyclic;
-  expect(isJsonValue(cyclic)).toBe(false);
   expect(() => parseWidgetProps('{"nested":{"constructor":1}}')).toThrow();
   expect(
     parse(
@@ -46,7 +44,6 @@ test("rejects unsafe or non-JSON values in sandbox messages and edited props", (
 
 test("rejects structured-clone objects that are not JSON records", () => {
   for (const value of [new Date(), new Map(), new Set(), new Uint8Array([1])]) {
-    expect(isJsonValue(value)).toBe(false);
     expect(
       parse(
         {

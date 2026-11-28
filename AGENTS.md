@@ -77,6 +77,10 @@ the final implementation change:
 
 ## Style and Reviews
 
+Before refactoring, renaming, adding a helper or constant, or reviewing code,
+read [rivto-refactoring](.agents/skills/rivto-refactoring/SKILL.md) and follow
+its review checklist.
+
 Use ES modules and nearby formatting. Use `PascalCase` for types/components, `camelCase` for functions/values, and kebab-case directories. Prefer existing managers and narrow types.
 
 Keep one field per manager in a controller. A lifecycle owner may use the concrete implementation type to create, attach, and destroy its manager. Consumers must depend on the smallest interface covering their actual operations; receiving a manager does not imply ownership of its lifecycle. Do not keep duplicate references merely to expose a narrow API, such as `events`/`eventManager` or `extensions`/`registrations`. Define the narrow editor interface at the consumer boundary: components, hooks, and extension setup receive manager interfaces that exclude internal attachment and teardown methods. Pass the existing controller object through that interface; do not replace duplicate fields with wrapper objects, type casts, forwarding methods, or duplicate getters. The host retains the concrete controller and owns its lifecycle. Interface narrowing is a TypeScript contract, not runtime access control.

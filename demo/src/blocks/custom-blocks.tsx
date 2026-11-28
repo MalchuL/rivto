@@ -35,6 +35,7 @@ import {
   counterBlockDefinition,
   sliderBlockDefinition,
 } from "./custom-block-definitions";
+import { createDemoHtmlPermissions } from "../extensions/html-surface/document-permissions";
 import { hostBlockExtensions } from "../extensions/host-blocks";
 
 interface SliderProps {
@@ -252,5 +253,5 @@ export const customBlockExtensions: readonly ReactEditorExtension[] = [
     },
   }),
   ...hostBlockExtensions,
-  htmlSurfaceExtension(),
+  htmlSurfaceExtension({ permissions: createDemoHtmlPermissions }),
 ];

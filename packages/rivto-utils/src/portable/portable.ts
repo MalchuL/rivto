@@ -1,10 +1,13 @@
 /**
- * Shared import-boundary rules for portable collaborative values and stable IDs.
+ * Shared rules for portable values: data that can round-trip through
+ * collaborative storage, clipboard and snapshots without corruption.
  *
- * Snapshot, clipboard, and create/load paths must reject values that cannot
- * round-trip through CRDT storage without corruption. Callers validate first,
- * then clone. This module is the single definition of those rules so block
- * props, plugin data, and element props cannot drift apart.
+ * Snapshot, clipboard, create/load and widget-message boundaries must reject
+ * values that cannot be stored unchanged. Callers validate first, then clone.
+ * This module is the single definition of those rules so block props, plugin
+ * data, element props and widget writes cannot drift apart.
+ *
+ * @module
  */
 
 /** Own keys that prototype pollution or constructor confusion can smuggle. */
@@ -18,25 +21,6 @@ const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
  */
 export type PortableValue =
   number | string | boolean | null | PortableValue[] | { readonly [key: string]: PortableValue };
-
-/**
- * Rejects empty and whitespace-only identifiers at create/load boundaries.
- *
- * Accepted IDs are returned exactly as supplied so stable identities are never
- * rewritten. Leading or trailing whitespace on an otherwise nonempty ID is
- * preserved; only strings that are empty after trim are rejected.
- *
- * @param id - Candidate identifier supplied by a caller or snapshot.
- * @param kind - Noun used in the error, such as `Block` or `Link`.
- * @returns The original identifier when it is nonempty.
- * @throws {Error} When the value is not a nonempty string.
- */
-export function requireNonemptyId(id: unknown, kind: string): string {
-  if (typeof id !== "string" || id.trim() === "") {
-    throw new Error(`${kind} ID is required`);
-  }
-  return id;
-}
 
 /**
  * Reports whether a value is a plain record from this or a foreign realm.
@@ -78,6 +62,22 @@ export function isPortableValue(value: unknown): value is PortableValue {
   } catch {
     return false;
   }
+}
+
+/**
+ * Narrows an unknown value to a portable plain record.
+ *
+ * The boolean counterpart of {@link assertPortableRecord}, for boundaries that
+ * drop invalid input instead of throwing, such as messages from a sandbox.
+ *
+ * @param value - Candidate value to inspect.
+ * @returns True when the value is a non-array object whose every nested value
+ * is portable and acyclic.
+ */
+export function isPortableRecord(value: unknown): value is Record<string, PortableValue> {
+  return (
+    typeof value === "object" && value !== null && !Array.isArray(value) && isPortableValue(value)
+  );
 }
 
 /**

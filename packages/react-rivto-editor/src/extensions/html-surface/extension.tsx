@@ -13,13 +13,14 @@ import { HtmlBlock, HtmlBlockEditSlot } from "./block/html-block";
 import { HTML_BLOCK_TYPE, HTML_ELEMENT_TYPE, UNSAFE_HTML_BLOCK_TYPE } from "./constants";
 import { createHtmlEditingStore, type HtmlEditingStore } from "./editing/use-html-editing";
 import { HtmlElement, HtmlElementEditSlot } from "./element/html-element";
+import { validateHtmlElementProps } from "./element/html-element-props";
 import { HTML_STARTER } from "./html-starter";
-import { validateHtmlElementProps } from "./model/json-value";
 import {
   resolveHtmlSurfaceLimits,
   type HtmlSurfaceLimits,
   type HtmlSurfaceOptions,
 } from "./options";
+import { createLocalHtmlPermissions, type HtmlPermissions } from "./unsafe/permissions";
 import { UnsafeHtmlBlock } from "./unsafe/unsafe-html-block";
 
 /** Registries borrowed while installing the extension. */
@@ -82,30 +83,40 @@ export function htmlSurfaceExtension(options: HtmlSurfaceOptions = {}): ReactEdi
         editingStore: createHtmlEditingStore(),
         limits,
       };
-      const disposers = [
-        registerHtmlBlock(editor, installation),
-        registerUnsafeHtmlBlock(editor, installation),
-        registerConversion(
-          editor,
-          HTML_BLOCK_TYPE,
-          UNSAFE_HTML_BLOCK_TYPE,
-          "Convert to unsafe HTML",
-          TriangleAlertIcon,
-        ),
-        registerConversion(
-          editor,
-          UNSAFE_HTML_BLOCK_TYPE,
-          HTML_BLOCK_TYPE,
-          "Convert to safe HTML",
-          CodeXmlIcon,
-        ),
-        registerHtmlElement(editor, installation),
-      ];
-      return () => {
-        for (const dispose of disposers.reverse()) {
+      const permissions = (options.permissions ?? createLocalHtmlPermissions)(editor.getDocument());
+      const disposers = [() => permissions.dispose()];
+      const cleanup = () => {
+        for (const dispose of disposers.splice(0).reverse()) {
           dispose();
         }
       };
+      try {
+        disposers.push(registerHtmlBlock(editor, installation));
+        disposers.push(registerUnsafeHtmlBlock(editor, installation, permissions));
+        disposers.push(
+          registerConversion(
+            editor,
+            HTML_BLOCK_TYPE,
+            UNSAFE_HTML_BLOCK_TYPE,
+            "Convert to unsafe HTML",
+            TriangleAlertIcon,
+          ),
+        );
+        disposers.push(
+          registerConversion(
+            editor,
+            UNSAFE_HTML_BLOCK_TYPE,
+            HTML_BLOCK_TYPE,
+            "Convert to safe HTML",
+            CodeXmlIcon,
+          ),
+        );
+        disposers.push(registerHtmlElement(editor, installation));
+      } catch (error) {
+        cleanup();
+        throw error;
+      }
+      return cleanup;
     },
   };
 }
@@ -146,11 +157,13 @@ function registerHtmlBlock(editor: HtmlSurfaceRegistries, installation: HtmlSurf
  *
  * @param editor - Registries to install into.
  * @param installation - Supplies the limits; unsafe editing state is local to each occurrence.
+ * @param permissions - Policy shared by all occurrences in this installation.
  * @returns Disposer that removes the registration.
  */
 function registerUnsafeHtmlBlock(
   editor: HtmlSurfaceRegistries,
   installation: HtmlSurfaceInstallation,
+  permissions: Pick<HtmlPermissions, "read" | "write" | "subscribe">,
 ): () => void {
   return editor.blockTypes.register({
     definition: {
@@ -159,7 +172,7 @@ function registerUnsafeHtmlBlock(
       defaultProps: { label: "Unsafe HTML" },
     },
     render: (props: BlockRendererProps) => (
-      <UnsafeHtmlBlock {...props} limits={installation.limits} />
+      <UnsafeHtmlBlock permissions={permissions} {...props} limits={installation.limits} />
     ),
     slashCommand: {
       title: "Unsafe HTML",
@@ -174,7 +187,7 @@ function registerUnsafeHtmlBlock(
  * Registers a block context menu item that changes selected blocks from one HTML type to another.
  *
  * Converting does not carry over any access grant; grants belong to the
- * mounted Unsafe HTML occurrence.
+ * approved unsafe type and exact source.
  *
  * @param editor - Registries to install into.
  * @param from - Type every selected block must have for the item to show.

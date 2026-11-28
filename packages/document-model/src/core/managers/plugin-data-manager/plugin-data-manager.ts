@@ -5,13 +5,8 @@
  */
 import type { CRDTType, CRDTDoc, CRDTMap, CRDTUndoScope } from "@chulane/crdt-doc";
 import type { DocumentPluginDataManagerApi } from "../../types";
-import {
-  assignMap,
-  assertPortableRecord,
-  assertPortableValue,
-  clone,
-  isCRDTMap,
-} from "../../utils";
+import { assertPortableRecord, assertPortableValue } from "@chulane/rivto-utils";
+import { assignMap, clone, isCRDTMap } from "../../utils";
 
 const PLUGINS_KEY = "rivto.editor.plugins";
 /**

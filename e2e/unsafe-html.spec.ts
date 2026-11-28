@@ -409,3 +409,113 @@ test("draft preview has no editor access even for an approved widget", async ({ 
     }),
   ).toEqual([true, false, false]);
 });
+
+for (const repeat of [0, 200]) {
+  test(`unsafe HTML permissions survive mode changes and the document override, repeat=${repeat}`, async ({
+    page,
+  }) => {
+    await page.goto(`/?repeat=${repeat}`);
+    const approved = page.locator('[data-html-label="Unsafe panel example"]');
+    const other = page.locator('[data-html-label="Unsafe editor example"]');
+    const toggle = page.getByRole("checkbox", { name: "Allow editor access for all unsafe HTML" });
+    await setAccess(approved, true);
+    await page.locator('[data-editor-mode="edgeless"]').click();
+    await panToHtmlCard(page.locator(".edgeless-viewport"));
+    await expect(
+      approved.getByRole("button", { name: "Edit Unsafe HTML" }),
+    ).toHaveAccessibleDescription("Editor access is enabled for this HTML.");
+    await page.locator('[data-editor-mode="block"]').click();
+    const enabled = "Editor access is enabled for this HTML.";
+    await expect(
+      approved.getByRole("button", { name: "Edit Unsafe HTML" }),
+    ).toHaveAccessibleDescription(enabled);
+    await toggle.check();
+    await expect(
+      other.getByRole("button", { name: "Edit Unsafe HTML" }),
+    ).toHaveAccessibleDescription(enabled);
+    await other.getByRole("button", { name: "Edit Unsafe HTML" }).click();
+    await expect(other.getByText("Editor access is allowed for this document.")).toBeVisible();
+    await other.getByRole("button", { name: "Done" }).click();
+    await toggle.uncheck();
+    await expect(
+      other.getByRole("button", { name: "Edit Unsafe HTML" }),
+    ).not.toHaveAccessibleDescription(enabled);
+    await expect(
+      approved.getByRole("button", { name: "Edit Unsafe HTML" }),
+    ).toHaveAccessibleDescription(enabled);
+  });
+}
+
+/**
+ * Restores the same persisted unsafe block into a freshly seeded demo document.
+ *
+ * @param page - Browser tab with a loaded demo editor.
+ * @returns The editor button for the restored block.
+ */
+async function restoreUnsafeBlock(page: Page) {
+  await page.waitForFunction(() => Boolean((window as unknown as DemoWindow).__rivtoDemo?.editor));
+  await page.evaluate(() => {
+    (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.insertBlock({
+      id: "persistent-unsafe-example",
+      type: "unsafe-html",
+      content: "<p>Original</p>",
+      props: { label: "Persistent HTML" },
+    });
+  });
+  return page.locator('[data-html-label="Persistent HTML"]');
+}
+
+test("individual permissions survive reload, synchronize tabs and stay revoked after Undo", async ({
+  page,
+  context,
+}) => {
+  await page.goto("/");
+  await setAccess(await restoreUnsafeBlock(page), true);
+  await page.reload();
+  const host = await restoreUnsafeBlock(page);
+  const edit = host.getByRole("button", { name: "Edit Unsafe HTML" });
+  const enabled = "Editor access is enabled for this HTML.";
+  await expect(edit).toHaveAccessibleDescription(enabled);
+  const peer = await context.newPage();
+  await peer.goto("/");
+  const other = await restoreUnsafeBlock(peer);
+  await expect(other.getByRole("button", { name: "Edit Unsafe HTML" })).toHaveAccessibleDescription(
+    enabled,
+  );
+  await setAccess(other, false);
+  await expect(edit).not.toHaveAccessibleDescription(enabled);
+  await setAccess(host, true);
+  await page.evaluate(() => {
+    const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
+    editor.blocks.updateBlock("persistent-unsafe-example", { content: "<p>Changed</p>" });
+    editor.history.undo();
+  });
+  await expect(edit).not.toHaveAccessibleDescription(enabled);
+  await expect(
+    other.getByRole("button", { name: "Edit Unsafe HTML" }),
+  ).not.toHaveAccessibleDescription(enabled);
+});
+
+test("document override survives reload and covers new and edited unsafe HTML", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const toggle = page.getByRole("checkbox", { name: "Allow editor access for all unsafe HTML" });
+  await toggle.check();
+  await page.reload();
+  await expect(toggle).toBeChecked();
+  const host = await restoreUnsafeBlock(page);
+  const enabled = "Editor access is enabled for this HTML.";
+  const button = host.getByRole("button", { name: "Edit Unsafe HTML" });
+  await expect(button).toHaveAccessibleDescription(enabled);
+  await page.evaluate(() =>
+    (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.updateBlock(
+      "persistent-unsafe-example",
+      { content: "<p>Updated</p>" },
+    ),
+  );
+  await expect(host.locator("iframe").contentFrame().locator("p")).toHaveText("Updated");
+  await expect(button).toHaveAccessibleDescription(enabled);
+  await toggle.uncheck();
+  await expect(button).not.toHaveAccessibleDescription(enabled);
+});

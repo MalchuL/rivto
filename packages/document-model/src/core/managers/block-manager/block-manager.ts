@@ -31,11 +31,10 @@ import type {
   IDPlugin,
   IDProp,
 } from "../../types/storage";
+import { assertPortableRecord, assertPortableValue } from "@chulane/rivto-utils";
 import {
   assignMap,
   assignText,
-  assertPortableRecord,
-  assertPortableValue,
   clone,
   isCRDTArray,
   isCRDTMap,

@@ -120,9 +120,21 @@ Each mounted panel owns its source-editing session. Inline and expanded fields s
 The extension also registers `unsafe-html`, exported as `UNSAFE_HTML_BLOCK_TYPE`.
 Its scripts run in the same separate-origin sandbox as ordinary HTML. The block's
 edit UI includes **Allow this HTML to read and modify editor blocks**, disabled by
-default. Saving with that option enabled grants access only to that mounted
-occurrence and source. Changing the source or unmounting the occurrence revokes
-it; the decision is not persisted or controlled by widget props. The yellow edit button at the widget’s upper right expands
+default. Saving approves this exact HTML for this document and block in browser
+localStorage. Page and Edgeless share the decision. Source changes, conversion
+and deletion revoke individual approval, including across undo while the document
+is open. Copies have their own IDs and require their own approval.
+
+Applications can supply `htmlSurfaceExtension({ permissions(document) { … } })`.
+Each installation owns the returned provider and calls its `dispose` on teardown.
+Its synchronous `read` checks the block ID, source and named capability
+(`editorAccess`), `write` saves individual decisions, and `subscribe` signals
+policy changes. The default storage format is private. The demo composes
+`createLocalHtmlPermissions(document)` with a per-document toggle: while enabled,
+all unsafe blocks including new or edited source receive editor access. Turning
+it off restores individual approvals. The sandbox cannot write either policy.
+
+The yellow edit button at the widget’s upper right expands
 to show the access warning after a denied request. While access is enabled,
 the button shows a compact green code icon and announces the enabled state to assistive technology.
 

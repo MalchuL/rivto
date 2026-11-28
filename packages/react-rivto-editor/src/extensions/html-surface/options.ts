@@ -4,8 +4,17 @@
  * @module
  */
 
+import type { HtmlPermissionDocument, HtmlPermissions } from "./unsafe/permissions";
+
 /** Options accepted by `htmlSurfaceExtension`. Omitted fields use {@link DEFAULT_HTML_SURFACE_LIMITS}. */
 export interface HtmlSurfaceOptions {
+  /**
+   * Creates the host permission policy once per document installation.
+   *
+   * @param document - Document identity and scoped block observation.
+   * @returns A provider disposed by the extension. Defaults to browser localStorage.
+   */
+  readonly permissions?: (document: HtmlPermissionDocument) => HtmlPermissions;
   /** Quiet time after the last draft edit before refreshing Preview, in milliseconds. Defaults to 400. */
   readonly previewDelayMs?: number;
   /**
@@ -30,7 +39,7 @@ export interface HtmlSurfaceOptions {
 }
 
 /** Fully resolved limits shared by every occurrence of one installation. */
-export type HtmlSurfaceLimits = Required<HtmlSurfaceOptions>;
+export type HtmlSurfaceLimits = Required<Omit<HtmlSurfaceOptions, "permissions">>;
 
 /** Props through which a registration hands its installation's limits to a renderer. */
 export interface HtmlSurfaceLimitsProps {
