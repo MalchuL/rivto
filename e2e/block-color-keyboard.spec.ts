@@ -25,6 +25,8 @@ test("menu arrows skip background controls while Tab reaches them", async ({ pag
     );
   }
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Theme default" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "No color", exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("Custom background color")).toBeFocused();

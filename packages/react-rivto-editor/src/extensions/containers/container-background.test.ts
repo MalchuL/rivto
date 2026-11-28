@@ -4,18 +4,8 @@ import { todoItemExtension } from "../todo-item/todo-item";
 import { bentoExtension } from "./bento/bento";
 import { kanbanExtension } from "./kanban/kanban";
 
-it("removes the background processor when container registration fails", async () => {
-  const editor = await createTestCoreEditor();
-  editor.blockRegistry.defineBlock({ type: "bento" });
-  const panel = createTestReactEditor({ editor });
-  expect(() => panel.editor.extensions.install(bentoExtension())).toThrow();
-  expect(editor.blocks.insertBlock({ type: "bento" }).listProps.style).toBeUndefined();
-  panel.editor.destroy();
-  editor.destroy();
-});
-
 it.each(["bento", "kanban", "todo-storage"])(
-  "initializes %s theme on creation and conversion while preserving chosen colors",
+  "leaves %s background unset on creation and conversion while preserving chosen colors",
   async (type) => {
     const editor = await createTestCoreEditor({ registerWritingBlock: false });
     const panel = createTestReactEditor({
@@ -36,7 +26,7 @@ it.each(["bento", "kanban", "todo-storage"])(
       background: { color: "#123456" },
     });
     const created = editor.blocks.insertBlock({ type });
-    expect(created.listProps.style).toEqual({ background: { color: "#eceef6" } });
+    expect(created.listProps.style).toBeUndefined();
     const transparent = editor.blocks.insertBlock({
       type,
       listProps: { style: { text: { color: "#ff0000" }, background: { color: "#00000000" } } },
@@ -53,7 +43,6 @@ it.each(["bento", "kanban", "todo-storage"])(
     editor.blocks.setBlockType(source.id, type);
     expect(editor.blocks.getBlockNode(source.id)?.listProps.style).toEqual({
       text: { color: "#0000ff" },
-      background: { color: "#eceef6" },
     });
     editor.history.undo();
     expect(editor.blocks.getBlockNode(source.id)?.listProps.style).toEqual({
@@ -62,7 +51,6 @@ it.each(["bento", "kanban", "todo-storage"])(
     editor.history.redo();
     expect(editor.blocks.getBlockNode(source.id)?.listProps.style).toEqual({
       text: { color: "#0000ff" },
-      background: { color: "#eceef6" },
     });
     const custom = editor.blocks.insertBlock({
       type: "paragraph",

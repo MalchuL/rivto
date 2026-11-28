@@ -64,7 +64,7 @@ it("projects ordinary and container backgrounds without the background menu exte
   const container = core.blocks.insertBlock({ type: "bento" });
   const blocks = new PageBlocks(panel, panel.editor.blockBehaviors);
   expect(blocks.getBlockNode(paragraph.id)?.style?.background?.color).toBe("#ff000080");
-  expect(blocks.getBlockNode(container.id)?.style?.background?.color).toBe("#eceef6");
+  expect(blocks.getBlockNode(container.id)?.style?.background?.color).toBeUndefined();
   panel.editor.destroy();
   core.destroy();
 });

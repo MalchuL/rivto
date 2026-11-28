@@ -1,4 +1,3 @@
-import { createContainerBackgroundProcessor } from "../../../blocks/style/background-color";
 /**
  * Optional responsive Bento container for ordinary editor blocks. Width
  * preferences live in block styles; content controls height by default. Tile widths are
@@ -97,19 +96,13 @@ export function bentoExtension(): ReactEditorExtension {
   return {
     id: "block.bento",
     /**
-     * Installs Bento sizing, background defaults and block presentation for this editor.
+     * Installs Bento sizing, conversion commands and block presentation for this editor.
      *
      * @param reactEditor - Runtime that owns the extension registrations.
      * @returns Disposer that releases those registrations in reverse installation order.
      */
     setup: (reactEditor) => {
       const disposers = [
-        // Defaults missing background on creation/conversion; removes the processor with the extension.
-        reactEditor.extensions.registerCleanup(
-          reactEditor.blocks.registerProcessor(
-            createContainerBackgroundProcessor(BENTO_BLOCK_TYPE),
-          ),
-        ),
         // Normalize detached copies before their destination-specific enter hook runs.
         // The processor does not inspect the destination parent: an ID absent from
         // this document may carry Bento overrides from a copy or another document.

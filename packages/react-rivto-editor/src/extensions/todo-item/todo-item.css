@@ -12,25 +12,12 @@
  * Public TODO color defaults are declared here for host overrides.
  */
 :root {
-  --rivto-todo-accent: var(--rivto-accent);
-  --rivto-todo-focus: var(--rivto-ring);
   --rivto-todo-done: #66846b;
-  --rivto-todo-foreground: var(--rivto-foreground);
-  --rivto-todo-muted-foreground: var(--rivto-muted-foreground);
-  --rivto-todo-item-border: var(--rivto-border);
-  --rivto-todo-control-border: var(--rivto-input);
   --rivto-todo-control-border-strong: #9297a9;
-  --rivto-todo-chip: var(--rivto-secondary);
-  --rivto-todo-chip-foreground: var(--rivto-secondary-foreground);
-  --rivto-todo-storage-border: var(--rivto-border);
-  --rivto-todo-storage-background: #eceef6;
-  --rivto-todo-priority-1: #fbefef;
-  --rivto-todo-priority-2: #fbf5e5;
-  --rivto-todo-priority-3: #f0eefb;
 }
 
 .rivto-todo-prompt {
-  color: var(--rivto-todo-accent);
+  color: var(--rivto-todo-accent, var(--rivto-accent));
   font-weight: 700;
 }
 
@@ -48,18 +35,23 @@
 
 /* Storage appearance belongs to the layout's own header and child host.
  * The shared BlockView remains the only outer selection and identity boundary. */
+.rivto-todo-storage-header,
+.rivto-todo-storage-children {
+  background: var(
+    --rivto-block-selection-fill,
+    var(--rivto-block-own-background, var(--rivto-todo-storage-background, var(--rivto-secondary)))
+  );
+}
 .rivto-todo-storage-header {
   /* Child rows also use z-index: 1 on `.rivto-block-content` (handle layering).
    * Equal z-index paints later siblings above overflowing Filter/Order panels. */
   z-index: 2;
   padding: 8px 7px;
   min-height: 44px;
-  background: var(--rivto-block-selection-fill, var(--rivto-todo-storage-background));
   border-radius: 16px 16px 0 0;
 }
 .rivto-todo-storage-header:has(.rivto-todo-storage-summary) {
-  background: transparent;
-  border-radius: 0;
+  border-radius: 16px;
 }
 .rivto-todo-storage-children {
   margin: 0;
@@ -67,10 +59,6 @@
   padding-inline-start: calc(var(--rivto-container-padding) + 24px);
   gap: 8px;
   min-height: 64px;
-  background: var(
-    --rivto-block-selection-fill,
-    var(--rivto-block-own-background, var(--rivto-todo-storage-background))
-  );
   border-radius: 0 0 16px 16px;
 }
 /* The empty field remains a native control inside Page's measured drop host. */
@@ -84,12 +72,14 @@
 .rivto-block:has(> .rivto-todo-storage-header:hover) .rivto-todo-storage-drop-field,
 .rivto-block:has(> .rivto-todo-storage-header)[data-block-drop-active="true"]
   .rivto-todo-storage-drop-field {
-  border-color: var(--rivto-todo-accent);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--rivto-todo-accent) 12%, transparent);
+  border-color: var(--rivto-todo-accent, var(--rivto-accent));
+  box-shadow: 0 2px 8px
+    color-mix(in srgb, var(--rivto-todo-accent, var(--rivto-accent)) 12%, transparent);
 }
 .rivto-block:has(> .rivto-todo-storage-header)[data-block-drop-active="between"] {
-  border-color: var(--rivto-todo-focus);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--rivto-todo-focus) 10%, transparent);
+  border-color: var(--rivto-todo-focus, var(--rivto-ring));
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--rivto-todo-focus, var(--rivto-ring)) 10%, transparent);
 }
 
 /* The inline priority chip is far smaller than the primitive's default select. */
@@ -110,4 +100,34 @@
 
 .rivto-block[data-block-type="todo-storage"] {
   --rivto-block-shell-background: transparent;
+}
+
+.rivto-todo-item {
+  --rivto-todo-item-background: var(--rivto-background);
+}
+
+.rivto-todo-item[data-todo-priority="1"] {
+  --rivto-todo-item-background: var(
+    --rivto-todo-priority-1,
+    color-mix(in srgb, var(--rivto-destructive) 12%, var(--rivto-background))
+  );
+}
+
+.rivto-todo-item[data-todo-priority="2"] {
+  --rivto-todo-item-background: var(
+    --rivto-todo-priority-2,
+    color-mix(in srgb, #cc9900 12%, var(--rivto-background))
+  );
+}
+
+.rivto-todo-item[data-todo-priority="3"] {
+  --rivto-todo-item-background: var(
+    --rivto-todo-priority-3,
+    color-mix(in srgb, var(--rivto-accent) 12%, var(--rivto-background))
+  );
+}
+
+/* The block shell already paints an explicit color, including its alpha. */
+.rivto-block[data-block-background] > .rivto-block-row > .rivto-block-content > .rivto-todo-item {
+  --rivto-todo-item-background: transparent;
 }

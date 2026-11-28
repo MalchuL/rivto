@@ -58,7 +58,7 @@ this value before their ordinary background, for example:
 
 ```css
 .rivto-bento-tiles {
-  background: var(--rivto-block-selection-fill, var(--rivto-bento-background));
+  background: var(--rivto-block-selection-fill, var(--rivto-block-own-background, var(--rivto-bento-background, var(--rivto-secondary))));
 }
 ```
 
@@ -77,8 +77,17 @@ by redefining a handful of variables on any ancestor:
   --rivto-accent: #0c66e4;
   --rivto-background: #0f1115;
   --rivto-foreground: #e6e6ea;
+  --rivto-secondary: #242733;
+  --rivto-muted: #303440;
+  --rivto-muted-foreground: #afb3c2;
 }
 ```
+
+Bento, Kanban and TODO storage use `--rivto-secondary` for their default surface.
+New and converted blocks leave the background color unset. The block menu’s
+**Theme default** removes an explicit color, including colors saved by older
+versions. **No color** saves explicit transparency. Switching a host theme
+requires only changing its CSS variables.
 
 Token groups:
 

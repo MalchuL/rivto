@@ -470,14 +470,15 @@ test("dragging from the empty right side of Counter starts structural selection"
   await expect(button).toHaveText("Count: 2");
 });
 
-test("plain clicks select structural regions without activating their controls", async ({
-  page,
-}) => {
+test("plain clicks clear structural selection on the same or another block", async ({ page }) => {
   const separator = page.locator('[data-separator-block="true"]').first();
   const separatorBlock = separator.locator(BLOCK_ANCESTOR_XPATH);
-  await separator.click();
+  await separator.click({ modifiers: ["Control"] });
   await expect(separatorBlock).toHaveAttribute("data-block-selected", "true");
-  await expect(page.locator("[data-block-selected]")).toHaveCount(1);
+  await separator.click();
+  await expect(page.locator("[data-block-selected]")).toHaveCount(0);
+  await separator.click({ modifiers: ["Control"] });
+  await expect(separatorBlock).toHaveAttribute("data-block-selected", "true");
 
   const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
   const region = counter.locator(".custom-counter-selection-region");
@@ -487,8 +488,7 @@ test("plain clicks select structural regions without activating their controls",
     throw new Error("Expected Counter selection-region geometry");
   }
   await region.click({ position: { x: regionBox.width - 8, y: regionBox.height / 2 } });
-  await expect(counter).toHaveAttribute("data-block-selected", "true");
-  await expect(separatorBlock).not.toHaveAttribute("data-block-selected", "true");
+  await expect(page.locator("[data-block-selected]")).toHaveCount(0);
   await expect(button).toHaveText("Count: 2");
 
   await button.click();
@@ -723,6 +723,10 @@ for (const mode of ["block", "edgeless"] as const) {
     await expect(parent).not.toHaveAttribute("data-block-selected", "true");
     await expect(child).toHaveCSS("background-color", "rgb(222, 217, 247)");
     await expect(child).toHaveCSS("outline-style", "solid");
+    const childContent = child.locator("[data-block-content]");
+    await childContent.click();
+    await expect(childContent).toBeFocused();
+    await expect(page.locator("[data-block-selected]")).toHaveCount(0);
   });
 }
 

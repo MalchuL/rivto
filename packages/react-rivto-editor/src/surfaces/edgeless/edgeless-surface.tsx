@@ -1,3 +1,5 @@
+import { CardMeasurements, type CardMeasurementCanvas } from "./card-measurements";
+import type { EditorElementNode } from "@chulane/rivto";
 import { EdgelessGridSpotlight } from "./edgeless-grid-spotlight";
 import { useReactPanelContext } from "../../hooks/editor/use-react-panel-context";
 import { BlockEditorScope } from "@chulane/rivto-page";
@@ -142,7 +144,7 @@ function EdgelessSurfaceContent({
           />
         }
       >
-        <EdgelessCards canvas={canvas} />
+        <EdgelessCards canvas={canvas} viewport={root} />
       </CanvasView>
     </BlockEditorScope>
   );
@@ -177,7 +179,8 @@ function EdgelessSurfaceOverlay({ controller, ...controls }: SurfaceOverlayProps
 
 /** Scene observation used to determine mounted root cards. */
 interface EdgelessCardsProps {
-  readonly canvas: CanvasApi;
+  readonly viewport: HTMLElement | null;
+  readonly canvas: CardMeasurementCanvas;
 }
 
 /**
@@ -188,35 +191,127 @@ interface EdgelessCardsProps {
  *
  * @param props - Scene controlling card visibility.
  * @param props.canvas - Scene whose visible IDs include focused and pinned cards.
+ * @param props.viewport - Mounted viewport used to prioritize pending auto-height measurements.
  * @returns Mounted block cards; inserted roots between boundaries need no property rewrite.
  */
-const EdgelessCards = memo(function EdgelessCards({ canvas }: EdgelessCardsProps) {
-  const panel = useReactPanel();
+const EdgelessCards = memo(function EdgelessCards({ canvas, viewport }: EdgelessCardsProps) {
   const visible = useCanvasVisible(canvas);
-  const visibleIds = useMemo(() => new Set(visible), [visible]);
   const rootIds = useRootBlockIds();
+  const measurements = useMemo(() => new CardMeasurements(canvas), [canvas]);
+  useEffect(
+    () => (viewport ? measurements.connect(viewport) : undefined),
+    [viewport, measurements],
+  );
+  const cards = useRootCards(rootIds);
+  // Element boundary IDs resolve against current root order; inserted
+  // roots between boundaries render without rewriting element props.
+  const observers = useMemo(
+    () =>
+      Array.from(
+        cards.values(),
+        (element) =>
+          element.props.autoHeight !== false && (
+            <CardMeasurementObserver
+              key={element.id}
+              element={element}
+              roots={rootIds}
+              measurements={measurements}
+            />
+          ),
+      ),
+    [cards, rootIds, measurements],
+  );
+  return (
+    <>
+      {observers}
+      {visible.map((id) => {
+        const element = cards.get(id);
+        if (!element) {
+          return null;
+        }
+        const blockIds = blockIdsOf(element, rootIds);
+        return <EdgelessBlockElement key={id} element={element} blockIds={blockIds} />;
+      })}
+    </>
+  );
+});
+
+/**
+ * Indexes block cards projected at the top of this panel's block hierarchy.
+ *
+ * @param rootIds - Current root order, which changes when a card boundary moves into or out of scope.
+ * @returns Renderable card nodes by identity until the projection or root membership changes.
+ */
+function useRootCards(rootIds: readonly string[]) {
+  const elements = useElements();
+  const panel = useReactPanel();
   // Only card ranges whose block parent is the panel's top level are rendered.
   // In an included-root panel, cards for that root's children remain nested and
   // do not substitute for a card whose range contains the root itself.
-  const blockElements = useElements().filter(
-    (element) =>
-      visibleIds.has(element.id) &&
-      element.type === EDGELESS_BLOCK_ELEMENT_TYPE &&
-      blockElementRoot(element, panel.blocks) === null,
+  return useMemo(
+    () =>
+      new Map(
+        elements
+          .filter(
+            (element) =>
+              element.type === EDGELESS_BLOCK_ELEMENT_TYPE &&
+              blockElementRoot(element, panel.blocks) === null,
+          )
+          .map((element) => [element.id, element]),
+      ),
+    [elements, panel, rootIds],
   );
-  // Element boundary IDs resolve against current root order; inserted
-  // roots between them render without rewriting element props.
-  return (
-    <>
-      {blockElements.map((element) => (
-        <EdgelessBlockElement
-          key={element.id}
-          element={element}
-          blockIds={blockIdsOf(element, rootIds)}
-        />
-      ))}
-    </>
-  );
+}
+
+interface CardMeasurementObserverProps {
+  readonly element: EditorElementNode;
+  readonly roots: readonly string[];
+  readonly measurements: Pick<CardMeasurements, "invalidate" | "remove">;
+}
+
+/**
+ * Watches the block subtrees owned by an auto-height card even while its DOM is absent.
+ *
+ * @param props - Card projection and its surface-owned measurement queue.
+ * @param props.element - Card whose width and inclusive range determine its layout.
+ * @param props.roots - Current ordered roots used to resolve the range.
+ * @param props.measurements - Receives coalesced invalidations and releases deleted identities.
+ * @returns No DOM. Subscriptions last until the card changes range or leaves the surface.
+ */
+const CardMeasurementObserver = memo(function CardMeasurementObserver({
+  element,
+  roots,
+  measurements,
+}: CardMeasurementObserverProps) {
+  const { blocks } = useReactPanel();
+  const { id, frame, props } = element;
+  useEffect(() => {
+    /**
+     * Queues the owning card when a root or one of its descendants changes.
+     *
+     * @returns Records one pending height check for the current card.
+     */
+    const invalidate = () => measurements.invalidate(id);
+    const stops = blockIdsOf(element, roots).map((root) => blocks.subscribeBlock(root, invalidate));
+    invalidate();
+    return () => {
+      stops.forEach((stop) => stop());
+      measurements.remove(id);
+    };
+  }, [
+    blocks,
+    id,
+    roots,
+    frame.width,
+    frame.x,
+    frame.y,
+    props.startBlockId,
+    props.endBlockId,
+    props.borderless,
+    props.rotation,
+    measurements,
+  ]);
+  return null;
 });
 
 /**

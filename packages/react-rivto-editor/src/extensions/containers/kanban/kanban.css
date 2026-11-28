@@ -2,16 +2,6 @@
 /* Kanban owns board, lane and card appearance through its explicit layout regions.
  * Page owns the single block shell, selection background, child traversal and gaps.
  * No recursive row styling or imperative footer placement is needed. */
-:root {
-  --rivto-kanban-board-background: #eceef6;
-  --rivto-kanban-lane-background: #f8f9fd;
-  --rivto-kanban-card-foreground: #151522;
-  --rivto-kanban-card-hover-border: #a89be5;
-  --rivto-kanban-drag-background: #edeafa;
-  --rivto-kanban-muted-foreground: #555569;
-  --rivto-kanban-accent: var(--rivto-accent);
-  --rivto-kanban-add-column-background: rgb(255 255 255 / 45%);
-}
 .rivto-kanban-board-header {
   padding: 0 12px;
 }
@@ -28,7 +18,7 @@
 }
 .rivto-kanban-summary > span,
 .rivto-kanban-column-count {
-  color: var(--rivto-kanban-muted-foreground);
+  color: var(--rivto-kanban-muted-foreground, var(--rivto-muted-foreground));
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
@@ -45,11 +35,18 @@
   border-radius: 16px;
   background: var(
     --rivto-block-selection-fill,
-    var(--rivto-block-own-background, var(--rivto-kanban-board-background))
+    var(--rivto-block-own-background, var(--rivto-kanban-board-background, var(--rivto-secondary)))
   );
   scrollbar-width: thin;
 }
 .rivto-kanban-columns > .rivto-block {
+  --rivto-block-shell-background: var(
+    --rivto-block-own-background,
+    var(
+      --rivto-kanban-lane-background,
+      color-mix(in srgb, var(--rivto-muted) 40%, var(--rivto-background))
+    )
+  );
   flex: 1 0 240px;
   min-width: 0;
   padding: 12px;
@@ -88,7 +85,7 @@
   align-items: center;
   gap: 8px;
   min-height: 28px;
-  color: var(--rivto-kanban-card-foreground);
+  color: var(--rivto-kanban-card-foreground, var(--rivto-foreground));
 }
 .rivto-kanban-column-title {
   flex: 1;
@@ -97,7 +94,7 @@
   font-weight: 600;
 }
 .rivto-kanban-column-title:focus-visible {
-  outline: 2px solid var(--rivto-kanban-accent);
+  outline: 2px solid var(--rivto-kanban-accent, var(--rivto-accent));
   outline-offset: 2px;
 }
 .rivto-kanban-cards {
@@ -109,13 +106,15 @@
 /* Card chrome has no extra padding outside the actual block's selection bounds. */
 .rivto-kanban-card {
   min-width: 0;
-  background: var(--rivto-block-selection-fill, var(--rivto-background));
   border-radius: 12px;
   box-shadow: 0 0 0 1px var(--rivto-border);
 }
+.rivto-kanban-card:not(:has(> .rivto-block[data-block-background])) {
+  background: var(--rivto-block-selection-fill, var(--rivto-background));
+}
 .rivto-kanban-card > .rivto-block {
   padding: 12px 10px;
-  color: var(--rivto-kanban-card-foreground);
+  color: var(--rivto-kanban-card-foreground, var(--rivto-foreground));
 }
 .rivto-kanban-card > .rivto-block > .rivto-block-row {
   padding: 0;
@@ -124,7 +123,7 @@
 .rivto-kanban-add-column[data-slot] {
   flex-shrink: 0;
   height: auto;
-  color: var(--rivto-kanban-muted-foreground);
+  color: var(--rivto-kanban-muted-foreground, var(--rivto-muted-foreground));
   border-radius: 10px;
 }
 .rivto-kanban-add-card[data-slot] {
@@ -137,8 +136,14 @@
 .rivto-kanban-add-column[data-slot] {
   flex: 0 0 200px;
   min-height: 160px;
-  border: 2px solid var(--rivto-kanban-card-hover-border);
-  background: var(--rivto-block-selection-fill, var(--rivto-kanban-add-column-background));
+  border: 2px solid var(--rivto-kanban-card-hover-border, var(--rivto-block-selection-outline));
+  background: var(
+    --rivto-block-selection-fill,
+    var(
+      --rivto-kanban-add-column-background,
+      color-mix(in srgb, var(--rivto-background) 45%, transparent)
+    )
+  );
 }
 .rivto-kanban-add-column > svg {
   width: 28px;

@@ -1,6 +1,3 @@
-/** Explicit default background stored for colored containers. */
-export const DEFAULT_CONTAINER_BACKGROUND = "#eceef6";
-
 /** Named background palette controls; names are not stored in block data. */
 export const DEFAULT_BLOCK_BACKGROUND_COLORS = [
   "",
