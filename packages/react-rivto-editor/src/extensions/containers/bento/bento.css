@@ -3,9 +3,6 @@
  * matches the existing block's bounds; Page owns its outline and subtree selection.
  * The resize controller owns temporary dimensions during a gesture, then restores
  * them before committing the preferred width through the ordinary block command. */
-:root {
-  --rivto-bento-background: #eceef6;
-}
 .rivto-bento-header {
   padding: 0 12px;
 }
@@ -37,7 +34,7 @@
   border-radius: 16px;
   background: var(
     --rivto-block-selection-fill,
-    var(--rivto-block-own-background, var(--rivto-bento-background))
+    var(--rivto-block-own-background, var(--rivto-bento-background, var(--rivto-secondary)))
   );
 }
 /* The declared width includes Page's insertion strips, so adjacent strips alone
@@ -56,9 +53,12 @@
 }
 .rivto-bento-tile > .rivto-block-drop-wrapper-content {
   min-width: 0;
-  background: var(--rivto-block-selection-fill, var(--rivto-background));
   border-radius: 14px;
   box-shadow: 0 0 0 1px var(--rivto-border);
+}
+.rivto-bento-tile
+  > .rivto-block-drop-wrapper-content:not(:has(> .rivto-block[data-block-background])) {
+  background: var(--rivto-block-selection-fill, var(--rivto-background));
 }
 .rivto-bento-tile > .rivto-block-drop-wrapper-content > .rivto-block {
   padding: 12px;

@@ -1,18 +1,5 @@
 import { DEFAULT_BLOCK_PALETTE_COLORS } from "../background-color-constants";
-import {
-  createContainerBackgroundProcessor,
-  formatBlockBackground,
-  parseBlockBackground,
-} from "../background-color";
-
-test("uses a container's configured default only when the block has no color", () => {
-  const { processor } = createContainerBackgroundProcessor("bento", "#abcdef");
-  expect(processor({ type: "bento" }, {}).listProps?.style).toEqual({
-    background: { color: "#abcdef" },
-  });
-  const explicit = { type: "bento", listProps: { style: { background: { color: "#00000000" } } } };
-  expect(processor(explicit, {})).toBe(explicit);
-});
+import { formatBlockBackground, parseBlockBackground } from "../background-color";
 
 test("concrete palette colors round-trip with alpha without stored CSS tokens", () => {
   for (const color of Object.values(DEFAULT_BLOCK_PALETTE_COLORS)) {

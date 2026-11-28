@@ -31,7 +31,7 @@ test("uses the editor theme for storage controls and status", async ({ page }) =
   const storage = page.locator('[data-journal-document="today"] [data-block-type="todo-storage"]');
   await expect(storage.locator(".rivto-todo-storage-children")).toHaveCSS(
     "background-color",
-    "rgb(236, 238, 246)",
+    "rgb(233, 235, 242)",
   );
   await expect(storage.getByRole("button", { name: /Status: doing/ })).toHaveCSS(
     "background-color",

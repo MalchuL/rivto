@@ -114,7 +114,7 @@ async function loadContainer(
   await page.locator(`[data-editor-mode="${mode}"]`).click();
 }
 
-test("default container color supports the opacity slider", async ({ page }) => {
+test("container opacity edits apply to a chosen color", async ({ page }) => {
   await loadContainer(page, "bento", "block");
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
@@ -128,10 +128,12 @@ test("default container color supports the opacity slider", async ({ page }) => 
     .locator(":scope > :is(.rivto-slot, .rivto-block-slot) > .block-handle")
     .click({ button: "right" });
   const opacity = page.getByRole("slider", { name: "Background opacity" });
+  await expect(opacity).toHaveAttribute("data-disabled", "");
+  await page.getByLabel("Custom background color").fill("#123456");
   await expect(opacity).toHaveAttribute("aria-valuenow", "100");
   await opacity.focus();
   await page.keyboard.press("Home");
-  await expect(board).toHaveAttribute("data-block-background", "#eceef600");
+  await expect(board).toHaveAttribute("data-block-background", "#12345600");
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -143,9 +145,9 @@ test("default container color supports the opacity slider", async ({ page }) => 
         )?.background?.color;
       }),
     )
-    .toBe("#eceef600");
+    .toBe("#12345600");
   await page.keyboard.press("End");
-  await expect(board).toHaveAttribute("data-block-background", "#eceef6");
+  await expect(board).toHaveAttribute("data-block-background", "#123456");
 });
 
 for (const type of ["bento", "kanban", "columns", "todo-storage", "table"] as const) {
@@ -160,6 +162,33 @@ for (const type of ["bento", "kanban", "columns", "todo-storage", "table"] as co
         surface = board.locator(":scope > .rivto-kanban-columns");
       } else if (type === "todo-storage") {
         surface = board.locator(":scope > .rivto-todo-storage-children");
+      }
+      if (type === "bento" || type === "kanban" || type === "todo-storage") {
+        await expect(board).not.toHaveAttribute("data-block-background", /.+/);
+        await board.evaluate((element) => {
+          element.style.setProperty("--rivto-secondary", "#242535");
+          element.style.setProperty("--rivto-background", "#161722");
+          element.style.setProperty("--rivto-foreground", "#eeeeff");
+        });
+        await expect(surface).toHaveCSS("background-color", "rgb(36, 37, 53)");
+        if (type === "todo-storage") {
+          const task = board.locator(".rivto-todo-item");
+          const tint = await task.evaluate((element) => getComputedStyle(element).backgroundColor);
+          await board.evaluate((element) =>
+            element.style.setProperty("--rivto-background", "#fff"),
+          );
+          await expect(task).not.toHaveCSS("background-color", tint);
+          await expect(task.locator(".rivto-todo-name")).toHaveCSS("color", "rgb(238, 238, 255)");
+        } else {
+          const childSurface =
+            type === "bento"
+              ? ".rivto-bento-tile > .rivto-block-drop-wrapper-content"
+              : ".rivto-kanban-card";
+          await expect(board.locator(childSurface).first()).toHaveCSS(
+            "background-color",
+            "rgb(22, 23, 34)",
+          );
+        }
       }
       const original = await surface.evaluate(
         (element) => getComputedStyle(element).backgroundColor,
@@ -180,6 +209,31 @@ for (const type of ["bento", "kanban", "columns", "todo-storage", "table"] as co
         });
       });
       await expect(surface).toHaveCSS("background-color", "rgba(18, 52, 86, 0.5)");
+      if (type === "todo-storage") {
+        const header = board.locator(".rivto-todo-storage-header");
+        await expect(header).toHaveCSS("background-color", "rgba(18, 52, 86, 0.5)");
+        await header.evaluate((element) => element.style.setProperty("--rivto-card", "#ddeeff"));
+        const controls = header.locator("input, .rivto-todo-storage-menu-trigger");
+        await expect(controls).toHaveCount(3);
+        for (const control of await controls.all()) {
+          await expect(control).toHaveCSS("background-color", "rgb(221, 238, 255)");
+        }
+        await page.evaluate(() => {
+          const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+            .__rivtoDemo.editor;
+          editor.blocks.updateBlock("layout-board", { listProps: { collapsed: true } });
+        });
+        await expect(header).toHaveCSS("background-color", "rgba(18, 52, 86, 0.5)");
+        await expect(header.locator(".rivto-todo-storage-summary")).toHaveCSS(
+          "background-color",
+          "rgba(0, 0, 0, 0)",
+        );
+        await page.evaluate(() => {
+          const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+            .__rivtoDemo.editor;
+          editor.blocks.updateBlock("layout-board", { listProps: { collapsed: false } });
+        });
+      }
       if (type === "bento" || type === "kanban" || type === "todo-storage") {
         await expect(board).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       }
@@ -355,7 +409,7 @@ for (const type of ["bento", "kanban", "columns", "todo-storage"] as const) {
 
 for (const type of ["bento", "kanban", "todo-storage"] as const) {
   for (const mode of ["block", "edgeless"] as const) {
-    test(`${type} palette reflects the saved default background in ${mode}`, async ({ page }) => {
+    test(`${type} palette restores the theme default in ${mode}`, async ({ page }) => {
       await loadContainer(page, type, mode, { borderless: false });
       await page.evaluate(() => {
         const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
@@ -363,20 +417,6 @@ for (const type of ["bento", "kanban", "todo-storage"] as const) {
         editor.blocks.updateBlock("layout-board", { listProps: { collapsed: true } });
       });
       const board = page.locator('[data-block-id="layout-board"]').first();
-      await board.evaluate(
-        (element, { blockType, surface }) => {
-          const tokens = {
-            bento: "--rivto-bento-background",
-            kanban: "--rivto-kanban-board-background",
-            "todo-storage": "--rivto-todo-storage-background",
-          };
-          element.style.setProperty(
-            tokens[blockType],
-            surface === "block" ? "#a1b2c3" : "rgb(161, 178, 195)",
-          );
-        },
-        { blockType: type, surface: mode },
-      );
       const row = board.locator(":scope > .rivto-block-row");
       await row.hover();
       await row
@@ -384,12 +424,17 @@ for (const type of ["bento", "kanban", "todo-storage"] as const) {
         .click({ button: "right" });
       const picker = page.getByLabel("Custom background color");
       const custom = page.locator(".block-color-custom");
-      await expect(picker).toHaveValue("#eceef6");
-      await expect(custom).toHaveAttribute("data-selected", "true");
+      const themeDefault = page.getByRole("button", { name: "Theme default" });
+      await expect(themeDefault).toHaveAttribute("aria-pressed", "true");
+      await expect(custom).not.toHaveAttribute("data-selected", "true");
       await expect(page.locator(".block-color-custom-palette")).toBeVisible();
       await page.getByRole("button", { name: "red", exact: true }).click();
       await expect(picker).toHaveValue("#d1d5db");
       await expect(custom).not.toHaveAttribute("data-selected", "true");
+      await expect(themeDefault).toHaveAttribute("aria-pressed", "false");
+      await themeDefault.click();
+      await expect(themeDefault).toHaveAttribute("aria-pressed", "true");
+      await expect(board).not.toHaveAttribute("data-block-background", /.+/);
     });
   }
 }

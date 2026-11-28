@@ -1,6 +1,6 @@
 import { Input } from "../../../components/ui/input";
 import { DropdownMenuLabel } from "../../../components/ui/dropdown-menu";
-import { CheckIcon, PaletteIcon, SlashIcon } from "lucide-react";
+import { CheckIcon, PaletteIcon, RotateCcwIcon, SlashIcon } from "lucide-react";
 import {
   Fragment,
   useCallback,
@@ -48,13 +48,13 @@ function readBackground(context: BlockContextMenuContext, id: string): string {
  * a color from each individual block so mixed selections retain their hues.
  *
  * @param context - Panel and ordered targets captured when the menu opened.
- * @param colorForBlock - Computes the color to persist, or returns undefined to skip that block.
+ * @param colorForBlock - Computes the color to persist, null to clear its override, or undefined to skip that block.
  * @returns All applicable targets have received the color while preserving other style properties.
  * @throws If an existing style is not an object or a delegated block command fails.
  */
 function updateBackgroundColors(
   context: BlockContextMenuContext,
-  colorForBlock: (blockId: string) => string | undefined,
+  colorForBlock: (blockId: string) => string | null | undefined,
 ): void {
   const { reactPanel, blockIds } = context;
   // Check every target before the first write; batching does not roll back an earlier block.
@@ -74,6 +74,20 @@ function updateBackgroundColors(
       const node = reactPanel.page.getNode(blockId);
       const style = node.getStyle();
       const background = style.background;
+      if (color === null) {
+        if (background?.color !== undefined) {
+          const remainingStyle = { ...style };
+          const remainingBackground = { ...background };
+          delete remainingBackground.color;
+          if (Object.keys(remainingBackground).length) {
+            remainingStyle.background = remainingBackground;
+          } else {
+            delete remainingStyle.background;
+          }
+          node.setStyle(Object.keys(remainingStyle).length ? remainingStyle : null);
+        }
+        continue;
+      }
       node.setStyle({
         ...style,
         background: {
@@ -117,7 +131,7 @@ interface BackgroundColorInput {
  * background values; mixed selections have no pressed swatch. Activation rechecks
  * target existence and batches color updates. Preset and custom selections keep
  * the menu open for further changes. No color sets an explicit
- * transparent background; new colored containers have an explicit initial color.
+ * transparent background. Theme default clears the local color and follows the host palette.
  * Descendant overrides are not rewritten.
  *
  * @param context - Panel and target IDs captured when the menu opened.
@@ -265,6 +279,20 @@ function BlockBackgroundColors(context: BlockContextMenuContext) {
         Background
       </DropdownMenuLabel>
       <div className="block-color-swatches">
+        <button
+          className="block-color-swatch"
+          type="button"
+          title="Theme default"
+          aria-label="Theme default"
+          aria-pressed={colorValues.every((color) => color === "")}
+          onClick={() => {
+            colorInput.flush();
+            assertBlockMenuTargets(context);
+            updateBackgroundColors(context, () => null);
+          }}
+        >
+          <RotateCcwIcon aria-hidden="true" />
+        </button>
         {VISIBLE_BACKGROUND_COLORS.map((color, index) => (
           <Fragment key={color}>
             {index === 1 && (

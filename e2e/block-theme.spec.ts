@@ -156,7 +156,7 @@ for (const mode of ["block", "edgeless"] as const) {
         content: "Partially valid style",
         listProps: {
           style: {
-            background: { color: "#ff0000" },
+            background: { color: "#ff0000", future: true },
             text: { color: "#0000ff", fontSize: 123 },
             size: { width: 123, height: "60" },
             future: { value: 42 },
@@ -187,13 +187,15 @@ for (const mode of ["block", "edgeless"] as const) {
       "color",
       "rgb(0, 0, 255)",
     );
+    await page.getByRole("button", { name: "Theme default" }).click();
+    await expect(block).not.toHaveAttribute("data-block-background", /.+/);
     const style = await page.evaluate((blockId) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
         .__rivtoDemo.editor;
       return editor.blocks.getBlockNode(blockId)?.listProps.style;
     }, id);
     expect(style).toEqual({
-      background: { color: "#00000000" },
+      background: { future: true },
       text: { color: "#0000ff", fontSize: 123 },
       size: { width: 123, height: "60" },
       future: { value: 42 },
