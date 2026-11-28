@@ -2,7 +2,10 @@ import { BlockAutoScroll } from "../pointer/block-auto-scroll";
 import type { BlockInputResult } from "../events/block-input-event";
 import type { HeldKeyBinding } from "@chulane/rivto-keyboard";
 import type { BlockEditorApi } from "../block-editor-api";
-import { IFRAME_TEXT_SELECTION_EVENT, type BlockInputEvent } from "../events/block-input-event";
+import {
+  BLOCK_CONTENT_TEXT_SELECTION_EVENT,
+  type BlockInputEvent,
+} from "../events/block-input-event";
 import type { BlockSelectionPosition as EditorPosition, BlockSelectionSnapshot } from "./types";
 import { BlockDOMSelection, type DOMSelectionPoint } from "./block-dom-selection";
 import { BlockSelectionRanges } from "./block-selection-ranges";
@@ -38,7 +41,7 @@ export interface BlockPointerSelectionHost {
 /** Pointer-down origin and evolving selection, owned by one controller. */
 interface PointerSelection {
   readonly root: HTMLElement;
-  readonly iframeDocument?: AbortSignal;
+  readonly sourceLifetime?: AbortSignal;
   readonly startX: number;
   readonly startY: number;
   readonly anchor?: DOMSelectionPoint;
@@ -126,13 +129,13 @@ export class BlockPointerSelection {
       }
       if (feature === "pointer") {
         events.register(
-          "selection.iframe-text",
+          "selection.content-text",
           {
-            type: IFRAME_TEXT_SELECTION_EVENT,
+            type: BLOCK_CONTENT_TEXT_SELECTION_EVENT,
             scope: "block",
             priority: BLOCK_SELECTION_INPUT_PRIORITY,
           },
-          this.onIframeTextSelection,
+          this.onContentTextSelection,
         );
         // Track this pointer outside the root through release or cancellation.
         events.register(
@@ -333,29 +336,29 @@ export class BlockPointerSelection {
   /**
    * Continues a native text drag once it reaches another block in this occurrence.
    *
-   * The frame owns text offsets and keeps receiving the physical pointer after exit.
+   * The originating renderer owns text offsets and keeps receiving the physical pointer after exit.
    * Only Page resolves the source and destination block IDs. Returning to the source
    * releases structural coverage and lets the still-active native selection show again.
    *
-   * @param input - Scoped frame, document lifetime and pointer position in Page coordinates.
-   * @returns Whether this occurrence accepted the iframe selection update.
+   * @param input - Source block, renderer lifetime and pointer position in Page coordinates.
+   * @returns Whether this occurrence accepted the content selection update.
    */
-  private onIframeTextSelection = ({
+  private onContentTextSelection = ({
     raw,
     blockId,
     root,
-  }: BlockInputEvent<typeof IFRAME_TEXT_SELECTION_EVENT>): BlockInputResult => {
+  }: BlockInputEvent<typeof BLOCK_CONTENT_TEXT_SELECTION_EVENT>): BlockInputResult => {
     const { phase, clientX, clientY, signal } = raw.detail;
-    if (!blockId || signal.aborted || (this.pointer && this.pointer.iframeDocument !== signal)) {
+    if (!blockId || signal.aborted || (this.pointer && this.pointer.sourceLifetime !== signal)) {
       return "continue";
     }
     if (phase === "cancel") {
-      this.cancelIframeSelection();
+      this.cancelContentTextSelection();
       return "continue";
     }
     const hit = this.dom.readBlockIdAtPoint(root, clientX, clientY);
     if (hit === blockId) {
-      this.cancelIframeSelection();
+      this.cancelContentTextSelection();
       return "continue";
     }
     if (!this.pointer) {
@@ -364,7 +367,7 @@ export class BlockPointerSelection {
       }
       this.cancel();
       // Acquire without the root: unlike Page-originated gestures, the source
-      // iframe must keep receiving the physical pointer, so frames stay hit-testable.
+      // content must keep receiving pointer updates until its native gesture ends.
       this.releasePointer = this.editor.pointer.acquire();
       if (!this.releasePointer) {
         return "continue";
@@ -374,11 +377,11 @@ export class BlockPointerSelection {
         startX: clientX,
         startY: clientY,
         anchorPosition: { blockId, offset: 0 },
-        iframeDocument: signal,
+        sourceLifetime: signal,
         crossBlock: false,
         wholeBlocks: false,
       };
-      signal.addEventListener("abort", this.cancelIframeSelection, { once: true });
+      signal.addEventListener("abort", this.cancelContentTextSelection, { once: true });
     }
     if (hit && hit !== this.pointer.selection?.focusBlockId) {
       this.ownsCrossBlockSelection = true;
@@ -395,12 +398,12 @@ export class BlockPointerSelection {
   };
 
   /**
-   * Releases the iframe text gesture and clears any provisional whole-block range.
+   * Releases the content text gesture and clears any provisional whole-block range.
    *
-   * @returns Page no longer owns this gesture; the iframe retains its native text selection.
+   * @returns Page no longer owns this gesture; the originating content retains its native text selection.
    */
-  private cancelIframeSelection = (): void => {
-    if (this.pointer?.iframeDocument) {
+  private cancelContentTextSelection = (): void => {
+    if (this.pointer?.sourceLifetime) {
       this.cancel();
       this.editor.adapter.selection.clear();
     }
@@ -533,7 +536,7 @@ export class BlockPointerSelection {
     this.releasePointer = undefined;
     this.latestPointer = undefined;
     const completed = this.pointer;
-    completed?.iframeDocument?.removeEventListener("abort", this.cancelIframeSelection);
+    completed?.sourceLifetime?.removeEventListener("abort", this.cancelContentTextSelection);
     const root = completed?.root;
     this.pointer = null;
     if (
@@ -815,7 +818,7 @@ export class BlockPointerSelection {
    * @returns Timers, animation frames, and pointer references are released.
    */
   private cancel = (): void => {
-    this.pointer?.iframeDocument?.removeEventListener("abort", this.cancelIframeSelection);
+    this.pointer?.sourceLifetime?.removeEventListener("abort", this.cancelContentTextSelection);
     this.stopAutoScroll();
     this.releasePointer?.();
     this.releasePointer = undefined;

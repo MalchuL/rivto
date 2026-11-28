@@ -5,16 +5,19 @@
  * The page side (`sandbox/runtime/text-selection-runtime.ts`) reports the
  * pointer position once a selection drag leaves the iframe. This module turns
  * that position into editor coordinates and hands it to Page as an
- * {@link IFRAME_TEXT_SELECTION_EVENT}; Page decides which blocks to select.
+ * {@link BLOCK_CONTENT_TEXT_SELECTION_EVENT}; Page decides which blocks to select.
  *
  * @module
  */
-import { IFRAME_TEXT_SELECTION_EVENT, type IframeTextSelectionDetail } from "@chulane/rivto-page";
+import {
+  BLOCK_CONTENT_TEXT_SELECTION_EVENT,
+  type BlockContentTextSelectionDetail,
+} from "@chulane/rivto-page";
 
 /** A validated report from the page, in iframe viewport coordinates. */
 interface TextSelectionReport {
   /** `move` while dragging, `end` on release, `cancel` when the drag was abandoned. */
-  readonly phase: IframeTextSelectionDetail["phase"];
+  readonly phase: BlockContentTextSelectionDetail["phase"];
   /** Pointer x inside the iframe viewport, in CSS pixels. May be outside the viewport. */
   readonly x: number;
   /** Pointer y inside the iframe viewport, in CSS pixels. May be outside the viewport. */
@@ -111,13 +114,13 @@ function dispatchToPage(
     return false;
   }
   const point = new DOMPoint(report.x, report.y).matrixTransform(matrix);
-  const detail: IframeTextSelectionDetail = {
+  const detail: BlockContentTextSelectionDetail = {
     phase: report.phase,
     clientX: point.x,
     clientY: point.y,
     signal,
   };
-  const event = new CustomEvent(IFRAME_TEXT_SELECTION_EVENT, {
+  const event = new CustomEvent(BLOCK_CONTENT_TEXT_SELECTION_EVENT, {
     bubbles: true,
     cancelable: true,
     detail,

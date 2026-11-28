@@ -411,3 +411,8 @@ button[data-html-access] [role="alert"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Keep a Page gesture in its owning document until release or cancellation. */
+[data-rivto-pointer-active] .html-surface-frame {
+  pointer-events: none !important;
+}

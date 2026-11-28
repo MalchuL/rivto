@@ -1,22 +1,22 @@
 /**
- * Event an iframe host dispatches on its iframe to continue a native
+ * Event a content renderer dispatches from its block content to continue a native
  * text drag into neighboring Page blocks. Page owns block resolution; the
- * iframe host only relays the pointer position in parent viewport coordinates.
+ * renderer relays the pointer position in Page viewport coordinates.
  */
-export const IFRAME_TEXT_SELECTION_EVENT = "rivto-iframe-text-selection";
+export const BLOCK_CONTENT_TEXT_SELECTION_EVENT = "rivto-block-content-text-selection";
 
-/** Parent-viewport position of a native text drag that started inside an iframe. */
-export interface IframeTextSelectionDetail {
+/** Page viewport position of a native text drag that started inside block content. */
+export interface BlockContentTextSelectionDetail {
   readonly phase: "move" | "end" | "cancel";
   readonly clientX: number;
   readonly clientY: number;
-  /** Aborted when the originating document disconnects. */
+  /** Aborted when the originating content is disposed. */
   readonly signal: AbortSignal;
 }
 
 /** Native input names accepted by a Page occurrence, including document lifecycle events. */
 export interface BlockInputEventMap extends GlobalEventHandlersEventMap {
-  [IFRAME_TEXT_SELECTION_EVENT]: CustomEvent<IframeTextSelectionDetail>;
+  [BLOCK_CONTENT_TEXT_SELECTION_EVENT]: CustomEvent<BlockContentTextSelectionDetail>;
   selectionchange: Event;
   visibilitychange: Event;
 }

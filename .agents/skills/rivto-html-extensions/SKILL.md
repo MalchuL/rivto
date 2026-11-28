@@ -37,8 +37,8 @@ also read [rivto-blocks](../rivto-blocks/SKILL.md),
   `frame/use-html-widget-context.ts` builds `rivto.context`. They belong to the HTML
   surface; "embed"/"embedding" in this repo means nested Rivto content (the
   `embedding` block, `EditorEmbed`), so do not reuse that term for iframes.
-- Page exports `IFRAME_TEXT_SELECTION_EVENT` for relaying native text drags out of
-  an iframe. `packages/rivto-page/src/editor/pointer/` and Page's block-editor CSS
+- Page exports `BLOCK_CONTENT_TEXT_SELECTION_EVENT` for relaying native text drags out of
+  an iframe. `packages/rivto-page/src/editor/pointer/` and HTML surface CSS
   own gesture continuity across iframes.
 - `demo/src/extensions/html-surface/` contains host-owned examples;
   `e2e/html-interaction.spec.ts` and `e2e/html-surface.spec.ts` exercise real input,
@@ -136,10 +136,9 @@ accidentally navigate the iframe; disable actions until their state is ready.
 An iframe is a separate document: its pointer events do not bubble to the parent.
 The sandbox additionally prevents direct access to its document. A gesture that
 starts in Page can otherwise lose pointer movement or release over any iframe,
-leaving dragging or selection stuck. Page's pointer owner temporarily disables
-pointer input on frames inside its root during its own gesture and restores it on
-release, cancellation or detach. Keep this generic to iframes and keep
-gesture completion, drop geometry and selection with the existing surface owner.
+leaving dragging or selection stuck. Page marks its root while it owns a gesture. HTML surface CSS disables
+pointer input on its own frames under that root until release, cancellation or
+detach. Page owns gesture completion, drop geometry and block selection.
 Avoid guessed offscreen heights for HTML blocks: activating an offscreen iframe's
 real layout can move another control between pointer-down and release. Check real
 scroll and pointer behavior before adding content-visibility optimizations.

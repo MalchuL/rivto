@@ -93,7 +93,7 @@ test("only the authenticated document port receives snapshots, permission decisi
       }),
     );
     let selectionEvents = 0;
-    iframe.addEventListener("rivto-iframe-text-selection", () => {
+    iframe.addEventListener("rivto-block-content-text-selection", () => {
       selectionEvents++;
     });
     port.onmessage!({ data: { selectionKey: token, phase: "move", x: 2, y: 120 } });
