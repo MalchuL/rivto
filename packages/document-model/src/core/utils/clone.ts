@@ -6,7 +6,7 @@
  * pollute `Object.prototype` while being copied into local objects.
  */
 
-import { isDangerousKey } from "./portable";
+import { isDangerousKey } from "@chulane/rivto-utils";
 
 /**
  * Recursively detaches portable arrays and records from CRDT adapter values.

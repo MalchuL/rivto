@@ -61,29 +61,84 @@ export function BlockModal({
     <ExpandContext.Provider
       value={{ blockId, expanded, label, toggle: () => setExpanded(!expanded) }}
     >
-      <Dialog open={expanded} onOpenChange={setExpanded}>
-        <div ref={inline} className={DIALOG_CLASS} role="group" aria-label={`${label} board`}>
-          {!expanded && children}
-        </div>
-        {expanded && (
-          <DialogContent
-            className="rivto-block-modal-content"
-            showCloseButton={false}
-            aria-describedby={undefined}
-            aria-modal="true"
-            onCloseAutoFocus={(event) => {
-              event.preventDefault();
-              inline.current?.querySelector<HTMLButtonElement>(`.${EXPAND_CLASS}`)?.focus();
-            }}
-          >
-            <DialogTitle className="sr-only">Expanded {label}</DialogTitle>
-            <EditorEmbed editor={panel.editor} rootBlockId={blockId}>
-              <PageSurface />
-            </EditorEmbed>
-          </DialogContent>
-        )}
-      </Dialog>
+      <div ref={inline} className={DIALOG_CLASS} role="group" aria-label={`${label} board`}>
+        {!expanded && children}
+      </div>
+      <BlockModalDialog
+        expanded={expanded}
+        onExpanded={setExpanded}
+        title={`Expanded ${label}`}
+        restoreFocus={() =>
+          inline.current?.querySelector<HTMLButtonElement>(`.${EXPAND_CLASS}`)?.focus()
+        }
+      >
+        <EditorEmbed editor={panel.editor} rootBlockId={blockId}>
+          <PageSurface />
+        </EditorEmbed>
+      </BlockModalDialog>
     </ExpandContext.Provider>
+  );
+}
+
+/** Presentation and focus ownership supplied by the expanded view. */
+type BlockModalDialogProps = {
+  expanded: boolean;
+  title: string;
+  children: ReactNode;
+  /**
+   * Changes the expanded state when the user dismisses the dialog.
+   *
+   * @param expanded - New visibility requested by the dialog.
+   * @returns The owner has received the visibility change.
+   */
+  onExpanded: (expanded: boolean) => void;
+  /**
+   * Returns keyboard focus to the inline occurrence after dismissal.
+   *
+   * @returns The owner's expand control is focused when still mounted.
+   */
+  restoreFocus: () => void;
+};
+
+/**
+ * Presents expanded editor content inside the shared shadcn block dialog.
+ *
+ * Closing unmounts the dialog content. The owner keeps any unsaved draft
+ * above this boundary and supplies the inline control to focus on return.
+ *
+ * @param props - Visibility, accessible title, content, and focus behavior.
+ * @param props.expanded - Mounts the fullscreen content when true.
+ * @param props.title - Accessible name of this expanded view.
+ * @param props.children - A board's scoped panel or a widget's source editor.
+ * @param props.onExpanded - Receives the new visibility on dismissal.
+ * @param props.restoreFocus - Focuses the inline control when the dialog closes.
+ * @returns A controlled dialog with its content mounted only while expanded.
+ */
+export function BlockModalDialog({
+  expanded,
+  title,
+  children,
+  onExpanded,
+  restoreFocus,
+}: BlockModalDialogProps) {
+  return (
+    <Dialog open={expanded} onOpenChange={onExpanded}>
+      {expanded && (
+        <DialogContent
+          className="rivto-block-modal-content"
+          showCloseButton={false}
+          aria-describedby={undefined}
+          aria-modal="true"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            restoreFocus();
+          }}
+        >
+          <DialogTitle className="sr-only">{title}</DialogTitle>
+          {children}
+        </DialogContent>
+      )}
+    </Dialog>
   );
 }
 

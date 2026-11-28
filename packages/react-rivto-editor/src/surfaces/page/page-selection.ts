@@ -132,7 +132,7 @@ export class PageSelection implements BlockEditorSelection {
    * @param event - Native input about to start block selection.
    * @returns Whether this input belongs to writing-page or canvas block content.
    */
-  canStartSelection(event: MouseEvent): boolean {
+  canStartSelection(event: Event): boolean {
     const root = this.panel.getRoot?.();
     const surface = root?.dataset.rivtoSurface ?? this.panel.mode?.get();
     if (surface !== "edgeless") {

@@ -2,7 +2,10 @@ import { BlockAutoScroll } from "../pointer/block-auto-scroll";
 import type { BlockInputResult } from "../events/block-input-event";
 import type { HeldKeyBinding } from "@chulane/rivto-keyboard";
 import type { BlockEditorApi } from "../block-editor-api";
-import type { BlockInputEvent } from "../events/block-input-event";
+import {
+  BLOCK_CONTENT_TEXT_SELECTION_EVENT,
+  type BlockInputEvent,
+} from "../events/block-input-event";
 import type { BlockSelectionPosition as EditorPosition, BlockSelectionSnapshot } from "./types";
 import { BlockDOMSelection, type DOMSelectionPoint } from "./block-dom-selection";
 import { BlockSelectionRanges } from "./block-selection-ranges";
@@ -38,6 +41,7 @@ export interface BlockPointerSelectionHost {
 /** Pointer-down origin and evolving selection, owned by one controller. */
 interface PointerSelection {
   readonly root: HTMLElement;
+  readonly sourceLifetime?: AbortSignal;
   readonly startX: number;
   readonly startY: number;
   readonly anchor?: DOMSelectionPoint;
@@ -124,6 +128,15 @@ export class BlockPointerSelection {
         );
       }
       if (feature === "pointer") {
+        events.register(
+          "selection.content-text",
+          {
+            type: BLOCK_CONTENT_TEXT_SELECTION_EVENT,
+            scope: "block",
+            priority: BLOCK_SELECTION_INPUT_PRIORITY,
+          },
+          this.onContentTextSelection,
+        );
         // Track this pointer outside the root through release or cancellation.
         events.register(
           "selection.move",
@@ -321,6 +334,82 @@ export class BlockPointerSelection {
   };
 
   /**
+   * Continues a native text drag once it reaches another block in this occurrence.
+   *
+   * The originating renderer owns text offsets and keeps receiving the physical pointer after exit.
+   * Only Page resolves the source and destination block IDs. Returning to the source
+   * releases structural coverage and lets the still-active native selection show again.
+   *
+   * @param input - Source block, renderer lifetime and pointer position in Page coordinates.
+   * @returns Whether this occurrence accepted the content selection update.
+   */
+  private onContentTextSelection = ({
+    raw,
+    blockId,
+    root,
+  }: BlockInputEvent<typeof BLOCK_CONTENT_TEXT_SELECTION_EVENT>): BlockInputResult => {
+    const { phase, clientX, clientY, signal } = raw.detail;
+    if (!blockId || signal.aborted || (this.pointer && this.pointer.sourceLifetime !== signal)) {
+      return "continue";
+    }
+    if (phase === "cancel") {
+      this.cancelContentTextSelection();
+      return "continue";
+    }
+    const hit = this.dom.readBlockIdAtPoint(root, clientX, clientY);
+    if (hit === blockId) {
+      this.cancelContentTextSelection();
+      return "continue";
+    }
+    if (!this.pointer) {
+      if (!hit || this.editor.adapter.selection.canStartSelection?.(raw) === false) {
+        return "continue";
+      }
+      this.cancel();
+      // Acquire without the root: unlike Page-originated gestures, the source
+      // content must keep receiving pointer updates until its native gesture ends.
+      this.releasePointer = this.editor.pointer.acquire();
+      if (!this.releasePointer) {
+        return "continue";
+      }
+      this.pointer = {
+        root,
+        startX: clientX,
+        startY: clientY,
+        anchorPosition: { blockId, offset: 0 },
+        sourceLifetime: signal,
+        crossBlock: false,
+        wholeBlocks: false,
+      };
+      signal.addEventListener("abort", this.cancelContentTextSelection, { once: true });
+    }
+    if (hit && hit !== this.pointer.selection?.focusBlockId) {
+      this.ownsCrossBlockSelection = true;
+      this.publish(this.pointer, undefined, { blockId: hit, offset: 0 }, true);
+    }
+    if (phase === "end") {
+      raw.preventDefault();
+      this.stop();
+    } else {
+      this.latestPointer = { x: clientX, y: clientY, exact: false };
+      this.scheduleAutoScroll(root);
+    }
+    return "handled";
+  };
+
+  /**
+   * Releases the content text gesture and clears any provisional whole-block range.
+   *
+   * @returns Page no longer owns this gesture; the originating content retains its native text selection.
+   */
+  private cancelContentTextSelection = (): void => {
+    if (this.pointer?.sourceLifetime) {
+      this.cancel();
+      this.editor.adapter.selection.clear();
+    }
+  };
+
+  /**
    * Resolves and publishes the moving endpoint at current pointer coordinates.
    * @param active - Gesture retaining the fixed endpoint.
    * @param current - Latest viewport coordinates and selection modifiers.
@@ -447,6 +536,7 @@ export class BlockPointerSelection {
     this.releasePointer = undefined;
     this.latestPointer = undefined;
     const completed = this.pointer;
+    completed?.sourceLifetime?.removeEventListener("abort", this.cancelContentTextSelection);
     const root = completed?.root;
     this.pointer = null;
     if (
@@ -566,7 +656,7 @@ export class BlockPointerSelection {
       crossBlock: false,
       wholeBlocks: false,
     };
-    this.releasePointer = this.editor.pointer.acquire();
+    this.releasePointer = this.editor.pointer.acquire(root);
     if (!this.releasePointer) {
       return "continue";
     }
@@ -728,6 +818,7 @@ export class BlockPointerSelection {
    * @returns Timers, animation frames, and pointer references are released.
    */
   private cancel = (): void => {
+    this.pointer?.sourceLifetime?.removeEventListener("abort", this.cancelContentTextSelection);
     this.stopAutoScroll();
     this.releasePointer?.();
     this.releasePointer = undefined;

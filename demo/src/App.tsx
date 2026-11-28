@@ -1,3 +1,4 @@
+import { DocumentHtmlPermissionToggle } from "./extensions/html-surface/document-permissions";
 import { BLOCK_HANDLE_SELECTOR } from "../../packages/react-rivto-editor/src/components/block-handle/constants";
 import { paragraphBlockFactory, separatorBlockFactory } from "@chulane/rivto-react/block-factories";
 import { mindmapExtension } from "./extensions/mindmap/mindmap";
@@ -1172,6 +1173,7 @@ function DemoToolbar({
         </button>
       </div>
       <div className="demo-toolbar-controls">
+        <DocumentHtmlPermissionToggle documentId={editor.getDocument().id} />
         <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_BLOCK_IDS_TOOLTIP}>
           <input
             type="checkbox"

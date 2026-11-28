@@ -226,3 +226,14 @@ Do not weaken a failing body assertion into a block-edge assertion or repair one
 container's renderer when the same primitive fails elsewhere. New renderers should
 inherit the verified behavior without another drag handler, pointer callback,
 container-type check or duplicate selection tree.
+
+## Interactive controls
+
+Native controls must receive their own click: mark editor controls with
+`editorControlProps`, honor `defaultPrevented` when selection claims a gesture,
+and avoid suppressing clicks merely because a drag might have occurred. Keep
+selection and pointer handling with the shared owner; test ordinary clicks,
+modifier selection, dragging, and keyboard activation on the rendered surface.
+
+For HTML/CSS/JavaScript blocks and other iframe-based content, also read
+[rivto-html-extensions](../rivto-html-extensions/SKILL.md).

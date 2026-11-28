@@ -110,10 +110,14 @@ export type {
   BlockWrapperRegistryApi,
 } from "./presentation/components/block-wrapper/types";
 
-export { BlockInputEvent } from "./editor/events/block-input-event";
+export {
+  BlockInputEvent,
+  BLOCK_CONTENT_TEXT_SELECTION_EVENT,
+} from "./editor/events/block-input-event";
 export type {
   BlockInputDefinition,
   BlockInputEventMap,
+  BlockContentTextSelectionDetail,
   BlockInputHandler,
   BlockInputObserver,
   BlockInputResult,

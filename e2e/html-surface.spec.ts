@@ -1,0 +1,430 @@
+import { expect, test, type Frame, type Page } from "@playwright/test";
+import type { DocumentEditorAPI } from "@chulane/rivto";
+import { blockIdSelector } from "./dom-markers";
+import { showCanvasCard } from "./fixtures/canvas-card";
+import { attachedFrame, htmlSample } from "./fixtures/html-widget";
+
+interface DemoWindow extends Window {
+  __rivtoDemo: { editor: DocumentEditorAPI };
+  resizeDocumentUpdates: number;
+  resizeTiming: { sync: number; frames: number } | null;
+  stopResizeObservation: () => void;
+}
+
+for (const mode of ["block", "edgeless"]) {
+  test(`HTML widgets align with Bento and the structural selection outline in ${mode}`, async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const [htmlId, unsafeId, bentoId] = await page.evaluate(() => {
+      const { editor } = (window as unknown as DemoWindow).__rivtoDemo;
+      const snapshot = editor.dump();
+      editor.load({ ...snapshot, blocks: [], elements: [], rootElementIds: [] });
+      return ["html", "unsafe-html", "bento"].map(
+        (type) =>
+          editor.blocks.insertBlock({
+            type,
+            content:
+              type === "bento" ? "" : '<div data-rivto-drag-handle style="height:40px"></div>',
+          }).id,
+      );
+    });
+    if (mode === "edgeless") {
+      await showCanvasCard(page, [htmlId!, unsafeId!, bentoId!]);
+    }
+    const html = page.locator(blockIdSelector(htmlId!));
+    await html.locator("[data-html-editor-pointer]").click({ modifiers: ["Control"] });
+    await expect(html).toHaveAttribute("data-block-selected", "true");
+    await expect(html).toHaveCSS("outline-style", "solid");
+    const bento = page.locator(blockIdSelector(bentoId!)).locator(".rivto-bento-tiles");
+    await expect(bento).toBeVisible();
+    const board = (await bento.boundingBox())!;
+    for (const id of [htmlId!, unsafeId!]) {
+      const block = page.locator(blockIdSelector(id));
+      const frame = block.locator("iframe");
+      await expect(frame).toBeVisible();
+      const shell = (await block.boundingBox())!;
+      const widget = (await frame.boundingBox())!;
+      expect(widget.x).toBeCloseTo(shell.x, 0);
+      expect(widget.width).toBeCloseTo(shell.width, 0);
+      expect(widget.x).toBeCloseTo(board.x, 0);
+      expect(widget.width).toBeCloseTo(board.width, 0);
+    }
+  });
+}
+
+test("HTML previews leave the border radius to the widget", async ({ page }) => {
+  await page.goto("/");
+  for (const [sample, selector] of [
+    ["mixer-block", ".mixer"],
+    ["unsafe-panel", ".card"],
+  ]) {
+    const frame = (await htmlSample(page, sample)).locator("iframe");
+    const widget = frame.contentFrame().locator(selector);
+    await expect(frame).toHaveCSS("border-radius", "0px");
+    await expect(widget).toHaveCSS("border-radius", sample === "mixer-block" ? "16px" : "12px");
+  }
+});
+
+test("HTML block height follows small and changing content", async ({ page }) => {
+  await page.goto("/");
+  const id = await page.evaluate(
+    () =>
+      (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.insertBlock({
+        type: "html",
+        content: '<div id="size" style="width:40px;height:32px">Small</div>',
+      }).id,
+  );
+  const frame = page.locator(`[data-block-id="${id}"] iframe`);
+  await frame.scrollIntoViewIfNeeded();
+  const sandbox = frame.contentFrame();
+  await expect(sandbox.locator("#size")).toBeVisible();
+  await expect.poll(async () => (await frame.boundingBox())?.height).toBe(32);
+  await sandbox.locator("#size").evaluate((element) => {
+    element.style.height = "210px";
+  });
+  await expect.poll(async () => (await frame.boundingBox())?.height).toBe(210);
+  await sandbox.locator("#size").evaluate((element) => {
+    element.style.height = "24px";
+  });
+  await expect.poll(async () => (await frame.boundingBox())?.height).toBe(24);
+  await sandbox.locator("#size").evaluate((element) => {
+    element.style.height = "25px";
+  });
+  await expect.poll(async () => (await frame.boundingBox())?.height).toBe(25);
+});
+
+/**
+ * Waits for a seeded widget to receive its initial node snapshot.
+ *
+ * @param page - Demo page that owns the widget occurrence.
+ * @param sample - Demo seed key used to resolve the node ID.
+ * @param kind - Model collection containing the widget.
+ * @returns The current browser frame with its node snapshot available.
+ * @throws If the widget or its iframe is unavailable.
+ */
+async function widgetFrame(
+  page: Page,
+  sample: string,
+  kind: "block" | "element" = "block",
+): Promise<Frame> {
+  const frame = await attachedFrame((await htmlSample(page, sample, kind)).locator("iframe"));
+  await expect
+    .poll(() =>
+      frame.evaluate(() => Boolean((window as { rivto?: { node?: unknown } }).rivto?.node)),
+    )
+    .toBe(true);
+  return frame;
+}
+
+/**
+ * Reads one block property from the live document.
+ *
+ * @param page - Demo page.
+ * @param sample - Seeded sample id stored on the block.
+ * @param key - Property name to read.
+ * @returns The current property value.
+ */
+async function blockProp(page: Page, sample: string, key: string): Promise<unknown> {
+  return page.evaluate(
+    ({ sample, key }) => {
+      const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
+      const block = editor.blocks.getBlocks().find((item) => item.props.sample === sample);
+      return block?.props[key];
+    },
+    { sample, key },
+  );
+}
+
+test("html blocks expose the node and render pasted markup", async ({ page }) => {
+  await page.goto("/");
+  const pomodoroHost = await htmlSample(page, "pomodoro");
+  await pomodoroHost.scrollIntoViewIfNeeded();
+  const pomodoro = await widgetFrame(page, "pomodoro");
+  await expect(pomodoro.getByText("25:00")).toBeVisible();
+  const node = await pomodoro.evaluate(
+    () => (window as { rivto: { node: Record<string, unknown> } }).rivto.node,
+  );
+  expect(node.kind).toBe("block");
+  expect(node).toMatchObject({
+    props: { startedAt: null, timer: 25 },
+    listProps: {},
+  });
+  expect(Array.isArray(node.childIds)).toBe(true);
+  expect(typeof node.content).toBe("string");
+  expect(node.pluginData).toEqual({});
+
+  const started = Date.now();
+  await pomodoro.getByRole("button", { name: "Start" }).click();
+  await expect(pomodoro.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  const elapsed = Date.now() - started;
+  console.log(JSON.stringify({ interaction: "pomodoro-start", repeat: 0, elapsed }));
+  expect(elapsed).toBeLessThan(1500);
+  expect(await blockProp(page, "pomodoro", "startedAt")).toEqual(expect.any(Number));
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(pomodoro.getByRole("button", { name: "Start" })).toBeEnabled();
+  expect(await blockProp(page, "pomodoro", "startedAt")).toBeNull();
+
+  await pomodoroHost.hover();
+  await pomodoroHost.getByRole("button", { name: "Edit HTML", exact: true }).click();
+  await expect(pomodoroHost.getByRole("button", { name: "Edit HTML" })).toHaveCount(0);
+  await pomodoroHost.getByRole("button", { name: "Expand HTML editor", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "HTML source" })).toBeVisible();
+  const props = page.getByRole("textbox", { name: "Widget props" });
+  await props.click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.insertText(
+    JSON.stringify({ sample: "pomodoro", startedAt: null, timer: 5 }, null, 2),
+  );
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  const edited = await widgetFrame(page, "pomodoro");
+  await expect(edited.getByText("05:00")).toBeVisible();
+  await expect(pomodoroHost.getByRole("textbox", { name: "List props" })).toHaveCount(0);
+  expect(await blockProp(page, "pomodoro", "timer")).toBe(5);
+
+  const goal = await widgetFrame(page, "goal");
+  await expect(goal.getByText("36 / 80")).toBeVisible();
+  await goal.getByRole("button", { name: "Increase pages" }).click();
+  await expect.poll(() => blockProp(page, "goal", "value")).toBe(37);
+
+  const quote = await widgetFrame(page, "quote");
+  await expect(quote.getByText("Watching for a while is enough.")).toBeVisible();
+
+  const mood = await widgetFrame(page, "mood");
+  const moodNode = await mood.evaluate(
+    () =>
+      (
+        window as {
+          rivto: {
+            node: { listProps: { tone?: string }; childIds: unknown[]; props: { mood?: string } };
+          };
+        }
+      ).rivto.node,
+  );
+  expect(moodNode.listProps.tone).toBe("soft");
+  expect(moodNode.props.mood).toBe("calm");
+  expect(moodNode.childIds).toEqual([]);
+  await mood.getByRole("button", { name: "Bright" }).click();
+  await expect.poll(() => blockProp(page, "mood", "mood")).toBe("bright");
+
+  await page.evaluate(() => {
+    (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.insertBlock({
+      type: "html",
+      content: "",
+      props: { sample: "scratch" },
+    });
+  });
+  const scratch = await htmlSample(page, "scratch");
+  await scratch.scrollIntoViewIfNeeded();
+  const source = scratch.getByRole("textbox", { name: "HTML source" });
+  const delivered = await source.evaluate((element, html) => {
+    const data = new DataTransfer();
+    data.setData("text/plain", html);
+    const event = new ClipboardEvent("paste", {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: data,
+    });
+    if (!event.clipboardData?.getData("text/plain")) {
+      return false;
+    }
+    element.dispatchEvent(event);
+    return true;
+  }, "<p>Pasted widget</p>");
+  if (!delivered) {
+    await source.fill("<p>Pasted widget</p>");
+    await scratch.getByRole("button", { name: "Render", exact: true }).click();
+  }
+  await expect(scratch.getByRole("textbox", { name: "HTML source" })).toHaveCount(0);
+  const pasted = await widgetFrame(page, "scratch");
+  await expect(pasted.getByText("Pasted widget")).toBeVisible();
+});
+
+test("pomodoro still answers in a repeated notebook", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/?repeat=200");
+  await (await htmlSample(page, "pomodoro")).scrollIntoViewIfNeeded();
+  const pomodoro = await widgetFrame(page, "pomodoro");
+  const started = Date.now();
+  await pomodoro.getByRole("button", { name: "Start" }).click();
+  await expect(pomodoro.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  const elapsed = Date.now() - started;
+  console.log(JSON.stringify({ interaction: "pomodoro-start", repeat: 200, elapsed }));
+  expect(elapsed).toBeLessThan(1500);
+  expect(await blockProp(page, "pomodoro", "startedAt")).toEqual(expect.any(Number));
+});
+
+for (const repeat of [0, 200]) {
+  test(`rotating circle scales during resize, repeat=${repeat}`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto(`/?repeat=${repeat}`);
+    await page.locator('[data-editor-mode="edgeless"]').click();
+    const circle = await htmlSample(page, "circle", "element");
+    const viewport = page.locator(".edgeless-viewport");
+    await viewport.evaluate((root) => {
+      const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
+      const element = editor.elements
+        .getElementNodes()
+        .find((item) => item.type === "html" && item.props.sample === "circle");
+      if (!element) {
+        throw new Error("Missing rotating circle");
+      }
+      const zoom = Number(root.getAttribute("data-edgeless-zoom")) || 1;
+      const cameraX = Number(root.getAttribute("data-edgeless-pan-x")) || 0;
+      const cameraY = Number(root.getAttribute("data-edgeless-pan-y")) || 0;
+      const desiredX = 120 - element.frame.x * zoom;
+      const desiredY = 80 - element.frame.y * zoom;
+      root.dispatchEvent(
+        new WheelEvent("wheel", {
+          deltaX: cameraX - desiredX,
+          deltaY: cameraY - desiredY,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    const viewportBox = (await viewport.boundingBox())!;
+    await expect
+      .poll(async () => {
+        const box = await circle.boundingBox();
+        return Boolean(
+          box &&
+          box.x >= viewportBox.x + 40 &&
+          box.x + 40 <= viewportBox.x + viewportBox.width &&
+          box.y >= viewportBox.y &&
+          box.y <= viewportBox.y + viewportBox.height,
+        );
+      })
+      .toBe(true);
+    const frame = await widgetFrame(page, "circle", "element");
+    expect(
+      await frame.evaluate(
+        () =>
+          (
+            window as {
+              rivto: {
+                node: {
+                  kind: string;
+                  props: { speed: number };
+                  frame: { width: number };
+                  childIds: unknown[];
+                };
+              };
+            }
+          ).rivto.node,
+      ),
+    ).toMatchObject({
+      kind: "element",
+      props: { speed: 6, color: "#6d5efc" },
+      frame: { width: 250 },
+      childIds: [],
+    });
+    const ring = frame.locator("[data-ring]");
+    const ringWidth = () => ring.evaluate((element) => (element as HTMLElement).offsetWidth);
+    const id = (await circle.getAttribute("data-edgeless-object-id"))!;
+    const stored = () =>
+      page.evaluate((elementId) => {
+        const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
+        return editor.elements.getElementNode(elementId);
+      }, id);
+    const original = await stored();
+    const originalHost = (await circle.boundingBox())!;
+    const originalRing = await ringWidth();
+    await page.evaluate((elementId) => {
+      (window as unknown as DemoWindow).__rivtoDemo.editor.commands.execute(
+        "edgeless.selection.set",
+        [elementId],
+      );
+    }, id);
+    const handle = page.locator('[data-edgeless-controls-for] [data-edgeless-resize-handle="se"]');
+    const start = (await handle.boundingBox())!;
+    const x = start.x + start.width / 2;
+    const y = start.y + start.height / 2;
+    await page.keyboard.down("Alt");
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.evaluate(() => {
+      const state = window as unknown as DemoWindow;
+      state.resizeDocumentUpdates = 0;
+      state.stopResizeObservation = state.__rivtoDemo.editor.subscribe(() => {
+        state.resizeDocumentUpdates += 1;
+      });
+    });
+    await page.mouse.move(x + 80, y + 70);
+    await expect
+      .poll(async () => (await circle.boundingBox())?.width ?? 0)
+      .toBeGreaterThan(originalHost.width + 40);
+    expect(await stored()).toEqual(original);
+    expect(await page.evaluate(() => (window as unknown as DemoWindow).resizeDocumentUpdates)).toBe(
+      0,
+    );
+    const previewHost = (await circle.boundingBox())!;
+    const previewRing = await ringWidth();
+    expect(previewRing / originalRing).toBeCloseTo(previewHost.width / originalHost.width, 1);
+    await page.mouse.up();
+    await page.keyboard.up("Alt");
+    const updates = await page.evaluate(() => {
+      const state = window as unknown as DemoWindow;
+      state.stopResizeObservation();
+      return state.resizeDocumentUpdates;
+    });
+    expect(updates).toBeGreaterThan(0);
+    expect((await stored())!.frame.width).toBeGreaterThan(original!.frame.width);
+    expect(await ringWidth()).toBeCloseTo(previewRing, 0);
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect
+      .poll(async () => (await stored())?.frame.width)
+      .toBeCloseTo(original!.frame.width, 0);
+  });
+}
+
+test("animated weekly board persists clicks and undo", async ({ page }) => {
+  await page.goto("/");
+  const host = await htmlSample(page, "weekly-progress");
+  await host.scrollIntoViewIfNeeded();
+  const frame = await widgetFrame(page, "weekly-progress");
+  await expect(frame.getByText("12 sessions")).toBeVisible();
+  await frame.getByRole("button", { name: "Add session" }).click();
+  await expect(frame.getByText("13 sessions")).toBeVisible();
+  await expect
+    .poll(() => blockProp(page, "weekly-progress", "sessions"))
+    .toEqual([2, 3, 1, 4, 3, 0, 0]);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(frame.getByText("12 sessions")).toBeVisible();
+});
+
+test("animated orbit persists its paused state", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-editor-mode="edgeless"]').click();
+  const viewport = page.locator(".edgeless-viewport");
+  await viewport.evaluate((root) => {
+    const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
+    const element = editor.elements.getElementNodes().find((item) => item.props.sample === "orbit");
+    if (!element) {
+      throw new Error("Missing orbit");
+    }
+    const zoom = Number(root.getAttribute("data-edgeless-zoom")) || 1;
+    const cameraX = Number(root.getAttribute("data-edgeless-pan-x")) || 0;
+    const cameraY = Number(root.getAttribute("data-edgeless-pan-y")) || 0;
+    root.dispatchEvent(
+      new WheelEvent("wheel", {
+        deltaX: cameraX - (120 - element.frame.x * zoom),
+        deltaY: cameraY - (80 - element.frame.y * zoom),
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  const frame = await widgetFrame(page, "orbit", "element");
+  await frame.getByRole("button", { name: "Pause orbit" }).click();
+  await expect(frame.getByRole("button", { name: "Resume orbit" })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
+        return editor.elements.getElementNodes().find((item) => item.props.sample === "orbit")
+          ?.props.running;
+      }),
+    )
+    .toBe(false);
+});

@@ -4,7 +4,8 @@
  * enforce identical geometry, layer, identity, and portability invariants.
  */
 import type { ElementFrame, ElementInput } from "../../types";
-import { assertPortableRecord, requireNonemptyId } from "../../utils/portable";
+import { assertPortableRecord } from "@chulane/rivto-utils";
+import { requireNonemptyId } from "../../utils";
 
 /**
  * Validates and detaches complete canvas geometry.

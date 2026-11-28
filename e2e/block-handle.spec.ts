@@ -70,6 +70,50 @@ async function iconSize(icon: Locator): Promise<string[]> {
   });
 }
 
+test("HTML conversion is scoped to the source block type and preserves widget data", async ({
+  page,
+}) => {
+  const { parent } = await seed(page);
+  await menu(page, parent);
+  await expect(page.getByRole("menuitem", { name: /Convert to (safe|unsafe) HTML/i })).toHaveCount(
+    0,
+  );
+  await page.keyboard.press("Escape");
+  const widget = await page.evaluate(() => {
+    const { editor } = (window as unknown as Demo).__rivtoDemo;
+    return editor.blocks.insertBlock({
+      type: "html",
+      content: "<p>Convertible widget</p>",
+      props: { label: "Convertible", count: 5 },
+      listProps: { checked: true },
+    });
+  });
+  const block = page.locator(`[data-block-id="${widget.id}"]`).first();
+  await menu(page, widget.id);
+  await expect(page.getByRole("menuitem", { name: "Convert to safe HTML" })).toHaveCount(0);
+  await page.getByRole("menuitem", { name: "Convert to unsafe HTML" }).click();
+  await expect(block.getByRole("button", { name: "Edit Unsafe HTML" })).toHaveAttribute(
+    "data-html-access",
+    "disabled",
+  );
+  await menu(page, widget.id);
+  await expect(page.getByRole("menuitem", { name: "Convert to unsafe HTML" })).toHaveCount(0);
+  await page.getByRole("menuitem", { name: "Convert to safe HTML" }).click();
+  await expect(block).toHaveAttribute("data-block-type", "html");
+  const restored = await page.evaluate(
+    (id) => (window as unknown as Demo).__rivtoDemo.editor.blocks.getBlockNode(id),
+    widget.id,
+  );
+  expect(restored).toMatchObject({
+    id: widget.id,
+    content: widget.content,
+    props: widget.props,
+    listProps: widget.listProps,
+  });
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(block).toHaveAttribute("data-block-type", "unsafe-html");
+});
+
 test("menu colors selected subtrees, retains child colors, and supports keyboard actions", async ({
   page,
 }) => {

@@ -323,3 +323,5 @@ export type {
   BlockTransferPanel,
   CrossDocumentBlockTransferPlacement,
 } from "./block-transfer/types";
+
+export * from "./extensions/html-surface";

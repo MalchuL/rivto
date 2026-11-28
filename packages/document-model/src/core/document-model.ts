@@ -14,7 +14,8 @@ import type {
   Snapshot,
   SnapshotUpdate,
 } from "./types";
-import { assertPortableRecord, clone } from "./utils";
+import { assertPortableRecord } from "@chulane/rivto-utils";
+import { clone } from "./utils";
 
 /** Default maximum number of entries in each document history stack. */
 export const DEFAULT_MAX_HISTORY_ENTRIES = 100;

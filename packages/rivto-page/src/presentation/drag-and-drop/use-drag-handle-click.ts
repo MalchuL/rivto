@@ -74,7 +74,7 @@ export function useDragHandleClick(threshold: number): DragHandleClick {
  * Post-release movement with buttons=0 never contributes distance. Reaching the
  * threshold records the decision once and immediately releases native observers.
  *
- * @param view - Window belonging to the mounted handle, including iframe occurrences.
+ * @param view - Window belonging to the mounted handle, including occurrences in another document.
  * @param origin - Primary pointer-down event supplying identity and viewport origin.
  * @param threshold - Positive excursion distance in viewport CSS pixels.
  * @param exceeded - Handle-owned flag set once when the excursion reaches the threshold.

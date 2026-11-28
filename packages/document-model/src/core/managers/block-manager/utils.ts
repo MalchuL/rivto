@@ -5,7 +5,8 @@
  */
 import type { CRDTArray } from "@chulane/crdt-doc";
 import type { Block, BlockInput, BlockListProps } from "../../types";
-import { assertPortableRecord, assertPortableValue, requireNonemptyId } from "../../utils/portable";
+import { assertPortableRecord, assertPortableValue } from "@chulane/rivto-utils";
+import { requireNonemptyId } from "../../utils";
 
 /**
  * Options for validating a portable block forest before any CRDT write.

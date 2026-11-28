@@ -20,6 +20,8 @@ export interface TransformStart {
   groupRotations?: Map<string, number>;
   previewGeometry?: ElementGeometry;
   stopMoveable?: () => void;
+  /** Pointer captured by a move started on an object, if any. */
+  readonly pointer?: { readonly target: Element; readonly id: number };
   dx: number;
   dy: number;
   readonly ids: string[];
