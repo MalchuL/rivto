@@ -25,6 +25,8 @@ htmlSurfaceExtension({ maxBlockHeight: 1200 });
 A block stores its HTML in `content`; an element stores it in `props.html`.
 Each widget runs its markup in an iframe sandbox with `allow-scripts` and `allow-forms`, and no
 `allow-same-origin`. The authored document opens a private message port. The parent sends the initial detached snapshot as soon as that port connects, including while images are still loading. Snapshots, commands and replies use that port for the lifetime of the document.
+A widget may store its own display text in a custom property such as `props.label`
+and render that text in its markup.
 A block snapshot contains `kind`, `id`, `type`, `content`, `props`, `listProps`,
 `pluginData`, and `childIds`. An element snapshot contains `kind`, `id`, `type`,
 `frame`, `zIndex`, `props`, and `childIds`.

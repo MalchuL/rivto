@@ -2,6 +2,7 @@ import { expect, test, type FrameLocator, type Locator, type Page } from "@playw
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import type { ReactEditorApi } from "@chulane/rivto-react";
 import type { HtmlWidgetContext, HtmlNodeView } from "@chulane/rivto-react";
+import { attachedFrame, htmlSample } from "./fixtures/html-widget";
 
 interface DemoWindow extends Window {
   __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditorApi };
@@ -12,7 +13,7 @@ interface WidgetWindow extends Window {
   nodeChanges: number;
   rivto: {
     context: { mode: string; selected: boolean; preview: boolean };
-    props: { label: string; count?: number };
+    props: { example?: string; count?: number };
     /**
      * Observes snapshots published to this sandbox.
      *
@@ -38,14 +39,15 @@ for (const type of ["html", "unsafe-html"] as const) {
         (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.insertBlock({
           type: blockType,
           content: "<p>Plain preview</p>",
-          props: { label: "Click preview" },
+          props: { example: "Click preview" },
         }).id,
       type,
     );
     const block = page.locator(`[data-block-id="${id}"]`);
     await block.scrollIntoViewIfNeeded();
-    await page
-      .frameLocator('iframe[name="Click preview"]')
+    await block
+      .locator("iframe")
+      .contentFrame()
       .getByText("Plain preview")
       .click({
         position: { x: 5, y: 8 },
@@ -64,15 +66,12 @@ for (const type of ["html", "unsafe-html"] as const) {
     await expect(block).toHaveAttribute("data-block-selected", "true");
     await background.click({ modifiers: ["Control"] });
     await expect(block).not.toHaveAttribute("data-block-selected", "true");
-    const sandbox = page.frame({ name: "Click preview" });
-    if (!sandbox) {
-      throw new Error("Missing HTML frame");
-    }
+    const sandbox = await attachedFrame(block.locator("iframe"));
     await expect
       .poll(() => sandbox.evaluate(() => (window as unknown as WidgetWindow).rivto.context))
       .toEqual({ mode: "block", selected: false, preview: false });
     await expect
-      .poll(() => sandbox.evaluate(() => (window as unknown as WidgetWindow).rivto.props.label))
+      .poll(() => sandbox.evaluate(() => (window as unknown as WidgetWindow).rivto.props.example))
       .toBe("Click preview");
   });
 }
@@ -91,7 +90,6 @@ test("Page dragging continues over an HTML frame", async ({ page }) => {
       id: "gesture-html",
       type: "html",
       content: '<div style="height:120px">Embedded</div>',
-      props: { label: "Gesture HTML" },
     });
   });
   const source = page.locator('[data-block-id="gesture-source"]');
@@ -138,7 +136,6 @@ test("Page selection continues over an HTML frame", async ({ page }) => {
       id: "selection-html",
       type: "html",
       content: '<div style="height:120px">Embedded</div>',
-      props: { label: "Selection HTML" },
     });
   });
   const source = page.locator('[data-block-id="selection-source"]');
@@ -170,7 +167,6 @@ test("Page editor pointer regions keep ordinary click and modifier selection beh
       (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.insertBlock({
         type: "html",
         content: '<div data-rivto-drag-handle style="height:40px">Handle</div>',
-        props: { label: "Page editor pointer region" },
       }).id,
   );
   const block = page.locator(`[data-block-id="${id}"]`);
@@ -178,10 +174,7 @@ test("Page editor pointer regions keep ordinary click and modifier selection beh
   const handle = block.locator("[data-html-editor-pointer]");
   await handle.click();
   await expect(block).not.toHaveAttribute("data-block-selected", "true");
-  const sandbox = page.frame({ name: "Page editor pointer region" });
-  if (!sandbox) {
-    throw new Error("Missing Page editor pointer region frame");
-  }
+  const sandbox = await attachedFrame(block.locator("iframe"));
   await sandbox.evaluate(() => {
     const widget = window as unknown as WidgetWindow;
     widget.selectionChanges = [];
@@ -224,7 +217,6 @@ test("HTML editor pointer regions retain block interaction inside a container", 
         {
           type: "html",
           content: '<div data-rivto-drag-handle style="height:40px">Handle</div>',
-          props: { label: "Nested HTML" },
         },
       ],
     });
@@ -243,9 +235,7 @@ test("dragging the clock inside its iframe moves the canvas element", async ({ p
   await page.goto("/");
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToHtmlElement(page, "clock");
-  const host = page.locator('[data-edgeless-visual-kind="html"]').filter({
-    has: page.locator('[data-html-label="Clock"]'),
-  });
+  const host = await htmlSample(page, "clock", "element");
   const frame = host.locator("iframe");
   await expect(host.locator("[data-html-editor-pointer]")).toBeVisible();
   const before = await host.boundingBox();
@@ -263,10 +253,7 @@ test("dragging the clock inside its iframe moves the canvas element", async ({ p
   expect(await readElementX(page, id)).toBe(originalX);
   await page.mouse.up();
   await expect.poll(() => readElementX(page, id)).not.toBe(originalX);
-  const sandbox = page.frame({ name: "Clock" });
-  if (!sandbox) {
-    throw new Error("Missing clock frame");
-  }
+  const sandbox = await attachedFrame(host.locator("iframe"));
   await expect
     .poll(() => sandbox.evaluate(() => (window as unknown as WidgetWindow).rivto.context))
     .toEqual({ mode: "edgeless", selected: true, preview: false });
@@ -279,9 +266,7 @@ test("dragging an unmarked HTML canvas background moves the element", async ({ p
   await page.goto("/");
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToHtmlElement(page, "circle");
-  const host = page.locator('[data-edgeless-visual-kind="html"]').filter({
-    has: page.locator('[data-html-label="Focus"]'),
-  });
+  const host = await htmlSample(page, "circle", "element");
   const frame = (await host.locator("iframe").boundingBox())!;
   const id = (await host.getAttribute("data-edgeless-object-id"))!;
   const originalX = await readElementX(page, id);
@@ -302,14 +287,13 @@ test("scripted HTML controls keep clicks while the background can be dragged", a
         zIndex: 999,
         props: {
           sample: "scripted-control",
-          label: "Scripted control",
           html: '<div id="action" style="width:80px;height:40px;background:red"></div><script>document.getElementById("action").addEventListener("click", function () { rivto.setProp("clicked", true); });</script>',
         },
       }).id,
   );
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToHtmlElement(page, "scripted-control");
-  const frame = page.frameLocator('iframe[name="Scripted control"]');
+  const frame = page.locator(`[data-edgeless-object-id="${id}"]`).locator("iframe").contentFrame();
   await frame.locator("#action").click();
   await expect
     .poll(() =>
@@ -321,7 +305,10 @@ test("scripted HTML controls keep clicks while the background can be dragged", a
       ),
     )
     .toBe(true);
-  const box = (await page.locator('iframe[name="Scripted control"]').boundingBox())!;
+  const box = (await page
+    .locator(`[data-edgeless-object-id="${id}"]`)
+    .locator("iframe")
+    .boundingBox())!;
   const originalX = await readElementX(page, id);
   await page.mouse.move(box.x + 150, box.y + 80);
   await page.mouse.down();
@@ -416,7 +403,7 @@ test("new HTML elements provide an editor pointer region without covering their 
         type: "html",
         frame: { x: 50000, y: 80, width: 220, height: 120 },
         zIndex: 999,
-        props: { sample: "starter", label: "Starter" },
+        props: { sample: "starter" },
       }).id,
   );
   await page.locator('[data-editor-mode="edgeless"]').click();
@@ -424,8 +411,8 @@ test("new HTML elements provide an editor pointer region without covering their 
   const host = page.locator(`[data-edgeless-object-id="${id}"]`);
   const handle = host.locator("[data-html-editor-pointer]");
   await expect(handle).toBeVisible();
-  const frame = page.frameLocator('iframe[name="Starter"]');
-  await expect(frame.getByText("Starter")).toBeVisible();
+  const frame = host.locator("iframe").contentFrame();
+  await expect(frame.getByText("HTML", { exact: false })).toBeVisible();
   const text = await frame.locator("#label").evaluate((element) => {
     const range = document.createRange();
     range.selectNodeContents(element.firstChild!);
@@ -436,7 +423,7 @@ test("new HTML elements provide an editor pointer region without covering their 
   await frame.locator("#label").dblclick({ position: text });
   await expect
     .poll(() => frame.locator("#label").evaluate(() => window.getSelection()?.toString()))
-    .toBe("Starter");
+    .toBe("HTML");
   const before = await host.boundingBox();
   const box = await handle.boundingBox();
   if (!before || !box) {
@@ -501,7 +488,6 @@ async function createDragControl(page: Page): Promise<string> {
         zIndex: 999,
         props: {
           sample: "drag-control",
-          label: "Drag control",
           count: 0,
           html: '<div style="height:20px;overflow:hidden"><div id="grip" data-rivto-drag-handle style="height:45px;background:#ddd"></div></div><button onclick="rivto.setProp(\'count\', 1)">Activate</button>',
         },
@@ -579,7 +565,7 @@ test("HTML editor pointer regions coexist with native controls and follow markup
   const host = page.locator(`[data-edgeless-object-id="${id}"]`);
   const handle = host.locator("[data-html-editor-pointer]");
   await expect(handle).toBeVisible();
-  const frame = page.frameLocator('iframe[name="Drag control"]');
+  const frame = host.locator("iframe").contentFrame();
   await frame.getByRole("button", { name: "Activate" }).click();
   await expect
     .poll(() =>
@@ -618,7 +604,7 @@ test("canvas marquee ends when released over an HTML iframe", async ({ page }) =
   await page.goto("/");
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToHtmlElement(page, "tally");
-  const frame = page.locator('iframe[name="Tea"]');
+  const frame = (await htmlSample(page, "tally", "element")).locator("iframe");
   const box = await frame.boundingBox();
   if (!box) {
     throw new Error("Missing iframe geometry");
@@ -652,7 +638,7 @@ test("fast canvas drag commits after the pointer crosses an HTML iframe", async 
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToHtmlElement(page, "tally");
   const shape = page.locator(`[data-edgeless-object-id="${id}"]`);
-  const frame = page.locator('iframe[name="Tea"]');
+  const frame = (await htmlSample(page, "tally", "element")).locator("iframe");
   const before = await shape.boundingBox();
   const target = await frame.boundingBox();
   if (!before || !target) {
@@ -857,7 +843,6 @@ for (const type of ["html", "unsafe-html"] as const) {
       return editor.blocks.insertBlock({
         type: blockType,
         content: "<p>Hello selection world</p>",
-        props: { label: "Selection block" },
       }).id;
     }, type);
     const block = page.locator(`[data-block-id="${id}"]`);
@@ -893,13 +878,17 @@ test("clicking an HTML canvas element selects it and its source supports text se
 }) => {
   await page.goto("/");
   await page.locator('[data-editor-mode="edgeless"]').click();
-  const host = page
-    .locator('[data-edgeless-visual-kind="html"]')
-    .filter({ has: page.locator('[data-html-label="Focus"]') });
+  const host = await htmlSample(page, "circle", "element");
   await panToHtmlElement(page, "circle");
   const originalSource = await readElementSource(page, "circle");
   await expect(host).toBeVisible();
-  await page.frameLocator('iframe[name="Focus"]').getByText("Focus").click();
+  await (
+    await htmlSample(page, "circle", "element")
+  )
+    .locator("iframe")
+    .contentFrame()
+    .getByText("Focus")
+    .click();
   await expect(host).toHaveAttribute("data-selected");
   await host.hover();
   await host.getByRole("button", { name: "Edit HTML" }).click();
@@ -913,7 +902,7 @@ test("clicking an HTML canvas element selects it and its source supports text se
   await page.keyboard.insertText("Changed");
   await expect(source).toContainText("Changed selection world");
   await host.getByRole("button", { name: "Preview", exact: true }).click();
-  const preview = host.locator('iframe[name="HTML draft preview"]');
+  const preview = host.getByRole("region", { name: "HTML preview" }).locator("iframe");
   await expect(preview.contentFrame().locator("p")).toHaveText("Changed selection world");
   expect(await readElementSource(page, "circle")).toBe(originalSource);
   await host.getByRole("button", { name: "Done" }).click();
@@ -928,9 +917,7 @@ test("saving element markup preserves remotely edited widget properties and rota
   await page.goto("/");
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToHtmlElement(page, "circle");
-  const host = page
-    .locator('[data-edgeless-visual-kind="html"]')
-    .filter({ has: page.locator('[data-html-label="Focus"]') });
+  const host = await htmlSample(page, "circle", "element");
   await host.hover();
   await host.getByRole("button", { name: "Edit HTML" }).click();
   const id = await page.evaluate(() => {
@@ -967,9 +954,7 @@ test("HTML canvas source editing keeps native focus, selection, and text operati
 }) => {
   await page.goto("/");
   await page.locator('[data-editor-mode="edgeless"]').click();
-  const host = page
-    .locator('[data-edgeless-visual-kind="html"]')
-    .filter({ has: page.locator('[data-html-label="Focus"]') });
+  const host = await htmlSample(page, "circle", "element");
   await panToHtmlElement(page, "circle");
   await expect(host).toBeVisible();
   await host.hover();
@@ -1006,10 +991,8 @@ test("an HTML canvas control receives its first click and keeps native text sele
   await page.goto("/");
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToHtmlElement(page, "tally");
-  const host = page
-    .locator('[data-edgeless-visual-kind="html"]')
-    .filter({ has: page.locator('[data-html-label="Tea"]') });
-  const frame = page.frameLocator('iframe[name="Tea"]');
+  const host = await htmlSample(page, "tally", "element");
+  const frame = (await htmlSample(page, "tally", "element")).locator("iframe").contentFrame();
   await frame.getByRole("button", { name: "Add one" }).click();
   await expect(host).toHaveAttribute("data-selected", "true");
   await expect(frame.locator("#count")).toHaveText("3");
@@ -1029,10 +1012,7 @@ test("an HTML canvas control receives its first click and keeps native text sele
     throw new Error("Missing iframe caption");
   }
   await page.mouse.dblclick(box.x + 8, box.y + box.height / 2);
-  const childFrame = page.frame({ name: "Tea" });
-  if (!childFrame) {
-    throw new Error("Missing Tea frame");
-  }
+  const childFrame = await attachedFrame(host.locator("iframe"));
   await expect
     .poll(() => childFrame.evaluate(() => window.getSelection()?.toString().toLowerCase()))
     .toBe("tea");
@@ -1054,7 +1034,12 @@ test("iframe pointer modifiers toggle canvas multiselection", async ({ page }) =
     return { circle, tally };
   });
   await panToHtmlElement(page, "circle");
-  await page.frameLocator('iframe[name="Focus"]').getByText("Focus").click();
+  await page
+    .locator(`[data-edgeless-object-id="${ids.circle}"]`)
+    .locator("iframe")
+    .contentFrame()
+    .getByText("Focus")
+    .click();
   await expect
     .poll(() =>
       page.evaluate(
@@ -1064,7 +1049,12 @@ test("iframe pointer modifiers toggle canvas multiselection", async ({ page }) =
     .toEqual([ids.circle]);
   await panToHtmlElement(page, "tally");
   await page.keyboard.down("Control");
-  await page.frameLocator('iframe[name="Tea"]').locator("#caption").click();
+  await page
+    .locator(`[data-edgeless-object-id="${ids.tally}"]`)
+    .locator("iframe")
+    .contentFrame()
+    .locator("#caption")
+    .click();
   await page.keyboard.up("Control");
   await expect
     .poll(() =>
@@ -1074,7 +1064,12 @@ test("iframe pointer modifiers toggle canvas multiselection", async ({ page }) =
     )
     .toEqual([ids.circle, ids.tally]);
   await page.keyboard.down("Control");
-  await page.frameLocator('iframe[name="Tea"]').locator("#caption").click();
+  await page
+    .locator(`[data-edgeless-object-id="${ids.tally}"]`)
+    .locator("iframe")
+    .contentFrame()
+    .locator("#caption")
+    .click();
   await page.keyboard.up("Control");
   await expect
     .poll(() =>
@@ -1101,7 +1096,11 @@ test("iframe clicks enter a canvas group before selecting its HTML child", async
     return { circle: circle.id, group: group.id };
   });
   await panToHtmlElement(page, "circle");
-  const content = page.frameLocator('iframe[name="Focus"]').getByText("Focus");
+  const content = page
+    .locator(`[data-edgeless-object-id="${ids.circle}"]`)
+    .locator("iframe")
+    .contentFrame()
+    .getByText("Focus");
   await content.click();
   await expect
     .poll(() =>
@@ -1134,13 +1133,9 @@ test("HTML block source keeps text selection inside an edgeless card", async ({ 
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToCard(page, ids.card);
   const block = page.locator(`[data-block-id="${ids.block}"]`);
-  await expect(block.locator("iframe")).toBeVisible();
+  const sandbox = await attachedFrame(block.locator("iframe"));
   await expect
-    .poll(() =>
-      page
-        .frame({ name: "Pomodoro" })
-        ?.evaluate(() => (window as unknown as WidgetWindow).rivto?.context?.mode),
-    )
+    .poll(() => sandbox.evaluate(() => (window as unknown as WidgetWindow).rivto?.context?.mode))
     .toBe("edgeless");
   await block.hover();
   await block.getByRole("button", { name: "Edit HTML" }).click();

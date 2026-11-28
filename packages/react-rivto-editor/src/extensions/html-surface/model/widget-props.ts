@@ -6,21 +6,6 @@
 import { isPortableRecord } from "@chulane/rivto-utils";
 
 /**
- * Reads the visible name stored on a widget, falling back when it is blank.
- *
- * @param props - Persisted properties that may include `label`.
- * @param fallback - Name used when `label` is missing or empty.
- * @returns The trimmed label, or the fallback.
- */
-export function readLabel(props: Record<string, unknown>, fallback: string): string {
-  const label = props.label;
-  if (typeof label === "string" && label.trim()) {
-    return label.trim();
-  }
-  return fallback;
-}
-
-/**
  * Formats widget props as JSON for the source editor, leaving out keys managed elsewhere.
  *
  * @param props - Current persisted properties.

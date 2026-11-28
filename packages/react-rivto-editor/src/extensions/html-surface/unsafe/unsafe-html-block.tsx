@@ -60,7 +60,6 @@ export function UnsafeHtmlBlock({
     <HtmlBlockOccurrence
       block={block}
       surface="unsafe-block"
-      fallbackLabel="Unsafe HTML"
       limits={limits}
       editing={editing}
       onCloseEditor={() => setEditing(false)}

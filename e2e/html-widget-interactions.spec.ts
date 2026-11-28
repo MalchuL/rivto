@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+import { attachedFrame, htmlSample } from "./fixtures/html-widget";
 
 interface DemoWindow extends Window {
   __rivtoDemo: { editor: DocumentEditorAPI };
@@ -61,7 +62,7 @@ async function insertWidget(page: Page): Promise<string> {
     return editor.blocks.insertBlock({
       type: "html",
       content: source,
-      props: { label: "Interaction lab", fixture: "retained" },
+      props: { fixture: "retained" },
     }).id;
   }, WIDGET);
 }
@@ -89,7 +90,6 @@ async function prepareWidgetCard(page: Page): Promise<{ block: string; card: str
     }
     editor.blocks.updateBlock(block.id, {
       content: source,
-      props: { label: "Card interaction lab" },
     });
     editor.elements.updateElement(card.id, { frame: { ...card.frame, x: 4000, y: 80 } });
     return { block: block.id, card: card.id };
@@ -200,7 +200,7 @@ test("HTML widgets retain native drag and drop inside Page", async ({ page }) =>
   const id = await insertWidget(page);
   const block = page.locator(`[data-block-id="${id}"]`);
   await block.evaluate((element) => element.scrollIntoView({ block: "center" }));
-  const frame = page.frameLocator('iframe[name="Interaction lab"]');
+  const frame = block.locator("iframe").contentFrame();
   await expect(frame.locator("#drag")).toBeVisible();
   await expect(frame.locator("#drop")).toBeVisible();
   const source = (await frame.locator("#drag").boundingBox())!;
@@ -228,13 +228,12 @@ test("HTML widgets keep captured pointer drags when the pointer moves quickly", 
       (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.insertBlock({
         type: "html",
         content: source,
-        props: { label: "Pointer lab" },
       }).id,
     POINTER_WIDGET,
   );
   const block = page.locator(`[data-block-id="${id}"]`);
   await block.evaluate((element) => element.scrollIntoView({ block: "center" }));
-  const knob = page.frameLocator('iframe[name="Pointer lab"]').locator("#knob");
+  const knob = block.locator("iframe").contentFrame().locator("#knob");
   await expect(knob).toBeVisible();
   const box = (await knob.boundingBox())!;
   await expect
@@ -278,12 +277,11 @@ test("HTML drag targets follow a dynamically enabled draggable attribute", async
           drop.addEventListener('dragover', function (event) { event.preventDefault(); });
           drop.addEventListener('drop', function (event) { event.preventDefault(); rivto.setProp('dropped', event.dataTransfer.getData('text/plain')); });
         </script>`,
-        props: { label: "Dynamic drag lab" },
       }).id,
   );
   const block = page.locator(`[data-block-id="${id}"]`);
   await block.evaluate((element) => element.scrollIntoView({ block: "center" }));
-  const frame = page.frameLocator('iframe[name="Dynamic drag lab"]');
+  const frame = block.locator("iframe").contentFrame();
   const source = frame.locator("#drag");
   const destination = frame.locator("#drop");
   await expect(source).toBeVisible();
@@ -307,7 +305,7 @@ test("replaced HTML controls retain their own click handlers", async ({ page }) 
   const id = await insertWidget(page);
   const block = page.locator(`[data-block-id="${id}"]`);
   await block.evaluate((element) => element.scrollIntoView({ block: "center" }));
-  const frame = page.frameLocator('iframe[name="Interaction lab"]');
+  const frame = block.locator("iframe").contentFrame();
   const body = frame.locator("body");
   for (let index = 0; index < 2; index += 1) {
     await body.evaluate((node) => {
@@ -333,11 +331,8 @@ test("removed HTML controls with listeners can be collected", async ({ page, bro
   const id = await insertWidget(page);
   const block = page.locator(`[data-block-id="${id}"]`);
   await block.evaluate((element) => element.scrollIntoView({ block: "center" }));
-  await expect(page.frameLocator('iframe[name="Interaction lab"]').locator("body")).toBeAttached();
-  const frame = page.frame({ name: "Interaction lab" });
-  if (!frame) {
-    throw new Error("Missing interaction lab frame");
-  }
+  await expect(block.locator("iframe").contentFrame().locator("body")).toBeAttached();
+  const frame = await attachedFrame(block.locator("iframe"));
   await frame.evaluate(() => {
     const current = window as unknown as RetentionWindow;
     current.tracked = [];
@@ -374,7 +369,7 @@ test("HTML controls in a closed shadow root retain pointer interaction", async (
   const id = await insertWidget(page);
   const block = page.locator(`[data-block-id="${id}"]`);
   await block.evaluate((element) => element.scrollIntoView({ block: "center" }));
-  const frame = page.frameLocator('iframe[name="Interaction lab"]');
+  const frame = block.locator("iframe").contentFrame();
   await frame.locator("body").evaluate((body) => {
     const host = document.createElement("div");
     host.id = "shadow-control";
@@ -402,12 +397,12 @@ test("HTML canvas widgets keep native drag and drop inside the element", async (
       type: "html",
       frame: { x: 4000, y: 80, width: 240, height: 230 },
       zIndex: 999,
-      props: { label: "Canvas interaction lab", html: source },
+      props: { html: source },
     }).id;
   }, WIDGET);
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToElement(page, id);
-  const frame = page.frameLocator('iframe[name="Canvas interaction lab"]');
+  const frame = page.locator(`[data-edgeless-object-id="${id}"]`).locator("iframe").contentFrame();
   await expect(frame.locator("#drag")).toBeVisible();
   const before = await page.evaluate(
     (elementId) =>
@@ -445,7 +440,7 @@ test("HTML blocks inside canvas cards keep their own drag and drop", async ({ pa
   const ids = await prepareWidgetCard(page);
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToElement(page, ids.card);
-  const frame = page.frameLocator('iframe[name="Card interaction lab"]');
+  const frame = page.locator(`[data-block-id="${ids.block}"]`).locator("iframe").contentFrame();
   await expect(frame.locator("#drag")).toBeVisible();
   await expect(frame.locator("#drop")).toBeVisible();
   const before = await readElementFrame(page, ids.card);
@@ -477,12 +472,9 @@ test("HTML widget inputs keep slider and clipboard interactions inside Page", as
   const id = await insertWidget(page);
   const block = page.locator(`[data-block-id="${id}"]`);
   await block.scrollIntoViewIfNeeded();
-  const frame = page.frameLocator('iframe[name="Interaction lab"]');
+  const frame = block.locator("iframe").contentFrame();
   await expect(block.locator("iframe")).toHaveAttribute("sandbox", "allow-scripts allow-forms");
-  const sandbox = page.frame({ name: "Interaction lab" });
-  if (!sandbox) {
-    throw new Error("Missing interaction lab frame");
-  }
+  const sandbox = await attachedFrame(block.locator("iframe"));
   expect(
     await sandbox.evaluate(() => {
       try {
@@ -531,7 +523,7 @@ test("copying an HTML block preserves its source and widget data", async ({ page
       page.evaluate(() =>
         (window as unknown as DemoWindow).__rivtoDemo.editor.blocks
           .getBlocks()
-          .filter((item) => item.type === "html" && item.props.label === "Interaction lab")
+          .filter((item) => item.type === "html" && item.props.fixture === "retained")
           .map((item) => ({ content: item.content, fixture: item.props.fixture })),
       ),
     )
@@ -543,7 +535,7 @@ test("copying an HTML block preserves its source and widget data", async ({ page
 
 test("priority board previews a drag and lets Escape cancel it", async ({ page }) => {
   await page.goto("/");
-  const board = page.locator('iframe[name="Priority board"]');
+  const board = (await htmlSample(page, "priorities")).locator("iframe");
   await board.evaluate((el) => el.scrollIntoView({ block: "center" }));
   const rows = board.contentFrame().locator(".item");
   await expect(rows).toHaveCount(3);
@@ -572,7 +564,7 @@ test("priority board reorders tasks, pastes a task, and undoes changes", async (
   });
   const block = page.locator(`[data-block-id="${id}"]`);
   await block.evaluate((element) => element.scrollIntoView({ block: "center" }));
-  const frame = page.frameLocator('iframe[name="Priority board"]');
+  const frame = (await htmlSample(page, "priorities")).locator("iframe").contentFrame();
   const rows = frame.locator(".item");
   await expect(rows).toHaveCount(3);
   await expect(rows.first()).toBeVisible();
@@ -607,8 +599,8 @@ test("priority board reorders tasks, pastes a task, and undoes changes", async (
 
 test("priority board adds a typed task", async ({ page }) => {
   await page.goto("/");
-  const frame = page.frameLocator('iframe[name="Priority board"]');
-  await page.locator('[data-html-label="Priority board"]').scrollIntoViewIfNeeded();
+  const frame = (await htmlSample(page, "priorities")).locator("iframe").contentFrame();
+  await (await htmlSample(page, "priorities")).scrollIntoViewIfNeeded();
   await frame.getByRole("textbox", { name: "New task" }).fill("Typed task");
   await frame.getByRole("button", { name: "Add", exact: true }).click();
   await expect(frame.locator(".item .name")).toContainText(["Typed task"]);
@@ -619,8 +611,8 @@ test("priority board adds a typed task", async ({ page }) => {
 
 test("priority board keeps keyboard focus when a task is reordered", async ({ page }) => {
   await page.goto("/");
-  await page.locator('[data-html-label="Priority board"]').scrollIntoViewIfNeeded();
-  const frame = page.frameLocator('iframe[name="Priority board"]');
+  await (await htmlSample(page, "priorities")).scrollIntoViewIfNeeded();
+  const frame = (await htmlSample(page, "priorities")).locator("iframe").contentFrame();
   const move = frame.getByRole("button", { name: "Move down Plan" });
   await move.focus();
   await page.keyboard.press("Enter");
@@ -646,7 +638,7 @@ test("canvas mixer responds to slider and playback without moving the element", 
   });
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToElement(page, id);
-  const frame = page.frameLocator('iframe[name="Sound mixer"]');
+  const frame = page.locator(`[data-edgeless-object-id="${id}"]`).locator("iframe").contentFrame();
   const slider = frame.getByRole("slider", { name: "Volume" });
   await expect(slider).toHaveValue("40");
   const before = await readElementFrame(page, id);
@@ -669,7 +661,7 @@ test("canvas mixer responds to slider and playback without moving the element", 
 
 test("Page mixer content height is independent of the iframe viewport", async ({ page }) => {
   await page.goto("/");
-  const iframe = page.locator('iframe[name="Page mixer"]');
+  const iframe = (await htmlSample(page, "mixer-block")).locator("iframe");
   const mixer = iframe.contentFrame().locator(".mixer");
   await expect(mixer.getByRole("button", { name: "Play" })).toBeVisible();
   // Browser zoom resizes the iframe viewport before the host receives its next height report.
@@ -692,7 +684,7 @@ test("the same mixer works as a Page block", async ({ page }) => {
   });
   const block = page.locator(`[data-block-id="${id}"]`);
   await block.evaluate((element) => element.scrollIntoView({ block: "center" }));
-  const frame = page.frameLocator('iframe[name="Page mixer"]');
+  const frame = block.locator("iframe").contentFrame();
   const slider = frame.getByRole("slider", { name: "Volume" });
   await expect(slider).toHaveValue("40");
   await slider.focus();
@@ -725,7 +717,7 @@ test("the same priority board works as an HTML canvas element", async ({ page })
   });
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToElement(page, id);
-  const frame = page.frameLocator('iframe[name="Canvas priorities"]');
+  const frame = page.locator(`[data-edgeless-object-id="${id}"]`).locator("iframe").contentFrame();
   const rows = frame.locator(".item");
   await expect(rows.first()).toBeVisible();
   await expect(rows.last()).toBeVisible();
@@ -780,7 +772,7 @@ async function recordFirstPaddleMove(paddle: Locator) {
 for (const repeat of [0, 200]) {
   test(`ping-pong starts on drag and limits paddle speed, repeat=${repeat}`, async ({ page }) => {
     await page.goto(`/?repeat=${repeat}`);
-    const iframe = page.locator('iframe[name="Ping-pong"]');
+    const iframe = (await htmlSample(page, "ping-pong")).locator("iframe");
     await iframe.evaluate((element) => element.scrollIntoView({ block: "center" }));
     const frame = iframe.contentFrame();
     const paddle = frame.getByRole("button", { name: "Your paddle" });
@@ -839,7 +831,7 @@ test("ping-pong can be played inside its Edgeless block card", async ({ page }) 
   await page.locator('[data-editor-mode="edgeless"]').click();
   await panToElement(page, cardId!);
   const before = await readElementFrame(page, cardId!);
-  const frame = page.frameLocator('iframe[name="Ping-pong"]');
+  const frame = (await htmlSample(page, "ping-pong")).locator("iframe").contentFrame();
   const paddle = frame.getByRole("button", { name: "Your paddle" });
   await paddle.hover();
   const rect = (await paddle.boundingBox())!;
@@ -855,7 +847,7 @@ test("ping-pong can be played inside its Edgeless block card", async ({ page }) 
 
 test("ping-pong returns the ball from the lower paddle", async ({ page }) => {
   await page.goto("/");
-  const iframe = page.locator('iframe[name="Ping-pong"]');
+  const iframe = (await htmlSample(page, "ping-pong")).locator("iframe");
   await iframe.evaluate((element) => element.scrollIntoView({ block: "center" }));
   const frame = iframe.contentFrame();
   const paddle = frame.getByRole("button", { name: "Your paddle" });

@@ -2,8 +2,8 @@
 
 /** One sandboxed example and its preceding paragraph. */
 export interface UnsafeHtmlSample {
-  /** Label displayed on the block and its frame. */
-  readonly label: string;
+  /** Stable sample key stored on the seeded block. */
+  readonly sample: string;
   /** Text to place immediately before the block. */
   readonly previous: string;
   /** Authored HTML with a button that modifies the previous sibling. */
@@ -42,9 +42,9 @@ function unsafeExample(target: "panel" | "reactEditor"): string {
 
 /** Panel-scoped and whole-document versions of the previous-block example. */
 export const UNSAFE_HTML_SAMPLES: readonly UnsafeHtmlSample[] = [
-  { label: "Unsafe panel example", previous: "Panel example target", html: unsafeExample("panel") },
+  { sample: "unsafe-panel", previous: "Panel example target", html: unsafeExample("panel") },
   {
-    label: "Unsafe editor example",
+    sample: "unsafe-editor",
     previous: "Editor example target",
     html: unsafeExample("reactEditor"),
   },

@@ -6,12 +6,6 @@
 import { HtmlEditorPointerTargets } from "./html-editor-pointer-targets";
 import { useHtmlFrame, type UseHtmlFrameOptions } from "./use-html-frame";
 
-/** Props for {@link HtmlFrame}: the frame name plus everything {@link useHtmlFrame} needs. */
-export interface HtmlFrameProps extends UseHtmlFrameOptions {
-  /** Accessible title and window name of the iframe. Tests locate frames by it. */
-  readonly frameName: string;
-}
-
 /**
  * Runs a widget's HTML in a sandboxed iframe.
  *
@@ -28,8 +22,7 @@ export interface HtmlFrameProps extends UseHtmlFrameOptions {
  * the surface: on the canvas it selects and moves the element; in a Page block
  * the targets act as block-selection anchors.
  *
- * @param props - Frame name plus the {@link useHtmlFrame} options.
- * @param props.frameName - Accessible title and window name of the iframe.
+ * @param props - HTML source, node snapshot, and frame options.
  * @param props.source - The widget's HTML.
  * @param props.node - Document data posted to the widget as `rivto.node`.
  * @param props.context - Presentation posted to the widget as `rivto.context`.
@@ -40,7 +33,7 @@ export interface HtmlFrameProps extends UseHtmlFrameOptions {
  * @param props.onCommand - Receives validated pointer notifications and writes.
  * @returns The iframe and its editor pointer targets inside a positioned container.
  */
-export function HtmlFrame({ frameName, ...options }: HtmlFrameProps) {
+export function HtmlFrame(options: UseHtmlFrameOptions) {
   const { iframeRef, srcDoc, height, editorPointerRegions } = useHtmlFrame(options);
   const fill = options.fit === "fill";
   return (
@@ -50,8 +43,6 @@ export function HtmlFrame({ frameName, ...options }: HtmlFrameProps) {
       <iframe
         ref={iframeRef}
         className={fill ? "html-surface-frame html-surface-frame-fill" : "html-surface-frame"}
-        title={frameName}
-        name={frameName}
         sandbox="allow-scripts allow-forms"
         referrerPolicy="no-referrer"
         srcDoc={srcDoc}

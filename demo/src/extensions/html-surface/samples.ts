@@ -529,7 +529,7 @@ export const HTML_BLOCK_SAMPLES: readonly HtmlBlockSample[] = [
   {
     sample: "pomodoro",
     html: POMODORO_HTML,
-    props: { sample: "pomodoro", label: "Pomodoro", timer: 25, startedAt: null },
+    props: { sample: "pomodoro", timer: 25, startedAt: null },
   },
   {
     sample: "goal",
@@ -539,19 +539,19 @@ export const HTML_BLOCK_SAMPLES: readonly HtmlBlockSample[] = [
   {
     sample: "priorities",
     html: PRIORITY_BOARD_HTML,
-    props: { sample: "priorities", label: "Priority board", items: ["Plan", "Build", "Review"] },
+    props: { sample: "priorities", items: ["Plan", "Build", "Review"] },
   },
   {
     sample: "mixer-block",
     html: MIXER_HTML,
-    props: { sample: "mixer-block", label: "Page mixer", volume: 40, playing: false },
+    props: { sample: "mixer-block", volume: 40, playing: false },
   },
   {
     sample: "quote",
     html: QUOTE_HTML,
     props: {
       sample: "quote",
-      label: "Field note",
+
       quote: "Watching for a while is enough.",
       author: "Saturday morning",
     },
@@ -559,18 +559,18 @@ export const HTML_BLOCK_SAMPLES: readonly HtmlBlockSample[] = [
   {
     sample: "weekly-progress",
     html: WEEKLY_PROGRESS_HTML,
-    props: { sample: "weekly-progress", label: "Weekly progress", sessions: [2, 3, 1, 4, 2, 0, 0] },
+    props: { sample: "weekly-progress", sessions: [2, 3, 1, 4, 2, 0, 0] },
   },
   {
     sample: "mood",
     html: MOOD_HTML,
-    props: { sample: "mood", label: "Mood", mood: "calm" },
+    props: { sample: "mood", mood: "calm" },
     listProps: { tone: "soft" },
   },
   {
     sample: "ping-pong",
     html: PING_PONG_HTML,
-    props: { sample: "ping-pong", label: "Ping-pong" },
+    props: { sample: "ping-pong" },
   },
 ];
 
@@ -585,7 +585,7 @@ export const HTML_ELEMENT_SAMPLES: readonly HtmlElementSample[] = [
   {
     sample: "clock",
     html: CLOCK_HTML,
-    props: { sample: "clock", label: "Clock", accent: "#243056" },
+    props: { sample: "clock", accent: "#243056" },
     frame: { x: 2410, y: 48, width: 250, height: 250 },
   },
   {
@@ -597,19 +597,19 @@ export const HTML_ELEMENT_SAMPLES: readonly HtmlElementSample[] = [
   {
     sample: "orbit",
     html: ORBIT_HTML,
-    props: { sample: "orbit", label: "Orbit", running: true },
+    props: { sample: "orbit", running: true },
     frame: { x: 3200, y: 48, width: 250, height: 250 },
   },
   {
     sample: "signal",
     html: SIGNAL_HTML,
-    props: { sample: "signal", label: "Signal", status: "On air", hue: 262 },
+    props: { sample: "signal", status: "On air", hue: 262 },
     frame: { x: 2930, y: 48, width: 250, height: 250 },
   },
   {
     sample: "mixer",
     html: MIXER_HTML,
-    props: { sample: "mixer", label: "Sound mixer", volume: 40, playing: false },
+    props: { sample: "mixer", volume: 40, playing: false },
     frame: { x: 3470, y: 48, width: 280, height: 250 },
   },
   {
@@ -617,7 +617,7 @@ export const HTML_ELEMENT_SAMPLES: readonly HtmlElementSample[] = [
     html: PRIORITY_BOARD_HTML,
     props: {
       sample: "priorities-element",
-      label: "Canvas priorities",
+
       items: ["Sketch", "Create", "Share"],
     },
     frame: { x: 3470, y: 360, width: 300, height: 290 },

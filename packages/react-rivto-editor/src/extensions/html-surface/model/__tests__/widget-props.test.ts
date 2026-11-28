@@ -1,4 +1,4 @@
-import { changedPropPatch, formatWidgetProps, parseWidgetProps, readLabel } from "../widget-props";
+import { changedPropPatch, formatWidgetProps, parseWidgetProps } from "../widget-props";
 
 test("draft patches omit equivalent JSON and can delete keys inherited by plain objects", () => {
   const patch = changedPropPatch(
@@ -17,6 +17,4 @@ test("element edits patch only what changed and keep host-owned keys out of the 
   expect(parseWidgetProps('{"timer":25,"start":false}')).toEqual({ timer: 25, start: false });
   expect(parseWidgetProps("  ")).toEqual({});
   expect(() => parseWidgetProps("[]")).toThrow();
-  expect(readLabel({ label: "  Timer " }, "HTML")).toBe("Timer");
-  expect(readLabel({ label: " " }, "HTML")).toBe("HTML");
 });

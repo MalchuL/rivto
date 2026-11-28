@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Locator } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+import { attachedFrame } from "./fixtures/html-widget";
 
 interface DemoWindow extends Window {
   __rivtoDemo: { editor: DocumentEditorAPI };
@@ -267,9 +268,10 @@ for (const repeat of [0, 200]) {
     const frame = host.locator("iframe").contentFrame();
     await expect(frame.locator("p")).toHaveText("Original");
     await expect(source).toBeFocused();
+    const previewFrame = await attachedFrame(host.locator("iframe"));
     let navigations = 0;
     page.on("framenavigated", (item) => {
-      if (item.name() === "HTML draft preview") {
+      if (item === previewFrame) {
         navigations += 1;
       }
     });

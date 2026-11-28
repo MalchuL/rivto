@@ -83,7 +83,6 @@ export function useDraftPreview(
           }
         >
           <HtmlFrame
-            frameName="HTML draft preview"
             source={accepted.html}
             node={snapshot}
             context={context}

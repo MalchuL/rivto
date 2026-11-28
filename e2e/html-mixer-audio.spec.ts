@@ -1,5 +1,6 @@
-import { expect, test, type Frame, type Page } from "@playwright/test";
+import { expect, test, type Frame, type Locator, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+import { attachedFrame, htmlSample } from "./fixtures/html-widget";
 
 interface DemoWindow extends Window {
   __rivtoDemo: { editor: DocumentEditorAPI };
@@ -143,12 +144,14 @@ async function expectMelody(sandbox: Frame): Promise<void> {
  *
  * @param page - Demo page with its editor initialized.
  * @param mode - Page block or canvas element to exercise.
- * @returns The iframe name for the visible mixer.
+ * @returns The mounted block or element occurrence that owns the mixer iframe.
+ * @throws If the seeded mixer is missing.
  */
-async function showMixer(page: Page, mode: "block" | "edgeless"): Promise<string> {
+async function showMixer(page: Page, mode: "block" | "edgeless"): Promise<Locator> {
   if (mode === "block") {
-    await page.locator('[data-html-label="Page mixer"]').scrollIntoViewIfNeeded();
-    return "Page mixer";
+    const owner = await htmlSample(page, "mixer-block");
+    await owner.scrollIntoViewIfNeeded();
+    return owner;
   }
   await page.locator('[data-editor-mode="edgeless"]').click();
   const viewport = page.locator(".edgeless-viewport");
@@ -171,7 +174,7 @@ async function showMixer(page: Page, mode: "block" | "edgeless"): Promise<string
       }),
     );
   });
-  return "Sound mixer";
+  return htmlSample(page, "mixer", "element");
 }
 
 /**
@@ -197,8 +200,9 @@ for (const mode of ["block", "edgeless"] as const) {
   test(`mixer produces audio, adjusts volume, and stops in ${mode}`, async ({ page }) => {
     await trackAudio(page);
     await page.goto("/");
-    const name = await showMixer(page, mode);
-    const frame = page.frameLocator(`iframe[name="${name}"]`);
+    const owner = await showMixer(page, mode);
+    const iframe = owner.locator("iframe");
+    const frame = iframe.contentFrame();
     const play = frame.getByRole("button", { name: "Play", exact: true });
     if (mode === "block") {
       await play.focus();
@@ -206,10 +210,7 @@ for (const mode of ["block", "edgeless"] as const) {
     } else {
       await play.click();
     }
-    const sandbox = page.frame({ name });
-    if (!sandbox) {
-      throw new Error("Missing mixer frame");
-    }
+    const sandbox = await attachedFrame(iframe);
     await expectMelody(sandbox);
     const slider = frame.getByRole("slider", { name: "Volume" });
     await slider.focus();
@@ -250,26 +251,18 @@ for (const mode of ["block", "edgeless"] as const) {
     });
     await trackAudio(page);
     await page.goto("/");
-    const name = await showMixer(page, mode);
-    const frame = page.frameLocator(`iframe[name="${name}"]`);
+    const owner = await showMixer(page, mode);
+    const iframe = owner.locator("iframe");
+    const frame = iframe.contentFrame();
     await frame.getByRole("button", { name: "Play", exact: true }).click();
     await expect(frame.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
-    const host = page.locator(`[data-html-label="${name}"]`);
-    const owner = host.locator(
-      mode === "block"
-        ? "xpath=ancestor::*[@data-block-id][1]"
-        : "xpath=ancestor::*[@data-edgeless-object-id][1]",
-    );
     await owner.hover();
     await owner.getByRole("button", { name: "Edit HTML" }).click();
     await expect.poll(() => closes).toBe(1);
     await owner.getByRole("button", { name: "Done", exact: true }).click();
     await expect(frame.getByRole("button", { name: "Play", exact: true })).toBeVisible();
     await expect.poll(() => readMixerPlaying(page, mode)).toBe(true);
-    const sandbox = page.frame({ name });
-    if (!sandbox) {
-      throw new Error("Missing remounted mixer frame");
-    }
+    const sandbox = await attachedFrame(iframe);
     expect(
       await sandbox.evaluate(
         () => (window as unknown as AudioProbeWindow).audioProbe.contexts.length,
@@ -284,15 +277,13 @@ for (const mode of ["block", "edgeless"] as const) {
   test(`undo stops mixer playback in ${mode}`, async ({ page }) => {
     await trackAudio(page);
     await page.goto("/");
-    const name = await showMixer(page, mode);
+    const owner = await showMixer(page, mode);
     await page.evaluate(() => (window as unknown as DemoWindow).__rivtoDemo.editor.history.clear());
-    const frame = page.frameLocator(`iframe[name="${name}"]`);
+    const iframe = owner.locator("iframe");
+    const frame = iframe.contentFrame();
     await frame.getByRole("button", { name: "Play", exact: true }).click();
     await expect(frame.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
-    const sandbox = page.frame({ name });
-    if (!sandbox) {
-      throw new Error("Missing mixer frame");
-    }
+    const sandbox = await attachedFrame(iframe);
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     await expect(frame.getByRole("button", { name: "Play", exact: true })).toBeVisible();
     await expect
@@ -312,8 +303,9 @@ test("mixer reports audio startup failure without enabling playback", async ({ p
     }
   });
   await page.goto("/");
-  await showMixer(page, "block");
-  const frame = page.frameLocator('iframe[name="Page mixer"]');
+  const owner = await showMixer(page, "block");
+  const iframe = owner.locator("iframe");
+  const frame = iframe.contentFrame();
   await frame.getByRole("button", { name: "Play", exact: true }).click();
   await expect(frame.locator("#status")).toHaveText("Audio could not start.");
   await expect(frame.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
@@ -336,8 +328,9 @@ test("leaving Page stops its playing mixer", async ({ page }) => {
   });
   await trackAudio(page);
   await page.goto("/");
-  await showMixer(page, "block");
-  const frame = page.frameLocator('iframe[name="Page mixer"]');
+  const owner = await showMixer(page, "block");
+  const iframe = owner.locator("iframe");
+  const frame = iframe.contentFrame();
   await frame.getByRole("button", { name: "Play", exact: true }).click();
   await expect(frame.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
   await page.locator('[data-editor-mode="edgeless"]').click();
@@ -347,14 +340,12 @@ test("leaving Page stops its playing mixer", async ({ page }) => {
 test("a suspended mixer does not accumulate future phrases", async ({ page }) => {
   await trackAudio(page);
   await page.goto("/");
-  await showMixer(page, "block");
-  const frame = page.frameLocator('iframe[name="Page mixer"]');
+  const owner = await showMixer(page, "block");
+  const iframe = owner.locator("iframe");
+  const frame = iframe.contentFrame();
   await frame.getByRole("button", { name: "Play", exact: true }).click();
   await expect(frame.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
-  const sandbox = page.frame({ name: "Page mixer" });
-  if (!sandbox) {
-    throw new Error("Missing mixer frame");
-  }
+  const sandbox = await attachedFrame(iframe);
   const suspended = await sandbox.evaluate(async () => {
     const probe = (window as unknown as AudioProbeWindow).audioProbe;
     await probe.contexts.at(-1)!.suspend();

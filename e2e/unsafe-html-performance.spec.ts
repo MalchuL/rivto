@@ -1,5 +1,6 @@
 import { expect, test, type Frame, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+import { attachedFrame, htmlSample } from "./fixtures/html-widget";
 
 interface PerformanceWindow extends Window {
   __rivtoDemo: { editor: DocumentEditorAPI };
@@ -21,20 +22,14 @@ interface UnsafeMeasurement {
  * @returns The current sandbox and target block ID.
  */
 async function prepareMeasurement(page: Page): Promise<{ frame: Frame; targetId: string }> {
-  const host = page.locator(
-    '[data-html-surface="unsafe-block"][data-html-label="Unsafe panel example"]',
-  );
+  const host = await htmlSample(page, "unsafe-panel");
   await host.scrollIntoViewIfNeeded();
   await host.getByRole("button", { name: "Edit Unsafe HTML" }).click();
   await host
     .getByRole("checkbox", { name: "Allow this HTML to read and modify editor blocks" })
     .check();
   await host.getByRole("button", { name: "Done", exact: true }).click();
-  await expect.poll(() => page.frame({ name: "Unsafe panel example" }) !== null).toBe(true);
-  const frame = page.frame({ name: "Unsafe panel example" });
-  if (!frame) {
-    throw new Error("Missing unsafe frame");
-  }
+  const frame = await attachedFrame(host.locator("iframe"));
   const targetId = await page.evaluate(() => {
     const hostWindow = window as unknown as PerformanceWindow;
     const manager = hostWindow.__rivtoDemo.editor.blocks;

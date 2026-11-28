@@ -19,7 +19,6 @@ import { HtmlSourceEditor } from "../editing/html-source-editor";
 import { useHtmlEditing, type HtmlEditingStoreProps } from "../editing/use-html-editing";
 import { HtmlFrame } from "../frame/html-frame";
 import { useHtmlWidgetContext } from "../frame/use-html-widget-context";
-import { readLabel } from "../model/widget-props";
 import type { HtmlSurfaceLimits, HtmlSurfaceLimitsProps } from "../options";
 import type { HtmlBlockView, HtmlDraft, HtmlWidgetCommand } from "../types";
 import type { UnsafeHtmlFrameAccess } from "../unsafe/unsafe-requests";
@@ -61,7 +60,6 @@ export function HtmlBlock({
     <HtmlBlockOccurrence
       block={block}
       surface="block"
-      fallbackLabel="HTML"
       limits={limits}
       editing={editing}
       onCloseEditor={() => setEditing(false)}
@@ -88,8 +86,6 @@ export interface HtmlBlockOccurrenceProps {
   readonly block: EditorBlockNode;
   /** Value of the `data-html-surface` attribute, used by styles and tests. */
   readonly surface: "block" | "unsafe-block";
-  /** Accessible name used when the block has no `label` prop. */
-  readonly fallbackLabel: string;
   /** Frame limits of the extension installation. */
   readonly limits: HtmlSurfaceLimits;
   /** Whether the source editor is open. */
@@ -130,7 +126,6 @@ export interface HtmlBlockOccurrenceProps {
  * @param props - Block snapshot, editing state and optional unsafe access.
  * @param props.block - Current snapshot of the block.
  * @param props.surface - Value of the `data-html-surface` attribute.
- * @param props.fallbackLabel - Accessible name used when the block has no label.
  * @param props.limits - Frame limits of the extension installation.
  * @param props.editing - Whether the source editor is open.
  * @param props.onCloseEditor - Closes the editor after a save or on Close.
@@ -141,17 +136,11 @@ export interface HtmlBlockOccurrenceProps {
  * @returns The occurrence wrapped in a block-selection anchor.
  */
 export function HtmlBlockOccurrence(props: HtmlBlockOccurrenceProps) {
-  const { block, surface, fallbackLabel, children } = props;
+  const { block, surface, children } = props;
   const anchor = useBlockSelectionAnchor(block.id);
-  const label = readLabel(block.props, fallbackLabel);
   return (
-    <div
-      {...anchor}
-      className="html-surface-block"
-      data-html-surface={surface}
-      data-html-label={label}
-    >
-      <HtmlBlockBody {...props} label={label} />
+    <div {...anchor} className="html-surface-block" data-html-surface={surface}>
+      <HtmlBlockBody {...props} />
       {children}
     </div>
   );
@@ -160,9 +149,8 @@ export function HtmlBlockOccurrence(props: HtmlBlockOccurrenceProps) {
 /**
  * Chooses and renders the body of a block occurrence: editor, empty state or widget.
  *
- * @param props - Occurrence props plus the resolved label.
+ * @param props - Occurrence snapshot, frame limits, and editing controls.
  * @param props.block - Current snapshot of the block.
- * @param props.label - Resolved accessible name of the widget frame.
  * @param props.limits - Frame limits of the extension installation.
  * @param props.editing - Whether the source editor is open.
  * @param props.onCloseEditor - Closes the editor after a save or on Close.
@@ -173,14 +161,13 @@ export function HtmlBlockOccurrence(props: HtmlBlockOccurrenceProps) {
  */
 function HtmlBlockBody({
   block,
-  label,
   limits,
   editing,
   onCloseEditor,
   onDraftSaved,
   unsafeAccess,
   editorControls,
-}: HtmlBlockOccurrenceProps & { readonly label: string }) {
+}: HtmlBlockOccurrenceProps) {
   const panel = usePanel();
   const { node, context, onCommand } = useBlockWidget(block, panel);
 
@@ -209,7 +196,6 @@ function HtmlBlockBody({
   }
   return (
     <HtmlFrame
-      frameName={label}
       source={block.content}
       node={node}
       context={context}

@@ -18,7 +18,6 @@ import { HtmlSourceEditor } from "../editing/html-source-editor";
 import { useHtmlEditing, type HtmlEditingStoreProps } from "../editing/use-html-editing";
 import { HtmlFrame } from "../frame/html-frame";
 import { useHtmlWidgetContext } from "../frame/use-html-widget-context";
-import { readLabel } from "../model/widget-props";
 import type { HtmlSurfaceLimitsProps } from "../options";
 import type { HtmlDraft, HtmlElementView, HtmlWidgetCommand } from "../types";
 
@@ -101,7 +100,6 @@ export function HtmlElement(
   const context = useHtmlWidgetContext(selected, preview);
   const node = useMemo(() => toElementView(element), [element]);
   const onCommand = useHtmlElementCommand(reactPanel, operations, element.id, preview);
-  const label = readLabel(element.props, "HTML");
   const source = typeof element.props.html === "string" ? element.props.html : "";
   let body;
   if (editing && !preview) {
@@ -122,7 +120,6 @@ export function HtmlElement(
   } else {
     body = (
       <HtmlFrame
-        frameName={label}
         source={source}
         node={node}
         context={context}
@@ -134,7 +131,7 @@ export function HtmlElement(
     );
   }
   return (
-    <div className="html-surface-canvas" data-html-surface="element" data-html-label={label}>
+    <div className="html-surface-canvas" data-html-surface="element">
       {body}
     </div>
   );

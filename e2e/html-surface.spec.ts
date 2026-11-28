@@ -2,6 +2,7 @@ import { expect, test, type Frame, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { blockIdSelector } from "./dom-markers";
 import { showCanvasCard } from "./fixtures/canvas-card";
+import { attachedFrame, htmlSample } from "./fixtures/html-widget";
 
 interface DemoWindow extends Window {
   __rivtoDemo: { editor: DocumentEditorAPI };
@@ -54,29 +55,29 @@ for (const mode of ["block", "edgeless"]) {
 
 test("HTML previews leave the border radius to the widget", async ({ page }) => {
   await page.goto("/");
-  for (const [frameName, selector] of [
-    ["Page mixer", ".mixer"],
-    ["Unsafe panel example", ".card"],
+  for (const [sample, selector] of [
+    ["mixer-block", ".mixer"],
+    ["unsafe-panel", ".card"],
   ]) {
-    const frame = page.locator(`iframe[name="${frameName}"]`);
+    const frame = (await htmlSample(page, sample)).locator("iframe");
     const widget = frame.contentFrame().locator(selector);
     await expect(frame).toHaveCSS("border-radius", "0px");
-    await expect(widget).toHaveCSS("border-radius", frameName === "Page mixer" ? "16px" : "12px");
+    await expect(widget).toHaveCSS("border-radius", sample === "mixer-block" ? "16px" : "12px");
   }
 });
 
 test("HTML block height follows small and changing content", async ({ page }) => {
   await page.goto("/");
-  await page.evaluate(() => {
-    (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.insertBlock({
-      type: "html",
-      content: '<div id="size" style="width:40px;height:32px">Small</div>',
-      props: { label: "Small HTML" },
-    });
-  });
-  const frame = page.locator('iframe[name="Small HTML"]');
+  const id = await page.evaluate(
+    () =>
+      (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.insertBlock({
+        type: "html",
+        content: '<div id="size" style="width:40px;height:32px">Small</div>',
+      }).id,
+  );
+  const frame = page.locator(`[data-block-id="${id}"] iframe`);
   await frame.scrollIntoViewIfNeeded();
-  const sandbox = page.frameLocator('iframe[name="Small HTML"]');
+  const sandbox = frame.contentFrame();
   await expect(sandbox.locator("#size")).toBeVisible();
   await expect.poll(async () => (await frame.boundingBox())?.height).toBe(32);
   await sandbox.locator("#size").evaluate((element) => {
@@ -94,18 +95,20 @@ test("HTML block height follows small and changing content", async ({ page }) =>
 });
 
 /**
- * Waits until a named sandbox has published its node snapshot.
+ * Waits for a seeded widget to receive its initial node snapshot.
  *
- * @param page - Demo page that owns the iframe.
- * @param name - Iframe name, matching the widget sample id.
- * @returns The sandbox frame after `rivto.node` is available.
+ * @param page - Demo page that owns the widget occurrence.
+ * @param sample - Demo seed key used to resolve the node ID.
+ * @param kind - Model collection containing the widget.
+ * @returns The current browser frame with its node snapshot available.
+ * @throws If the widget or its iframe is unavailable.
  */
-async function widgetFrame(page: Page, name: string): Promise<Frame> {
-  await expect.poll(() => page.frame({ name }) != null).toBe(true);
-  const frame = page.frame({ name });
-  if (!frame) {
-    throw new Error(`Missing HTML frame ${name}`);
-  }
+async function widgetFrame(
+  page: Page,
+  sample: string,
+  kind: "block" | "element" = "block",
+): Promise<Frame> {
+  const frame = await attachedFrame((await htmlSample(page, sample, kind)).locator("iframe"));
   await expect
     .poll(() =>
       frame.evaluate(() => Boolean((window as { rivto?: { node?: unknown } }).rivto?.node)),
@@ -135,16 +138,16 @@ async function blockProp(page: Page, sample: string, key: string): Promise<unkno
 
 test("html blocks expose the node and render pasted markup", async ({ page }) => {
   await page.goto("/");
-  const pomodoroHost = page.locator('[data-html-label="Pomodoro"]');
+  const pomodoroHost = await htmlSample(page, "pomodoro");
   await pomodoroHost.scrollIntoViewIfNeeded();
-  const pomodoro = await widgetFrame(page, "Pomodoro");
+  const pomodoro = await widgetFrame(page, "pomodoro");
   await expect(pomodoro.getByText("25:00")).toBeVisible();
   const node = await pomodoro.evaluate(
     () => (window as { rivto: { node: Record<string, unknown> } }).rivto.node,
   );
   expect(node.kind).toBe("block");
   expect(node).toMatchObject({
-    props: { startedAt: null, timer: 25, label: "Pomodoro" },
+    props: { startedAt: null, timer: 25 },
     listProps: {},
   });
   expect(Array.isArray(node.childIds)).toBe(true);
@@ -162,33 +165,32 @@ test("html blocks expose the node and render pasted markup", async ({ page }) =>
   await expect(pomodoro.getByRole("button", { name: "Start" })).toBeEnabled();
   expect(await blockProp(page, "pomodoro", "startedAt")).toBeNull();
 
-  const pomodoroBlock = page.locator('[data-block-type="html"]').filter({ has: pomodoroHost });
-  await pomodoroBlock.hover();
-  await pomodoroBlock.getByRole("button", { name: "Edit HTML", exact: true }).click();
-  await expect(pomodoroBlock.getByRole("button", { name: "Edit HTML" })).toHaveCount(0);
-  await pomodoroBlock.getByRole("button", { name: "Expand HTML editor", exact: true }).click();
+  await pomodoroHost.hover();
+  await pomodoroHost.getByRole("button", { name: "Edit HTML", exact: true }).click();
+  await expect(pomodoroHost.getByRole("button", { name: "Edit HTML" })).toHaveCount(0);
+  await pomodoroHost.getByRole("button", { name: "Expand HTML editor", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "HTML source" })).toBeVisible();
   const props = page.getByRole("textbox", { name: "Widget props" });
   await props.click();
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.insertText(
-    JSON.stringify({ sample: "pomodoro", label: "Pomodoro", startedAt: null, timer: 5 }, null, 2),
+    JSON.stringify({ sample: "pomodoro", startedAt: null, timer: 5 }, null, 2),
   );
   await page.getByRole("button", { name: "Done", exact: true }).click();
-  const edited = await widgetFrame(page, "Pomodoro");
+  const edited = await widgetFrame(page, "pomodoro");
   await expect(edited.getByText("05:00")).toBeVisible();
   await expect(pomodoroHost.getByRole("textbox", { name: "List props" })).toHaveCount(0);
   expect(await blockProp(page, "pomodoro", "timer")).toBe(5);
 
-  const goal = await widgetFrame(page, "Reading goal");
+  const goal = await widgetFrame(page, "goal");
   await expect(goal.getByText("36 / 80")).toBeVisible();
   await goal.getByRole("button", { name: "Increase pages" }).click();
   await expect.poll(() => blockProp(page, "goal", "value")).toBe(37);
 
-  const quote = await widgetFrame(page, "Field note");
+  const quote = await widgetFrame(page, "quote");
   await expect(quote.getByText("Watching for a while is enough.")).toBeVisible();
 
-  const mood = await widgetFrame(page, "Mood");
+  const mood = await widgetFrame(page, "mood");
   const moodNode = await mood.evaluate(
     () =>
       (
@@ -209,10 +211,10 @@ test("html blocks expose the node and render pasted markup", async ({ page }) =>
     (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.insertBlock({
       type: "html",
       content: "",
-      props: { label: "Scratch", sample: "scratch" },
+      props: { sample: "scratch" },
     });
   });
-  const scratch = page.locator('[data-html-label="Scratch"]');
+  const scratch = await htmlSample(page, "scratch");
   await scratch.scrollIntoViewIfNeeded();
   const source = scratch.getByRole("textbox", { name: "HTML source" });
   const delivered = await source.evaluate((element, html) => {
@@ -234,15 +236,15 @@ test("html blocks expose the node and render pasted markup", async ({ page }) =>
     await scratch.getByRole("button", { name: "Render", exact: true }).click();
   }
   await expect(scratch.getByRole("textbox", { name: "HTML source" })).toHaveCount(0);
-  const pasted = await widgetFrame(page, "Scratch");
+  const pasted = await widgetFrame(page, "scratch");
   await expect(pasted.getByText("Pasted widget")).toBeVisible();
 });
 
 test("pomodoro still answers in a repeated notebook", async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto("/?repeat=200");
-  await page.locator('[data-html-label="Pomodoro"]').scrollIntoViewIfNeeded();
-  const pomodoro = await widgetFrame(page, "Pomodoro");
+  await (await htmlSample(page, "pomodoro")).scrollIntoViewIfNeeded();
+  const pomodoro = await widgetFrame(page, "pomodoro");
   const started = Date.now();
   await pomodoro.getByRole("button", { name: "Start" }).click();
   await expect(pomodoro.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
@@ -257,9 +259,7 @@ for (const repeat of [0, 200]) {
     test.setTimeout(120_000);
     await page.goto(`/?repeat=${repeat}`);
     await page.locator('[data-editor-mode="edgeless"]').click();
-    const circle = page
-      .locator('[data-edgeless-visual-kind="html"]')
-      .filter({ has: page.locator('[data-html-label="Focus"]') });
+    const circle = await htmlSample(page, "circle", "element");
     const viewport = page.locator(".edgeless-viewport");
     await viewport.evaluate((root) => {
       const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
@@ -296,7 +296,7 @@ for (const repeat of [0, 200]) {
         );
       })
       .toBe(true);
-    const frame = await widgetFrame(page, "Focus");
+    const frame = await widgetFrame(page, "circle", "element");
     expect(
       await frame.evaluate(
         () =>
@@ -380,9 +380,9 @@ for (const repeat of [0, 200]) {
 
 test("animated weekly board persists clicks and undo", async ({ page }) => {
   await page.goto("/");
-  const host = page.locator('[data-html-label="Weekly progress"]');
+  const host = await htmlSample(page, "weekly-progress");
   await host.scrollIntoViewIfNeeded();
-  const frame = await widgetFrame(page, "Weekly progress");
+  const frame = await widgetFrame(page, "weekly-progress");
   await expect(frame.getByText("12 sessions")).toBeVisible();
   await frame.getByRole("button", { name: "Add session" }).click();
   await expect(frame.getByText("13 sessions")).toBeVisible();
@@ -415,7 +415,7 @@ test("animated orbit persists its paused state", async ({ page }) => {
       }),
     );
   });
-  const frame = await widgetFrame(page, "Orbit");
+  const frame = await widgetFrame(page, "orbit", "element");
   await frame.getByRole("button", { name: "Pause orbit" }).click();
   await expect(frame.getByRole("button", { name: "Resume orbit" })).toBeVisible();
   await expect

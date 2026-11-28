@@ -1,23 +1,20 @@
 import { expect, test, type Frame, type Locator, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+import { attachedFrame, htmlSample } from "./fixtures/html-widget";
 
 interface DemoWindow extends Window {
   __rivtoDemo: { editor: DocumentEditorAPI };
 }
 
 /**
- * Finds a widget's currently mounted sandbox by its accessible name.
+ * Finds the current sandbox inside one unsafe block occurrence.
  *
- * @param page - Page containing the demo editor.
- * @param name - Name assigned to the sandbox.
- * @returns The current frame after it is attached.
+ * @param iframe - Locator for the iframe in the desired occurrence.
+ * @returns The attached frame after it receives its node snapshot.
+ * @throws If the iframe is unavailable or its snapshot does not arrive.
  */
-async function unsafeFrame(page: Page, name: string): Promise<Frame> {
-  await expect.poll(() => page.frame({ name }) != null).toBe(true);
-  const frame = page.frame({ name });
-  if (!frame) {
-    throw new Error(`Missing unsafe frame ${name}`);
-  }
+async function unsafeFrame(iframe: Locator): Promise<Frame> {
+  const frame = await attachedFrame(iframe);
   await expect
     .poll(() =>
       frame.evaluate(() => Boolean((window as { rivto?: { node?: unknown } }).rivto?.node)),
@@ -111,7 +108,7 @@ async function sendSourceChangeAndWrite(frame: Frame, targetId: string): Promise
  *
  * @param page - Demo page.
  * @param host - Unsafe block occurrence.
- * @param label - Frame and widget label.
+ * @param sample - Demo seed key of the widget whose source changes.
  * @param target - Unchanged text of the preceding block.
  * @param targetId - ID of that preceding block.
  * @returns The revoked grant and unchanged target have been observed.
@@ -119,7 +116,7 @@ async function sendSourceChangeAndWrite(frame: Frame, targetId: string): Promise
 async function verifySourceRevocation(
   page: Page,
   host: Locator,
-  label: string,
+  sample: string,
   target: string,
   targetId: string,
 ): Promise<void> {
@@ -127,17 +124,17 @@ async function verifySourceRevocation(
   await expect(host.getByRole("button", { name: "Edit Unsafe HTML" })).toHaveAccessibleDescription(
     "Editor access is enabled for this HTML.",
   );
-  let frame = await unsafeFrame(page, label);
+  let frame = await unsafeFrame(host.locator("iframe"));
   await sendSourceChangeAndWrite(frame, targetId);
   await expect
     .poll(() =>
-      page.evaluate((widgetLabel) => {
+      page.evaluate((widgetSample) => {
         const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
         return editor.blocks
           .getBlocks()
-          .find((item) => item.props.label === widgetLabel)
+          .find((item) => item.props.sample === widgetSample)
           ?.content.endsWith("<!-- changed -->");
-      }, label),
+      }, sample),
     )
     .toBe(true);
   // A closed source port can discard its pending request before the host receives it.
@@ -145,21 +142,21 @@ async function verifySourceRevocation(
     host.getByRole("button", { name: "Edit Unsafe HTML" }),
   ).not.toHaveAccessibleDescription("Editor access is enabled for this HTML.");
   expect(await targetContent(page, target)).toBe(target);
-  frame = await unsafeFrame(page, label);
+  frame = await unsafeFrame(host.locator("iframe"));
   await frame.getByRole("button", { name: "Append Unsafe!!!" }).click();
   await expect(host.getByRole("alert")).toContainText("requested editor access");
   expect(await targetContent(page, target)).toBe(target);
 }
 
-for (const [label, target] of [
-  ["Unsafe panel example", "Panel example target"],
-  ["Unsafe editor example", "Editor example target"],
+for (const [sample, target] of [
+  ["unsafe-panel", "Panel example target"],
+  ["unsafe-editor", "Editor example target"],
 ]) {
-  test(`${label} requires opt-in and supports undo`, async ({ page }) => {
+  test(`${sample} requires opt-in and supports undo`, async ({ page }) => {
     await page.goto("/");
-    const host = page.locator(`[data-html-surface="unsafe-block"][data-html-label="${label}"]`);
+    const host = await htmlSample(page, sample);
     await host.scrollIntoViewIfNeeded();
-    let frame = await unsafeFrame(page, label);
+    let frame = await unsafeFrame(host.locator("iframe"));
     const targetId = await page.evaluate((text) => {
       const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
       return editor.blocks.getBlocks().find((block) => block.content === text)?.id;
@@ -184,17 +181,17 @@ for (const [label, target] of [
     await expect(enabledButton).toHaveText("");
     await expect(enabledButton).toHaveCSS("width", "24px");
     await expect(editIcon).toHaveClass(/lucide-code-xml/);
-    frame = await unsafeFrame(page, label);
+    frame = await unsafeFrame(host.locator("iframe"));
     await frame.getByRole("button", { name: "Append Unsafe!!!" }).click();
     await expect.poll(() => targetContent(page, target)).toBe(`${target} Unsafe!!!`);
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     await expect.poll(() => targetContent(page, target)).toBe(target);
     await setAccess(host, false);
-    frame = await unsafeFrame(page, label);
+    frame = await unsafeFrame(host.locator("iframe"));
     await frame.getByRole("button", { name: "Append Unsafe!!!" }).click();
     await expect(host.getByRole("alert")).toContainText("requested editor access");
     expect(await targetContent(page, target)).toBe(target);
-    await verifySourceRevocation(page, host, label, target, targetId);
+    await verifySourceRevocation(page, host, sample, target, targetId);
   });
 }
 
@@ -279,14 +276,12 @@ async function panToWidget(viewport: Locator, host: Locator): Promise<void> {
 test("unsafe block works inside an edgeless card", async ({ page }) => {
   await page.goto("/");
   await page.locator('[data-editor-mode="edgeless"]').click();
-  const host = page.locator(
-    '[data-html-surface="unsafe-block"][data-html-label="Unsafe panel example"]',
-  );
+  const host = await htmlSample(page, "unsafe-panel");
   const viewport = page.locator(".edgeless-viewport");
   await panToHtmlCard(viewport);
   await panToWidget(viewport, host);
   await setAccess(host, true);
-  const frame = await unsafeFrame(page, "Unsafe panel example");
+  const frame = await unsafeFrame(host.locator("iframe"));
   await frame.getByRole("button", { name: "Append Unsafe!!!" }).click();
   await expect
     .poll(() => targetContent(page, "Panel example target"))
@@ -302,10 +297,10 @@ test("an access attempt during initial script execution shows a warning", async 
     editor.blocks.insertBlock({
       type: "unsafe-html",
       content: "<p>Startup access</p><script>window.attempt = rivto.reactEditor;</script>",
-      props: { label: "Startup access" },
+      id: "startup-unsafe-example",
     });
   });
-  const host = page.locator('[data-html-surface="unsafe-block"][data-html-label="Startup access"]');
+  const host = page.locator('[data-block-id="startup-unsafe-example"]');
   await host.scrollIntoViewIfNeeded();
   const edit = host.getByRole("button", { name: "Edit Unsafe HTML" });
   await expect(edit.getByRole("alert")).toContainText("requested editor access");
@@ -314,7 +309,7 @@ test("an access attempt during initial script execution shows a warning", async 
   await expect
     .poll(() => edit.evaluate((el) => el.scrollWidth - el.clientWidth))
     .toBeLessThanOrEqual(1);
-  const frame = await unsafeFrame(page, "Startup access");
+  const frame = await unsafeFrame(host.locator("iframe"));
   expect(
     await frame.evaluate(() => (window as unknown as { attempt: unknown }).attempt),
   ).toBeNull();
@@ -324,7 +319,7 @@ test("long unsafe HTML lines scroll inside the inline and fullscreen code fields
   page,
 }) => {
   await page.goto("/");
-  const host = page.locator('[data-html-label="Unsafe panel example"]');
+  const host = await htmlSample(page, "unsafe-panel");
   await host.getByRole("button", { name: "Edit Unsafe HTML" }).click();
   await host.getByRole("textbox", { name: "HTML source" }).fill("x".repeat(3000));
   for (const pane of [host, page.getByRole("dialog")]) {
@@ -367,7 +362,7 @@ test("long unsafe HTML lines scroll inside the inline and fullscreen code fields
 test("fullscreen JSON editors stay top-aligned when one document grows", async ({ page }) => {
   await page.setViewportSize({ width: 720, height: 800 });
   await page.goto("/");
-  const host = page.locator('[data-html-label="Unsafe panel example"]');
+  const host = await htmlSample(page, "unsafe-panel");
   await host.getByRole("button", { name: "Edit Unsafe HTML" }).click();
   await host.getByRole("button", { name: "Expand HTML editor" }).click();
   const dialog = page.getByRole("dialog");
@@ -394,12 +389,14 @@ test("fullscreen JSON editors stay top-aligned when one document grows", async (
 
 test("draft preview has no editor access even for an approved widget", async ({ page }) => {
   await page.goto("/");
-  const host = page.locator('[data-html-label="Unsafe panel example"]');
+  const host = await htmlSample(page, "unsafe-panel");
   await setAccess(host, true);
   await host.getByRole("button", { name: "Edit Unsafe HTML" }).click();
   await expect(host.getByRole("checkbox")).toBeChecked();
   await host.getByRole("button", { name: "Preview", exact: true }).click();
-  const frame = await unsafeFrame(page, "HTML draft preview");
+  const frame = await unsafeFrame(
+    host.getByRole("region", { name: "HTML preview" }).locator("iframe"),
+  );
   expect(
     await frame.evaluate(() => {
       const { rivto } = window as unknown as {
@@ -415,8 +412,8 @@ for (const repeat of [0, 200]) {
     page,
   }) => {
     await page.goto(`/?repeat=${repeat}`);
-    const approved = page.locator('[data-html-label="Unsafe panel example"]');
-    const other = page.locator('[data-html-label="Unsafe editor example"]');
+    const approved = await htmlSample(page, "unsafe-panel");
+    const other = await htmlSample(page, "unsafe-editor");
     const toggle = page.getByRole("checkbox", { name: "Allow editor access for all unsafe HTML" });
     await setAccess(approved, true);
     await page.locator('[data-editor-mode="edgeless"]').click();
@@ -459,10 +456,9 @@ async function restoreUnsafeBlock(page: Page) {
       id: "persistent-unsafe-example",
       type: "unsafe-html",
       content: "<p>Original</p>",
-      props: { label: "Persistent HTML" },
     });
   });
-  return page.locator('[data-html-label="Persistent HTML"]');
+  return page.locator('[data-block-id="persistent-unsafe-example"]');
 }
 
 test("individual permissions survive reload, synchronize tabs and stay revoked after Undo", async ({

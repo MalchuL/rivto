@@ -130,7 +130,7 @@ export function htmlSurfaceExtension(options: HtmlSurfaceOptions = {}): ReactEdi
  */
 function registerHtmlBlock(editor: HtmlSurfaceRegistries, installation: HtmlSurfaceInstallation) {
   const removeType = editor.blockTypes.register({
-    definition: { type: HTML_BLOCK_TYPE, title: "HTML", defaultProps: { label: "HTML" } },
+    definition: { type: HTML_BLOCK_TYPE, title: "HTML" },
     render: (props: BlockRendererProps) => <HtmlBlock {...props} {...installation} />,
     slashCommand: {
       title: "HTML",
@@ -169,7 +169,6 @@ function registerUnsafeHtmlBlock(
     definition: {
       type: UNSAFE_HTML_BLOCK_TYPE,
       title: "Unsafe HTML",
-      defaultProps: { label: "Unsafe HTML" },
     },
     render: (props: BlockRendererProps) => (
       <UnsafeHtmlBlock permissions={permissions} {...props} limits={installation.limits} />
@@ -244,7 +243,7 @@ function registerHtmlElement(editor: HtmlSurfaceRegistries, installation: HtmlSu
     title: "HTML",
     definition: {
       type: HTML_ELEMENT_TYPE,
-      defaults: { html: HTML_STARTER, label: "HTML" },
+      defaults: { html: HTML_STARTER },
       validate: validateHtmlElementProps,
     },
     render: (props: ElementRenderProps) => <HtmlElement {...props} {...installation} />,

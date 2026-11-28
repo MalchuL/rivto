@@ -50,7 +50,6 @@ test("only the authenticated document port receives snapshots, permission decisi
     act(() =>
       root.render(
         <HtmlFrame
-          frameName="One"
           fit="auto"
           source="<p>One</p>"
           node={{ ...node, props: { label } }}
@@ -76,6 +75,8 @@ test("only the authenticated document port receives snapshots, permission decisi
   try {
     render("original");
     const iframe = host.querySelector("iframe")!;
+    expect(iframe.hasAttribute("title")).toBe(false);
+    expect(iframe.hasAttribute("name")).toBe(false);
     let windowPosts = 0;
     iframe.contentWindow!.postMessage = () => {
       windowPosts++;
@@ -144,7 +145,6 @@ test("an auto-sized frame grows with its document up to the configured maxBlockH
     act(() =>
       root.render(
         <HtmlFrame
-          frameName="Tall"
           fit="auto"
           source="<p>Tall</p>"
           node={{

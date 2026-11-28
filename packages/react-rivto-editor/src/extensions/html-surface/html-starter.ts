@@ -15,15 +15,4 @@ export const HTML_STARTER = `<style>
   .drag-region { position: absolute; inset: 0 0 auto; height: 24px; cursor: grab; }
 </style>
 <div class="drag-region" data-rivto-drag-handle aria-hidden="true"></div>
-<p id="label">HTML<small>Edit to paste markup</small></p>
-<script>
-  rivto.ready().then(function (node) {
-    var label = document.getElementById("label");
-    function paint(next) {
-      var text = typeof next.props.label === "string" ? next.props.label : "HTML";
-      label.firstChild.textContent = text;
-    }
-    paint(node);
-    rivto.subscribe(paint);
-  });
-</script>`;
+<p id="label">HTML<small>Edit to paste markup</small></p>`;

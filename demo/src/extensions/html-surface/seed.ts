@@ -146,7 +146,7 @@ function appendUnsafeHtmlSamples(editor: HtmlSeedEditor, afterId: string): strin
       editor.blocks.getInsertionDestinationAfter(afterId),
     );
     const widget = editor.blocks.insertBlock(
-      { type: UNSAFE_HTML_BLOCK_TYPE, content: sample.html, props: { label: sample.label } },
+      { type: UNSAFE_HTML_BLOCK_TYPE, content: sample.html, props: { sample: sample.sample } },
       editor.blocks.getInsertionDestinationAfter(previous.id),
     );
     afterId = widget.id;
